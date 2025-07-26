@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciar Usuários</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/admin.css' %}">
+<style>
+    /* admin.css */
+
+body {
+    font-family: Arial, sans-serif;
+    background-image: url("{% static 'img/prefeitura.jpg' %}");
+    background-repeat: no-repeat;
+    background-size: cover;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start; /* Align to the top */
+    min-height: 100vh;
+    margin: 0;
+    padding: 20px; /* Add some padding around the container */
+    box-sizing: border-box;
+}
+
+.manage-users-container {
+    background-color: #ffffff;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 600px;
+    text-align: left;
+}
+
+.manage-users-container h2 {
+    color: #333333;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.manage-users-container h3 {
+    color: #555555;
+    margin-top: 30px;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #eeeeee;
+    padding-bottom: 5px;
+}
+
+.manage-users-container p {
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+.manage-users-container p a {
+    color: #007bff;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.manage-users-container p a:hover {
+    text-decoration: underline;
+}
+
+.manage-users-container ul {
+    list-style: none;
+    padding: 0;
+    margin-bottom: 20px;
+}
+
+.manage-users-container li {
+    background-color: #f9f9f9;
+    border: 1px solid #e0e0e0;
+    padding: 10px 15px;
+    margin-bottom: 8px;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #333333;
+    word-break: break-all; /* Ensures long emails break and don't overflow */
+}
+
+/* Style for user roles */
+.manage-users-container li span {
+    font-weight: normal;
+    color: #666666;
+    margin-left: 10px;
+}
+
+.manage-users-container li form {
+    display: inline-block;
+    margin-left: 10px;
+}
+
+.manage-users-container li button {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.manage-users-container li button:hover {
+    background-color: #c82333;
+}
+
+/* Added styles for level dropdown */
+.manage-users-container li select {
+    padding: 5px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    margin-left: 10px;
+}
+.manage-users-container li button.save-level {
+    background-color: #007bff;
+    margin-left: 5px;
+}
+.manage-users-container li button.save-level:hover {
+    background-color: #0056b3;
+}
+</style>
+</head>
+
+
+<body>
+    <div class="manage-users-container">
+        <h2>Gerenciar Usuários</h2>
+        {% if request.user.is_superuser %} {# Only superusers can create new users #}
+            <p><a href="{% url 'register' %}">Criar Novo Usuário</a></p>
+        {% endif %}
+
+        <h3>Lista de Usuários</h3>
+        <ul>
+            {% for user in users %}
+                <li>
+                    {{ user.username }} ({{ user.email }})
+                    {% if user.is_superuser %} - Super Administrador {% endif %}
+                    {% if user.profile %} - {{ user.profile.get_level_display }} {% endif %}
+                    {# Display and allow editing of user level for superusers #}
+                    {% if request.user.is_superuser %}
+                        <form action="{% url 'update_user_level' user.id %}" method="post" style="display: inline-flex; align-items: center;">
+                            {% csrf_token %}
+                            <select name="level" id="level_{{ user.id }}" onchange="this.nextElementSibling.style.display='inline-block'">
+                                {% for level_value, level_label in user_levels %} {# user_levels passed from view #}
+                                    <option value="{{ level_value }}" {% if user.profile.level == level_value %}selected{% endif %}>
+                                        {{ level_label }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" class="btn save-level" style="display:none;">Salvar Nível</button>
+                        </form>
+                    {% endif %}
+                    
+                    {% if user.id != request.user.id and request.user.is_superuser %} {# Prevents a user from deleting themselves, and only superusers can delete #}
+                    <form action="{% url 'delete_user' user.id %}" method="post" onsubmit="return confirm('Tem certeza que deseja deletar este usuário?');">
+                        {% csrf_token %}
+                        <button type="submit">Deletar</button>
+                    </form>
+                    {% endif %}
+                </li>
+            {% empty %}
+                <li>Nenhum usuário cadastrado.</li>
+            {% endfor %}
+        </ul>
+        <p><a href="{% url 'listar_processos' %}">Voltar para o Dashboard</a></p>
+        <p><a href="{% url 'logout' %}">Sair</a></p>
+    </div>
+</body>
+</html>
