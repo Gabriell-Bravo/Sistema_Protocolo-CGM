@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Processos Finalizados</title>
+    {% load static %}
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-image: url("https://github.com/Gabriell-Bravo/imgs/blob/main/prefeitura.jpg?raw=true");
+            background-repeat: no-repeat;
+            background-size: cover;
+
+        }
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+            padding: 0;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .action-buttons .btn {
+            padding: 6px 10px;
+            font-size: 0.85em;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: #fff
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        textarea.edit-field {
+            min-height: 60px;
+            width: 100%;
+            box-sizing: border-box;
+            resize: vertical;
+            white-space: pre-wrap;
+        }
+        th {
+            background-color: #f2f2f2;
+            position: sticky;
+            top: 0;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            overflow-x: auto;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .btn {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            margin-left: 5px;
+        }
+        .btn-voltar {
+            background-color: #3498db;
+        }
+        .btn-editar {
+            background-color: #4CAF50;
+        }
+        .btn-salvar {
+            background-color: #3498db;
+        }
+        .btn-cancelar {
+            background-color: #e74c3c;
+        }
+        .btn-deletar {
+            background-color: #dc3545;
+        }
+        .editable {
+            background-color: #fffde7;
+            cursor: pointer;
+        }
+        .edit-field {
+            width: 100%;
+            padding: 5px;
+            box-sizing: border-box;
+        }
+        textarea.edit-field {
+            min-height: 60px;
+        }
+        .scrollable-table {
+            overflow-x: auto;
+            max-width: 100%;
+        }
+        .text-truncate {
+            max-width: 200px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #formPesquisa {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+        #inputPesquisa, #filtroDataSaida, #filtroDataInicial, #filtroDataFinal {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            min-width: 150px;
+        }
+        .filtros {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9em;
+            color: #2c3e50;
+        }
+        .user-info .material-icons {
+            font-size: 1.2em;
+        }
+        .user-info a {
+            color: #e74c3c;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .user-info a:hover {
+            text-decoration: underline;
+        }
+
+        .btn-visualizar {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 3px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.75em;
+            margin-left: 5px;
+            vertical-align: middle;
+        }
+
+        .btn-visualizar:hover {
+            background-color: #0056b3;
+        }
+
+        #observacaoModal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #observacaoModal > div {
+            background-color: #fefefe;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 700px;
+            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
+            animation-name: animatetop;
+            animation-duration: 0.4s;
+            border-radius: 8px;
+            position: relative;
+        }
+
+        @keyframes animatetop {
+            from {top: -300px; opacity: 0}
+            to {top: 0; opacity: 1}
+        }
+
+        #observacaoModal .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 35px;
+            font-weight: bold;
+            cursor: pointer;
+            position: absolute;
+            top: 10px;
+            right: 20px;
+        }
+
+        #observacaoModal .close-button:hover,
+        #observacaoModal .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        #observacaoConteudo {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            padding: 10px;
+            background-color: #f9f9f9;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Processos Finalizados</h1>
+            <div style="display: flex; align-items: center; gap: 15px;">
+                {% if user.is_authenticated %}
+                    <div class="user-info">
+                        <span class="material-icons">person</span> Olá, {{ user.username }}!
+                        <form action="{% url 'logout' %}" method="post" style="display: inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn" style="background-color: #e74c3c; margin-left: 0;">Sair</button>
+                        </form>
+                    </div>
+                {% endif %}
+                <div>
+                    <a href="{% url 'listar_processos' %}" class="btn btn-voltar">Voltar para Processos Ativos</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="filtros">
+            <select id="filtroPrioridade" class="btn" style="background-color: #9b59b6; padding: 8px;">
+                <option value="todas" {% if prioridade_filtro == 'todas' %}selected{% endif %}>Todas Prioridades</option>
+                <option value="NAO" {% if prioridade_filtro == 'NAO' %}selected{% endif %}>NÃO</option>
+                <option value="SIM" {% if prioridade_filtro == 'SIM' %}selected{% endif %}>SIM</option>
+            </select>
+
+            <label for="filtroDataInicial">Data Inicial:</label>
+            <input type="date" id="filtroDataInicial"
+                   value="{{ data_inicial_filtro|default:'' }}"
+                   class="btn" style="background-color: #2ecc71; padding: 8px;">
+
+            <label for="filtroDataFinal">Data Final:</label>
+            <input type="date" id="filtroDataFinal"
+                   value="{{ data_final_filtro|default:'' }}"
+                   class="btn" style="background-color: #2ecc71; padding: 8px;">
+
+            <select id="filtroStatusMonitoramento" class="btn" style="background-color: #f0ad4e; padding: 8px;">
+                <option value="todas" {% if status_monitoramento_filtro == 'todas' %}selected{% endif %}>Todos os Status Monitoramento</option>
+                <option value="PENDENTE" {% if status_monitoramento_filtro == 'PENDENTE' %}selected{% endif %}>Pendente</option>
+                <option value="CONCLUIDO" {% if status_monitoramento_filtro == 'CONCLUIDO' %}selected{% endif %}>Concluído</option>
+                <option value="ATRASADO" {% if status_monitoramento_filtro == 'ATRASADO' %}selected{% endif %}>Atrasado</option>
+                <option value="NAO_APLICAVEL" {% if status_monitoramento_filtro == 'NAO_APLICAVEL' %}selected{% endif %}>Não Aplicável</option>
+            </select>
+
+            <select id="filtroGenero" class="btn" style="background-color: #3498db; padding: 8px;">
+                <option value="todas">Todos os Gêneros</option>
+                {% for genero in all_generos %}
+                    <option value="{{ genero }}" {% if genero_filtro == genero %}selected{% endif %}>{{ genero }}</option>
+                {% endfor %}
+            </select>
+
+            <select id="filtroEspecie" class="btn" style="background-color: #2ecc71; padding: 8px;">
+                <option value="todas">Todas as Espécies</option>
+                {% for especie in all_especies %}
+                    <option value="{{ especie }}" {% if especie_filtro == especie %}selected{% endif %}>{{ especie }}</option>
+                {% endfor %}
+            </select>
+
+            <select id="filtroStatusAnalise" class="btn" style="background-color: #e74c3c; padding: 8px;">
+                <option value="todas">Todos os Status Análise</option>
+                {% for status_item in all_status_analise %}
+                    <option value="{{ status_item.value }}" {% if status_analise_filtro == status_item.value %}selected{% endif %}>{{ status_item.label }}</option>
+                {% endfor %}
+            </select>
+
+            <form id="formPesquisa" style="display: inline-block; margin-right: 10px;">
+                <input type="text" id="inputPesquisa" placeholder="Pesquisar processos..."
+                       value="{{ termo_pesquisa|default:'' }}" style="padding: 8px; border-radius: 4px; border: 1px solid #ddd;">
+                <button type="submit" class="btn" style="background-color: #3498db;">Pesquisar</button>
+                <button type="button" id="btnLimparPesquisa" class="btn" style="background-color: #95a5a6;">Limpar</button>
+            </form>
+
+            {% if user.is_superuser %} {# Only superusers can export to excel #}
+                <button type="button" id="btnExportExcel" class="btn" style="background-color: #2ecc71;">Exportar para Excel</button>
+            {% endif %}
+        </div>
+
+        <div class="scrollable-table">
+            <table id="tabelaProcessos">
+                <thead>
+                    <tr>
+                        <th>N° Processo</th>
+                        <th>Volume</th>
+                        <th>Secretaria</th>
+                        <th>Data Entrada</th>
+                        <th>Hora Entrada</th>
+                        <th>Data Saída</th>
+                        <th>Hora Saída</th>
+                        <th>Destino</th>
+                        <th>Gênero</th>
+                        <th>Espécie</th>
+                        <th>Objeto</th>
+                        <th>Contratada</th>
+                        <th>Recorrente</th>
+                        <th>Prioridade</th>
+                        <th>Técnico</th>
+                        <th>N° Despacho</th>
+                        <th>Observação</th>
+                        <th>Valor</th>
+                        <th>Período</th>
+                        <th>Status Análise</th>
+                        <th>Prazo Monitoramento</th>
+                        <th>Próximo Monitoramento</th>
+                        <th>Status Monitoramento</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for processo in processos %}
+                    <tr data-id="{{ processo.id }}">
+                        <td class="editable" data-field="numero_processo">{{ processo.numero_processo }}</td>
+                        <td class="editable" data-field="volume">{{ processo.volume|default:'' }}</td>
+                        <td class="editable" data-field="secretaria">{{ processo.secretaria }}</td>
+                        <td class="editable" data-field="data_entrada">{{ processo.data_entrada|date:"Y-m-d" }}</td>
+                        <td class="editable" data-field="hora_entrada">{{ processo.hora_entrada|time:"H:i" }}</td>
+                        <td class="editable" data-field="data_saida">{{ processo.data_saida|default:''|date:"Y-m-d" }}</td>
+                        <td class="editable" data-field="hora_saida">{{ processo.hora_saida|default:''|time:"H:i" }}</td>
+                        <td class="editable" data-field="destino">{{ processo.destino|default:'' }}</td>
+                        <td class="editable" data-field="genero">{{ processo.genero }}</td>
+                        <td class="editable" data-field="especie">{{ processo.especie }}</td>
+                        <td class="editable" data-field="objeto" data-full-text="{{ processo.objeto|default:'' }}">
+                            <span class="observacao-preview">{{ processo.objeto|linebreaksbr|truncatechars:50 }}</span>
+                            {% if processo.objeto and processo.objeto|length > 50 %}
+                                <button class="btn btn-sm btn-visualizar" onclick="visualizarObservacao('{{ processo.objeto|escapejs }}')">Visualizar</button>
+                            {% endif %}
+                        </td>
+                        <td class="editable" data-field="contratada">{{ processo.contratada|default:'' }}</td>
+                        <td class="editable" data-field="recorrente">{{ processo.recorrente|default:'NAO' }}</td>
+                        <td class="editable" data-field="prioridade">{{ processo.prioridade }}</td>
+                        <td class="editable" data-field="tecnico">{{ processo.tecnico|default:'' }}</td>
+                        <td class="editable" data-field="numero_despacho">{{ processo.numero_despacho|default:'' }}</td>
+                        <td class="editable" data-field="observacao" data-full-text="{{ processo.observacao|default:'' }}">
+                            <span class="observacao-preview">{{ processo.observacao|default:''|truncatechars:50 }}</span>
+                            {% if processo.observacao and processo.observacao|length > 50 %}
+                                <button class="btn btn-sm btn-visualizar" onclick="visualizarObservacao('{{ processo.observacao|escapejs }}')">Visualizar</button>
+                            {% endif %}
+                        </td>
+                        <td class="editable" data-field="valor">{{ processo.valor|default:'' }}</td>
+                        <td class="editable" data-field="periodo">{{ processo.periodo|default:'' }}</td>
+                        <td class="editable" data-field="status_analise" data-status-analise-raw="{{ processo.status_analise }}">{{ processo.status_analise_display }}</td>
+                        
+                        <td>
+                            {{ processo.prazo_monitoramento_display }}
+                        </td>
+                        <td>
+                            {{ processo.proxima_data_monitoramento_formatada }}
+                        </td>
+                        <td data-status-monitoramento-raw="{{ processo.status_monitoramento }}">{{ processo.status_monitoramento_display }}</td>
+                        <td>
+                            <div class="action-buttons">
+                                {% if can_edit %}
+                                    <button class="btn btn-editar" onclick="editarProcesso(this)">Editar</button>
+                                {% endif %}
+                                <a href="{% url 'ver_historico_processo' process_id=processo.id %}" class="btn" style="background-color: #6c757d;">Histórico</a>
+                                {% if can_edit and processo.status_monitoramento_raw != 'NAO_APLICAVEL' and processo.status_monitoramento_raw != 'CONCLUIDO' %}
+                                    <button class="btn" style="background-color: #28a745;" onclick="concluirMonitoramento('{{ processo.id }}')">Concluir Monitoramento</button>
+                                {% endif %}
+                                {% if user.is_superuser %}
+                                    <button class="btn btn-deletar" onclick="deletarProcesso('{{ processo.id }}')">Deletar</button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="observacaoModal" style="display: none;">
+        <div>
+            <span class="close-button" onclick="fecharModal()">&times;</span>
+            <h2>Observação Completa</h2>
+            <p id="observacaoConteudo"></p>
+        </div>
+    </div>
+
+    <script>
+        let editingRow = null;
+        let originalData = {};
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        const csrftoken = getCookie('csrftoken');
+
+        const especiesPorGenero = {
+            'LIQUIDACOES': [
+                'Pagamento Geral', 'Concessão Aux. Bolsa Atleta', 'P.C. Bolsa Atleta',
+                'Concessão Aux. Aluguel Social', 'Concessão Adiantamento', 'P.C. Adiantamento',
+                'Subvenção Social - Concessão', 'Subvenção Social - Pagamento',
+                'Subvenção Social - Prestação de Contas', 'Subvenção Social - P.C. Anual',
+                'Subvenção Social - Renovação', 'Subvenção Bloco Carnaval', 'P.C. Subvenção Bloco Carnaval',
+                'Concessão Diária', 'P.C. Patrocínio'
+            ],
+            'LICITACOES_E_CONTRATOS': [
+                'Análise Fase Inicial', 'Análise Fase Externa', 'Dispensa - Análise Fase Externa',
+                'Inexigibilidade', 'Adesão de Ata', 'Concessão Patrocínio', 'Análise Aditivo'
+            ]
+        };
+
+        function editarProcesso(btn) {
+            if (editingRow) {
+                alert("Já existe uma linha em edição. Por favor, salve ou cancele a edição atual.");
+                return;
+            }
+
+            const row = btn.closest('tr');
+            editingRow = row;
+            originalData = {};
+
+            row.querySelectorAll('.editable').forEach(cell => {
+                const field = cell.getAttribute('data-field');
+                let value;
+                if (field === 'objeto' || field === 'observacao') {
+                    value = cell.getAttribute('data-full-text') || cell.textContent.trim();
+                } else if (field === 'status_analise') { 
+                    value = cell.getAttribute('data-status-analise-raw'); 
+                }
+                else {
+                    value = cell.textContent.trim();
+                }
+                originalData[field] = value;
+            });
+            originalData['actionsHtml'] = row.querySelector('td:last-child').innerHTML;
+
+            row.querySelectorAll('.editable').forEach(cell => {
+                const field = cell.getAttribute('data-field');
+                let value = originalData[field];
+                let inputElement;
+
+                if (field === 'objeto' || field === 'observacao') {
+                    inputElement = document.createElement('textarea');
+                    inputElement.className = 'edit-field';
+                    inputElement.value = value;
+                } else if (field === 'secretaria') {
+                    inputElement = document.createElement('select');
+                    inputElement.className = 'edit-field';
+                    const options = [
+                        "Administração, Receita e Tributação", "Agricultura, Abastecimento e Pesca", "Comunicação Social",
+                        "Desenvolvimento Social", "Direitos dos Animais", "Educação, Cultura, Inclusão, Ciência e Tecnologia",
+                        "Esporte, Lazer e Turismo", "Finanças", "Gabinete", "Gestão, Inovação e Tecnologia",
+                        "Governança e Sustentabilidade", "Municipal de Infraestrutura", "Meio Ambiente", "Mulher",
+                        "Transporte e Serviços Públicos", "Obras Públicas", "Planejamento", "Relações Institucionais",
+                        "Saúde", "Segurança e Ordem Pública", "Transparência e Integridade", "Urbanismo"
+                    ];
+                    options.forEach(optionText => {
+                        const option = document.createElement('option');
+                        option.value = optionText;
+                        option.textContent = optionText;
+                        if (optionText === value) {
+                            option.selected = true;
+                        }
+                        inputElement.appendChild(option);
+                    });
+                } else if (field === 'genero') {
+                    inputElement = document.createElement('select');
+                    inputElement.className = 'edit-field';
+                    const generoOptions = ['LIQUIDACOES', 'LICITACOES_E_CONTRATOS', 'OUTROS_GENERO'];
+                    generoOptions.forEach(optionText => {
+                        const option = document.createElement('option');
+                        option.value = optionText;
+                        option.textContent = optionText === 'OUTROS_GENERO' ? 'Outros' : optionText.replace(/_/g, ' ');
+                        if (optionText === value) {
+                            option.selected = true;
+                        }
+                        inputElement.appendChild(option);
+                    });
+                    inputElement.addEventListener('change', (e) => {
+                        setTimeout(() => {
+                            const especieCell = cell.nextElementSibling;
+                            if (especieCell) {
+                                const especieSelect = especieCell.querySelector('select');
+                                if (especieSelect) {
+                                    updateEspecieOptionsForEdit(
+                                        e.target.value,
+                                        especieSelect,
+                                        originalData['especie']
+                                    );
+                                }
+                            }
+                        }, 0); 
+                    });
+                } else if (field === 'especie') {
+                    inputElement = document.createElement('select');
+                    inputElement.className = 'edit-field';
+
+                    const generoSelecionado = originalData['genero'];
+                    const especieAtual = originalData[field];
+
+                    // Se o gênero tiver espécies conhecidas, usa elas. Senão, apenas a espécie atual
+                    const especies = especiesPorGenero[generoSelecionado] || [especieAtual];
+
+                    especies.forEach(optionText => {
+                        const option = document.createElement('option');
+                        option.value = optionText;
+                        option.textContent = optionText;
+                        if (optionText === especieAtual) {
+                            option.selected = true;
+                        }
+                        inputElement.appendChild(option);
+                    });
+                } else if (field === 'recorrente') {
+                    inputElement = document.createElement('select');
+                    inputElement.className = 'edit-field';
+                    const recorrenteOptions = [
+                        { value: 'NAO', text: 'NÃO' },
+                        { value: 'SIM', text: 'SIM' }
+                    ];
+                    recorrenteOptions.forEach(optionData => {
+                        const option = document.createElement('option');
+                        option.value = optionData.value;
+                        option.textContent = optionData.text;
+                        if (optionData.value === value) {
+                            option.selected = true;
+                        }
+                        inputElement.appendChild(option);
+                    });
+                } else if (field === 'prioridade') {
+                    inputElement = document.createElement('select');
+                    inputElement.className = 'edit-field';
+                    const prioridadeOptions = [
+                        { value: 'NAO', text: 'NÃO' },
+                        { value: 'SIM', text: 'SIM' }
+                    ];
+                    prioridadeOptions.forEach(optionData => {
+                        const option = document.createElement('option');
+                        option.value = optionData.value;
+                        option.textContent = optionData.text;
+                        if (optionData.value === value) {
+                            option.selected = true;
+                        }
+                        inputElement.appendChild(option);
+                    });
+                } else if (field === 'status_analise') { 
+                    inputElement = document.createElement('select');
+                    inputElement.className = 'edit-field';
+                    const statusAnaliseOptions = [
+                        {value: 'PROSSEGUIMENTO_SEM_RESSALVA', text: 'Prosseguimento sem ressalva'},
+                        {value: 'PROSSEGUIMENTO_COM_RESSALVA', text: 'Prosseguimento com ressalva'},
+                        {value: 'NAO_PROSSEGUIMENTO', text: 'Não Prosseguimento'},
+                        {value: 'DEVOLUCAO_PARA_SANEAMENTO', text: 'Devolução para saneamento'},
+                        {value: 'NAO_APLICAVEL', text: 'Não Aplicável'}
+                    ];
+                    statusAnaliseOptions.forEach(optionData => {
+                        const option = document.createElement('option');
+                        option.value = optionData.value;
+                        option.textContent = optionData.text;
+                        if (optionData.value === value) { 
+                            option.selected = true;
+                        }
+                        inputElement.appendChild(option);
+                    });
+                } else if (field.startsWith('data_')) {
+                    inputElement = document.createElement('input');
+                    inputElement.type = 'date';
+                    inputElement.className = 'edit-field';
+                    inputElement.value = value;
+                } else if (field.startsWith('hora_')) {
+                    inputElement = document.createElement('input');
+                    inputElement.type = 'time';
+                    inputElement.className = 'edit-field';
+                    inputElement.value = value;
+                }
+                else {
+                    inputElement = document.createElement('input');
+                    inputElement.type = 'text';
+                    inputElement.className = 'edit-field';
+                    inputElement.value = value;
+                }
+
+                cell.textContent = '';
+                cell.appendChild(inputElement);
+            });
+
+            const actionsCell = row.querySelector('td:last-child');
+            actionsCell.innerHTML = `
+                <button class="btn btn-salvar" onclick="salvarProcesso(this)">Salvar</button>
+                <button class="btn btn-cancelar" onclick="cancelarEdicao()">Cancelar</button>
+            `;
+        }
+
+        function updateEspecieOptionsForEdit(selectedGenero, especieSelectElement, selectedEspecieValue) {
+            especieSelectElement.innerHTML = '<option value="">Selecione uma Espécie</option>';
+            const outrosOption = document.createElement('option');
+            outrosOption.value = 'OUTROS_ESPECIE';
+            outrosOption.textContent = 'Outros';
+            especieSelectElement.appendChild(outrosOption);
+
+            if (selectedGenero && especiesPorGenero[selectedGenero]) {
+                especiesPorGenero[selectedGenero].forEach(especie => {
+                    const option = document.createElement('option');
+                    option.value = especie;
+                    option.textContent = especie;
+                    especieSelectElement.appendChild(option);
+                });
+            }
+
+            if (selectedEspecieValue) {
+                const existe = Array.from(especieSelectElement.options).some(opt => opt.value === selectedEspecieValue);
+                especieSelectElement.value = existe ? selectedEspecieValue : 'OUTROS_ESPECIE';
+            }
+        }
+
+        async function salvarProcesso(btn) {
+            const row = btn.closest('tr');
+            const id = row.getAttribute('data-id');
+            const data = {};
+            let isValid = true;
+
+            row.querySelectorAll('.editable').forEach(cell => {
+                const field = cell.getAttribute('data-field');
+                const input = cell.querySelector('input, select, textarea');
+                if (input) {
+                    let fieldValue = input.value.trim();
+
+                    if (field === 'genero' && fieldValue === 'OUTROS_GENERO') {
+                        const outrosInput = cell.querySelector('input[data-field-extra="genero_outros_input"]');
+                        if (outrosInput && outrosInput.value.trim()) {
+                            fieldValue = outrosInput.value.trim();
+                        } else {
+                            isValid = false;
+                            alert('Por favor, preencha o campo "Outros" para Gênero.');
+                            outrosInput.style.borderColor = '#e74c3c';
+                            return;
+                        }
+                    } else if (field === 'especie' && fieldValue === 'OUTROS_ESPECIE') {
+                        const outrosInput = cell.querySelector('input[data-field-extra="especie_outros_input"]');
+                        if (outrosInput && outrosInput.value.trim()) {
+                            fieldValue = outrosInput.value.trim();
+                        } else {
+                            isValid = false;
+                            alert('Por favor, preencha o campo "Outros" para Espécie.');
+                            outrosInput.style.borderColor = '#e74c3c';
+                            return;
+                        }
+                    }
+
+                    if (fieldValue === '' && ['numero_processo', 'secretaria', 'data_entrada', 'hora_entrada', 'genero', 'especie', 'objeto', 'prioridade'].includes(field)) {
+                        isValid = false;
+                        alert(`O campo "${field}" é obrigatório.`);
+                        input.style.borderColor = '#e74c3c';
+                    } else {
+                        data[field] = fieldValue === '' ? null : fieldValue;
+                        input.style.borderColor = '#ddd';
+                    }
+                }
+            });
+
+            if (!isValid) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`{% url 'atualizar_processo' id=0 %}`.replace('0', id), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken,
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert('Processo atualizado com sucesso!');
+                    location.reload();
+                } else {
+                    alert('Erro ao salvar: ' + result.message);
+                }
+            } catch (error) {
+                alert('Erro na comunicação com o servidor: ' + error.message);
+                console.error('Erro de comunicação ou no servidor:', error);
+            } finally {
+                editingRow = null;
+                originalData = {};
+            }
+        }
+
+        function cancelarEdicao() {
+            if (editingRow && Object.keys(originalData).length > 0) {
+                const row = editingRow;
+                row.querySelectorAll('.editable').forEach(cell => {
+                    const field = cell.getAttribute('data-field');
+                    let restoredValue = originalData[field] || '';
+
+                    const existingInput = cell.querySelector('input, select, textarea');
+                    if (existingInput) {
+                        cell.removeChild(existingInput);
+                        const extraInput = cell.querySelector('input[data-field-extra]');
+                        if (extraInput) {
+                            cell.removeChild(extraInput);
+                        }
+                    }
+
+                    if (field === 'objeto' || field === 'observacao') {
+                        cell.innerHTML = `
+                            <span class="observacao-preview">${restoredValue.replace(/\n/g, '<br/>').substring(0, 50)}</span>
+                            ${restoredValue.length > 50 ? `<button class="btn btn-sm btn-visualizar" onclick="visualizarObservacao('${restoredValue.replace(/'/g, "\\'")}')">Visualizar</button>` : ''}
+                        `;
+                    } else if (field === 'status_analise') { 
+                         const statusMap = {
+                            'PROSSEGUIMENTO_SEM_RESSALVA': 'Prosseguimento sem ressalva',
+                            'PROSSEGUIMENTO_COM_RESSALVA': 'Prosseguimento com ressalva',
+                            'NAO_PROSSEGUIMENTO': 'Não Prosseguimento',
+                            'DEVOLUCAO_PARA_SANEAMENTO': 'Devolução para saneamento',
+                            'NAO_APLICAVEL': 'Não Aplicável'
+                        };
+                        cell.textContent = statusMap[restoredValue] || restoredValue;
+                    }
+                    else {
+                        cell.textContent = restoredValue;
+                    }
+                });
+                const actionsCell = row.querySelector('td:last-child');
+                actionsCell.innerHTML = originalData['actionsHtml'];
+
+
+                editingRow = null;
+                originalData = {};
+            }
+        }
+
+        async function deletarProcesso(id) {
+            if (confirm('Tem certeza que deseja deletar este processo?')) {
+                try {
+                    const response = await fetch(`{% url 'deletar_processo' id=0 %}`.replace('0', id), {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': csrftoken,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        alert(result.message);
+                        location.reload();
+                    } else {
+                        alert('Erro ao deletar processo: ' + result.message);
+                    }
+                } catch (error) {
+                    alert('Erro na comunicação com o servidor ao deletar processo: ' + error.message);
+                    console.error('Erro de exclusão:', error);
+                }
+            }
+        }
+
+        // Função concluirMonitoramento movida para dentro do script de finalizados.html
+        async function concluirMonitoramento(processId) {
+            if (confirm('Tem certeza que deseja registrar este monitoramento como concluído?')) {
+                try {
+                    const response = await fetch(`{% url 'concluir_monitoramento' process_id=0 %}`.replace('0', processId), {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': csrftoken,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({})
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        alert(result.message);
+                        location.reload(); // Recarrega a página para refletir as mudanças
+                    } else {
+                        alert('Erro ao concluir monitoramento: ' + result.message);
+                    }
+                } catch (error) {
+                    alert('Erro na comunicação com o servidor: ' + error.message);
+                    console.error('Erro ao concluir monitoramento:', error);
+                }
+            }
+        }
+
+        // Função marcarSaida também movida para dentro do script de finalizados.html (se for usada)
+        async function marcarSaida(processId) {
+            if (confirm('Tem certeza que deseja marcar a saída deste processo com a data e hora atuais?')) {
+                try {
+                    const response = await fetch(`{% url 'marcar_saida_processo' process_id=0 %}`.replace('0', processId), {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': csrftoken,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({})
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        alert(result.message);
+                        // Atualiza a exibição na tabela se o processo não for recarregado
+                        document.getElementById(`data_saida_${processId}`).textContent = result.data_saida;
+                        document.getElementById(`hora_saida_${processId}`).textContent = result.hora_saida;
+
+                        // Esconde o botão após marcar a saída, se desejar
+                        const row = document.querySelector(`tr[data-id="${processId}"]`);
+                        if (row) {
+                            const marcarSaidaButton = row.querySelector('.btn-marcar-saida');
+                            if (marcarSaidaButton) {
+                                marcarSaidaButton.style.display = 'none';
+                            }
+                        }
+                        location.reload(); // Recarrega a página para refletir as mudanças
+
+                    } else {
+                        alert('Erro ao marcar saída: ' + result.message);
+                    }
+                } catch (error) {
+                    alert('Erro na comunicação com o servidor: ' + error.message);
+                    console.error('Erro ao marcar saída:', error);
+                }
+            }
+        }
+
+
+        document.getElementById('filtroPrioridade').addEventListener('change', applyFilters);
+        document.getElementById('filtroDataInicial').addEventListener('change', applyFilters);
+        document.getElementById('filtroDataFinal').addEventListener('change', applyFilters);
+        document.getElementById('filtroStatusMonitoramento').addEventListener('change', applyFilters);
+        document.getElementById('filtroGenero').addEventListener('change', function() {
+            const selectedGenero = this.value;
+            document.getElementById('filtroEspecie').value = 'todas';
+            if (selectedGenero !== 'todas') {
+                populateEspeciesFilter(selectedGenero);
+            } else {
+                populateEspeciesFilter('todas');
+            }
+            applyFilters();
+        });
+        document.getElementById('filtroEspecie').addEventListener('change', applyFilters);
+        document.getElementById('filtroStatusAnalise').addEventListener('change', applyFilters);
+
+
+        function applyFilters() {
+            const prioridade = document.getElementById('filtroPrioridade').value;
+            const termo = document.getElementById('inputPesquisa').value.trim();
+            const dataInicial = document.getElementById('filtroDataInicial').value;
+            const dataFinal = document.getElementById('filtroDataFinal').value;
+            const statusMonitoramento = document.getElementById('filtroStatusMonitoramento').value;
+            const genero = document.getElementById('filtroGenero').value;
+            const especie = document.getElementById('filtroEspecie').value;
+            const statusAnalise = document.getElementById('filtroStatusAnalise').value;
+
+            // ***** CORRIGIDO: Agora aponta para listar_finalizados *****
+            let url = '{% url "listar_finalizados" %}';
+            const params = new URLSearchParams();
+
+            if (prioridade !== 'todas') {
+                params.append('prioridade', prioridade);
+            }
+            if (termo) {
+                params.append('termo', termo);
+            }
+            if (dataInicial) {
+                params.append('data_inicial', dataInicial);
+            }
+            if (dataFinal) {
+                params.append('data_final', dataFinal);
+            }
+            if (statusMonitoramento !== 'todas') {
+                params.append('status_monitoramento', statusMonitoramento);
+            }
+            if (genero !== 'todas') {
+                params.append('genero', genero);
+            }
+            if (especie !== 'todas') {
+                params.append('especie', especie);
+            }
+            if (statusAnalise !== 'todas') {
+                params.append('status_analise', statusAnalise);
+            }
+
+            if (params.toString()) {
+                url += '?' + params.toString();
+            }
+            window.location.href = url;
+        }
+
+        document.getElementById('formPesquisa').addEventListener('submit', function(e) {
+            e.preventDefault();
+            applyFilters();
+        });
+
+        document.getElementById('btnLimparPesquisa').addEventListener('click', function() {
+            document.getElementById('inputPesquisa').value = '';
+            document.getElementById('filtroDataInicial').value = '';
+            document.getElementById('filtroDataFinal').value = '';
+            document.getElementById('filtroPrioridade').value = 'todas';
+            document.getElementById('filtroStatusMonitoramento').value = 'todas';
+            document.getElementById('filtroGenero').value = 'todas';
+            document.getElementById('filtroEspecie').value = 'todas';
+            document.getElementById('filtroStatusAnalise').value = 'todas';
+            populateEspeciesFilter('todas');
+            applyFilters(); // Chama applyFilters para recarregar com os filtros limpos
+        });
+
+        document.getElementById('btnExportExcel').addEventListener('click', function() {
+            const dataInicial = document.getElementById('filtroDataInicial').value;
+            const dataFinal = document.getElementById('filtroDataFinal').value;
+            const prioridade = document.getElementById('filtroPrioridade').value;
+            const termo = document.getElementById('inputPesquisa').value.trim();
+            const statusMonitoramento = document.getElementById('filtroStatusMonitoramento').value;
+            const genero = document.getElementById('filtroGenero').value;
+            const especie = document.getElementById('filtroEspecie').value;
+            const statusAnalise = document.getElementById('filtroStatusAnalise').value;
+
+            if (!dataInicial || !dataFinal) {
+                alert('Por favor, selecione uma Data Inicial e uma Data Final para exportar os processos por período.');
+                return;
+            }
+
+            let exportUrl = '{% url "exportar_finalizados_excel" %}';
+            const params = new URLSearchParams();
+
+            params.append('data_inicial', dataInicial);
+            params.append('data_final', dataFinal);
+
+            if (prioridade !== 'todas') {
+                params.append('prioridade', prioridade);
+            }
+            if (termo) {
+                params.append('termo', termo);
+            }
+            if (statusMonitoramento !== 'todas') {
+                params.append('status_monitoramento', statusMonitoramento);
+            }
+            if (genero !== 'todas') {
+                params.append('genero', genero);
+            }
+            if (especie !== 'todas') {
+                params.append('especie', especie);
+            }
+            if (statusAnalise !== 'todas') {
+                params.append('status_analise', statusAnalise);
+            }
+
+            exportUrl += '?' + params.toString();
+            window.location.href = exportUrl;
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const prioridadeParam = urlParams.get('prioridade');
+            const termoParam = urlParams.get('termo');
+            const dataInicialParam = urlParams.get('data_inicial');
+            const dataFinalParam = urlParams.get('data_final');
+            const statusMonitoramentoParam = urlParams.get('status_monitoramento');
+            const generoParam = urlParams.get('genero');
+            const especieParam = urlParams.get('especie');
+            const statusAnaliseParam = urlParams.get('status_analise');
+
+
+            if (statusMonitoramentoParam) {
+                document.getElementById('filtroStatusMonitoramento').value = statusMonitoramentoParam;
+            }
+            if (generoParam) {
+                document.getElementById('filtroGenero').value = generoParam;
+            }
+            if (generoParam && generoParam !== 'todas') {
+                populateEspeciesFilter(generoParam, especieParam);
+            } else {
+                populateEspeciesFilter('todas', especieParam);
+            }
+            if (statusAnaliseParam) {
+                document.getElementById('filtroStatusAnalise').value = statusAnaliseParam;
+            }
+        });
+
+        async function populateEspeciesFilter(selectedGenero, selectedEspecie = 'todas') {
+            const especieSelect = document.getElementById('filtroEspecie');
+            especieSelect.innerHTML = '<option value="todas">Todas as Espécies</option>';
+
+            let apiUrl = '';
+            if (selectedGenero === 'todas') {
+                apiUrl = `/api/get_all_especies/`;
+            } else {
+                apiUrl = `/api/get_especies_by_genero/?genero=${selectedGenero}`;
+            }
+
+            try {
+                const response = await fetch(apiUrl);
+                const data = await response.json();
+                data.especies.forEach(especie => {
+                    const option = document.createElement('option');
+                    option.value = especie;
+                    option.textContent = especie;
+                    especieSelect.appendChild(option);
+                });
+                if (selectedEspecie) {
+                    especieSelect.value = selectedEspecie;
+                }
+            } catch (error) {
+                console.error('Error fetching species:', error);
+            }
+        }
+
+        function visualizarObservacao(conteudo) {
+            document.getElementById('observacaoConteudo').textContent = conteudo;
+            document.getElementById('observacaoModal').style.display = 'flex';
+        }
+
+        function fecharModal() {
+            document.getElementById('observacaoModal').style.display = 'none';
+        }
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('observacaoModal');
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+    </script>
+</body>
+</html>
