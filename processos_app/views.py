@@ -860,7 +860,7 @@ def listar_finalizados(request):
 
 
 @login_required
-@user_passes_test(lambda u: u.is_superuser or (hasattr(u, 'profile') and u.profile.level == '0'))
+@user_passes_test(lambda u: u.is_superuser or (hasattr(u, 'profile') and u.profile.level in ['0', '3']))
 def exportar_finalizados_excel(request):
     data_inicial_str = request.GET.get('data_inicial')
     data_final_str = request.GET.get('data_final')

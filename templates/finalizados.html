@@ -301,7 +301,7 @@
                 <button type="button" id="btnLimparPesquisa" class="btn" style="background-color: #95a5a6;">Limpar</button>
             </form>
 
-            {% if user.is_superuser %} {# Only superusers can export to excel #}
+            {% if user.is_superuser or user_level == '0' or user_level == '3' %}
                 <button type="button" id="btnExportExcel" class="btn" style="background-color: #2ecc71;">Exportar para Excel</button>
             {% endif %}
         </div>
