@@ -928,8 +928,7 @@ def exportar_finalizados_excel(request):
         "N° Processo", "Volume", "Secretaria", "Data Entrada", "Hora Entrada",
         "Data Saída", "Hora Saída", "Destino", "Gênero", "Espécie", "Objeto",
         "Contratada", "Recorrente", "Prioridade", "Técnico", "N° Despacho",
-        "Observação", "Prazo Monitoramento", "Próxima Data Monitoramento", "Status Monitoramento",
-        "Valor", "Período", "Status Análise"
+        "Observação", "Valor"
     ]
     sheet.append(headers)
 
@@ -960,7 +959,7 @@ def exportar_finalizados_excel(request):
                 '%H:%M') if process.hora_entrada else '',
             process.data_saida.strftime(
                 '%Y-%m-%d') if process.data_saida else '',
-            # Format Time object for Excel
+            # Formatacao Excel
             process.hora_saida.strftime('%H:%M') if process.hora_saida else '',
             process.destino,
             process.genero,
@@ -972,13 +971,8 @@ def exportar_finalizados_excel(request):
             process.tecnico,
             process.numero_despacho,
             process.observacao,
-            process.get_prazo_monitoramento_display(),
-            process.proxima_data_monitoramento.strftime(
-                '%Y-%m-%d') if process.proxima_data_monitoramento else '',
-            process.get_status_monitoramento_display(),
             process.valor,
-            process.periodo,
-            process.get_status_analise_display()
+
         ]
         sheet.append(row_data)
 
@@ -1110,19 +1104,18 @@ def marcar_saida_processo(request, process_id):
     return JsonResponse({"success": False, "message": "Método não permitido."}, status=405)
 
 
-@login_required
 def user_login(request):
     if request.method == 'POST':
         form = AuthenticationForm(request, data=request.POST)
         if form.is_valid():
             username = form.cleaned_data.get('username')
             password = form.cleaned_data.get('password')
-            user = authenticate(username=username, password=password)
+            user = authenticate(request, username=username, password=password)
             if user is not None:
                 login(request, user)
                 return redirect('listar_processos')
             else:
-                return render(request, 'registration/login.html', {'form': form, 'error_message': 'Nome de usuário ou senha inválidos.'})
+                return render(request, 'registration/login.html', {'form': form, 'error': 'Nome de usuário ou senha inválidos.'})
     else:
         form = AuthenticationForm()
     return render(request, 'registration/login.html', {'form': form})
