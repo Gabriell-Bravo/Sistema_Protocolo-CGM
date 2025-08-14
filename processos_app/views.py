@@ -346,7 +346,7 @@ def listar_processos(request):
     # Pre-calculate flags for template logic
     can_edit = request.user.is_superuser or \
         (hasattr(request.user, 'profile')
-         and request.user.profile.level in ['1', '2', '3'])
+         and request.user.profile.level in ['1', '2', '3', '0'])
 
     can_delete = request.user.is_superuser
 
@@ -383,7 +383,7 @@ def atualizar_processo(request, id):
             processo = get_object_or_404(Processo, id=id)
 
             # Permission check for updating a process
-            if not (request.user.is_superuser or (hasattr(request.user, 'profile') and request.user.profile.level in ['1', '2', '3'])):
+            if not (request.user.is_superuser or (hasattr(request.user, 'profile') and request.user.profile.level in ['1', '2', '3', '0'])):
                 return JsonResponse({"success": False, "message": "Você não tem permissão para editar processos."}, status=403)
 
             if not can_access_genero(request.user, processo.genero):
