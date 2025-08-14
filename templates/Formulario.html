@@ -552,26 +552,27 @@
                                 generoSelect.value = foundGeneroKey;
                                 handleGeneroOutros();
                                 updateEspecieOptions(); // This will populate species for the foundGeneroKey
-                                
                                 const foundEspecie = especiesPorGenero[foundGeneroKey].find(e => e.name === especieExistente);
                                 if (foundEspecie) {
                                     especieSelect.value = especieExistente;
+                                    especieOutrosInput.value = '';
+                                    especieOutrosInput.style.display = 'none';
+                                    especieOutrosInput.required = false;
                                     handleEspecieOutros();
                                 } else {
-                                    // If existing species is not in the predefined list for this genre, treat as 'Outros'
+                                    // Se espécie não está na lista, trata como Outros
                                     especieSelect.value = 'OUTROS_ESPECIE';
                                     especieOutrosInput.value = especieExistente;
                                     especieOutrosInput.style.display = 'block';
                                     especieOutrosInput.required = true;
                                 }
                             } else {
-                                // If existing genre is not in the predefined list, treat as 'Outros'
+                                // Se gênero não está na lista, trata como Outros
                                 generoSelect.value = 'OUTROS_GENERO';
                                 generoOutrosInput.value = generoExistente;
                                 generoOutrosInput.style.display = 'block';
                                 generoOutrosInput.required = true;
-                                
-                                // And the species will also be 'Outros' in this case
+                                // Espécie também vira Outros
                                 especieSelect.value = 'OUTROS_ESPECIE';
                                 especieOutrosInput.value = especieExistente;
                                 especieOutrosInput.style.display = 'block';
