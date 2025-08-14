@@ -499,15 +499,28 @@
                     inputElement = document.createElement('select');
                     inputElement.className = 'edit-field';
                     const generoOptions = ['LIQUIDACOES', 'LICITACOES_E_CONTRATOS', 'OUTROS_GENERO'];
+                    let isCustomGenero = !generoOptions.includes(value);
                     generoOptions.forEach(optionText => {
                         const option = document.createElement('option');
                         option.value = optionText;
                         option.textContent = optionText === 'OUTROS_GENERO' ? 'Outros' : optionText.replace(/_/g, ' ');
-                        if (optionText === value) {
+                        if ((isCustomGenero && optionText === 'OUTROS_GENERO') || (!isCustomGenero && optionText === value)) {
                             option.selected = true;
                         }
                         inputElement.appendChild(option);
                     });
+                    cell.textContent = '';
+                    cell.appendChild(inputElement);
+                    // Se for personalizado, mostra input texto preenchido
+                    if (isCustomGenero) {
+                        const outrosInput = document.createElement('input');
+                        outrosInput.type = 'text';
+                        outrosInput.className = 'edit-field';
+                        outrosInput.value = value;
+                        outrosInput.setAttribute('data-field-extra', 'genero_outros_input');
+                        outrosInput.style.marginTop = '5px';
+                        cell.appendChild(outrosInput);
+                    }
                     inputElement.addEventListener('change', (e) => {
                         setTimeout(() => {
                             const especieCell = cell.nextElementSibling;
@@ -521,26 +534,76 @@
                                     );
                                 }
                             }
-                        }, 0); 
+                            // Mostrar ou esconder input de outros
+                            if (e.target.value === 'OUTROS_GENERO') {
+                                let outrosInput = cell.querySelector('input[data-field-extra="genero_outros_input"]');
+                                if (!outrosInput) {
+                                    outrosInput = document.createElement('input');
+                                    outrosInput.type = 'text';
+                                    outrosInput.className = 'edit-field';
+                                    outrosInput.setAttribute('data-field-extra', 'genero_outros_input');
+                                    outrosInput.style.marginTop = '5px';
+                                    cell.appendChild(outrosInput);
+                                }
+                            } else {
+                                const outrosInput = cell.querySelector('input[data-field-extra="genero_outros_input"]');
+                                if (outrosInput) cell.removeChild(outrosInput);
+                            }
+                        }, 0);
                     });
                 } else if (field === 'especie') {
                     inputElement = document.createElement('select');
                     inputElement.className = 'edit-field';
-
                     const generoSelecionado = originalData['genero'];
                     const especieAtual = originalData[field];
-
-                    // Se o gênero tiver espécies conhecidas, usa elas. Senão, apenas a espécie atual
-                    const especies = especiesPorGenero[generoSelecionado] || [especieAtual];
-
+                    const especies = especiesPorGenero[generoSelecionado] || [];
+                    let isCustomEspecie = especies.length === 0 || !especies.includes(especieAtual);
+                    // Opção Outros sempre
+                    const outrosOption = document.createElement('option');
+                    outrosOption.value = 'OUTROS_ESPECIE';
+                    outrosOption.textContent = 'Outros';
+                    inputElement.appendChild(outrosOption);
                     especies.forEach(optionText => {
                         const option = document.createElement('option');
                         option.value = optionText;
                         option.textContent = optionText;
-                        if (optionText === especieAtual) {
+                        if (!isCustomEspecie && optionText === especieAtual) {
                             option.selected = true;
                         }
                         inputElement.appendChild(option);
+                    });
+                    if (isCustomEspecie) {
+                        inputElement.value = 'OUTROS_ESPECIE';
+                    }
+                    cell.textContent = '';
+                    cell.appendChild(inputElement);
+                    // Se for personalizado, mostra input texto preenchido
+                    if (isCustomEspecie) {
+                        const outrosInput = document.createElement('input');
+                        outrosInput.type = 'text';
+                        outrosInput.className = 'edit-field';
+                        outrosInput.value = especieAtual;
+                        outrosInput.setAttribute('data-field-extra', 'especie_outros_input');
+                        outrosInput.style.marginTop = '5px';
+                        cell.appendChild(outrosInput);
+                    }
+                    inputElement.addEventListener('change', (e) => {
+                        setTimeout(() => {
+                            if (e.target.value === 'OUTROS_ESPECIE') {
+                                let outrosInput = cell.querySelector('input[data-field-extra="especie_outros_input"]');
+                                if (!outrosInput) {
+                                    outrosInput = document.createElement('input');
+                                    outrosInput.type = 'text';
+                                    outrosInput.className = 'edit-field';
+                                    outrosInput.setAttribute('data-field-extra', 'especie_outros_input');
+                                    outrosInput.style.marginTop = '5px';
+                                    cell.appendChild(outrosInput);
+                                }
+                            } else {
+                                const outrosInput = cell.querySelector('input[data-field-extra="especie_outros_input"]');
+                                if (outrosInput) cell.removeChild(outrosInput);
+                            }
+                        }, 0);
                     });
                 } else if (field === 'recorrente') {
                     inputElement = document.createElement('select');
