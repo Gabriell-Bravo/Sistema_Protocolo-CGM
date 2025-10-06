@@ -211,9 +211,13 @@ def salvar_processo(request):
                 proxima_data_monitoramento_value = calcular_proxima_data_monitoramento(
                     data_base_monitoramento, prazo_monitoramento_value)
 
+            # Server-side validation: 'volume' is required
+            if not data.get('volume') or not str(data.get('volume')).strip():
+                return JsonResponse({"success": False, "message": "Campo 'volume' é obrigatório."}, status=400)
+
             processo = Processo.objects.create(
                 numero_processo=data['numero_processo'],
-                volume=data.get('volume') or None,
+                volume=data['volume'],
                 secretaria=data['secretaria'],
                 data_entrada=data_entrada_obj,
                 hora_entrada=hora_entrada_obj,

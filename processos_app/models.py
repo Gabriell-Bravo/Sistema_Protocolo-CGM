@@ -48,7 +48,7 @@ class Processo(models.Model):
     numero_processo = models.CharField(
         max_length=255, verbose_name="Número de Processo")
     volume = models.CharField(
-        max_length=255, null=True, blank=True, verbose_name="Volume")
+        max_length=255, verbose_name="Volume")
     secretaria = models.CharField(max_length=255, verbose_name="Secretaria")
     data_entrada = models.DateField(verbose_name="Data de Entrada")
     hora_entrada = models.TimeField(verbose_name="Hora de Entrada")

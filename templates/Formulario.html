@@ -193,11 +193,11 @@
                     </div>
                 </div>
                 <div class="form-col">
-                    <div class="form-group">
-                        <label for="volume">VOLUME</label>
-                        <input type="text" id="volume" name="volume">
-                        <div class="error" id="volumeError">Campo obrigatório</div>
-                    </div>
+                        <div class="form-group required">
+                            <label for="volume">VOLUME</label>
+                            <input type="text" id="volume" name="volume" required>
+                            <div class="error" id="volumeError">Campo obrigatório</div>
+                        </div>
                 </div>
             </div>
 
@@ -669,7 +669,7 @@
 
                 let isValid = true;
                 const requiredFields = [
-                    'numeroProcesso', 'secretaria', 'dataEntrada', 'horaEntrada',
+                    'numeroProcesso', 'volume', 'secretaria', 'dataEntrada', 'horaEntrada',
                     'objeto', 'prioridade'
                 ];
 
@@ -734,7 +734,7 @@
                 try {
                     const formData = {
                         numero_processo: numeroProcessoInput.value,
-                        volume: document.getElementById('volume').value || null,
+                        volume: document.getElementById('volume').value,
                         secretaria: secretariaSelect.value,
                         data_entrada: document.getElementById('dataEntrada').value,
                         hora_entrada: document.getElementById('horaEntrada').value,

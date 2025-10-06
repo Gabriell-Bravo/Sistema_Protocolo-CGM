@@ -2,6 +2,20 @@
 
 from django.db import migrations, models
 
+
+def remove_unique_constraint_if_postgres(apps, schema_editor):
+    # Only attempt to run the PostgreSQL-specific ALTER TABLE when using Postgres
+    vendor = getattr(schema_editor.connection, 'vendor', None)
+    if vendor == 'postgresql':
+        schema_editor.execute("ALTER TABLE processos DROP CONSTRAINT IF EXISTS processos_numero_processo_key;")
+
+
+def add_unique_constraint_if_postgres(apps, schema_editor):
+    vendor = getattr(schema_editor.connection, 'vendor', None)
+    if vendor == 'postgresql':
+        schema_editor.execute("ALTER TABLE processos ADD CONSTRAINT processos_numero_processo_key UNIQUE (numero_processo);")
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -9,11 +23,8 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # Remover a constraint UNIQUE diretamente no banco
-        migrations.RunSQL(
-            sql="ALTER TABLE processos DROP CONSTRAINT IF EXISTS processos_numero_processo_key;",
-            reverse_sql="ALTER TABLE processos ADD CONSTRAINT processos_numero_processo_key UNIQUE (numero_processo);"
-        ),
+        # Remover a constraint UNIQUE diretamente no banco, mas só em Postgres
+        migrations.RunPython(remove_unique_constraint_if_postgres, add_unique_constraint_if_postgres),
         migrations.AlterField(
             model_name='processo',
             name='numero_processo',
