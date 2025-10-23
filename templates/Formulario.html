@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Protocolo - Entrada de Processo</title>
+    {% load static %}
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-image: url("https://github.com/Gabriell-Bravo/imgs/blob/main/prefeitura.jpg?raw=true");
+            background-repeat: no-repeat;
+            background-size: cover;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .processo {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            margin-left: 5px;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h2 {
+            color: #3498db;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+            margin-top: 30px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .required label:after {
+            content: " *";
+            color: #e74c3c;
+        }
+        input:invalid, select:invalid, textarea:invalid {
+            border-color: #e74c3c;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        .form-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .form-col {
+            flex: 1;
+        }
+        .buttons {
+            margin-top: 30px;
+            text-align: center;
+        }
+        .botao-processos {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 10px 0 30px 0;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            text-align: center;
+        }
+        .botao-processos:hover {
+            background-color: #2980b9;
+        }
+        button {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            margin: 0 10px;
+        }
+        .btn-primary {
+            background-color: #3498db;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #2980b9;
+        }
+        .btn-primary:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        .btn-primary.loading {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+            opacity: 0.6;
+            position: relative;
+        }
+        .btn-primary.loading::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            margin: auto;
+            border: 2px solid transparent;
+            border-top-color: #ffffff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        .btn-secondary {
+            background-color: #95a5a6;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background-color: #7f8c8d;
+        }
+        .error {
+            color: #e74c3c;
+            font-size: 14px;
+            margin-top: 5px;
+            display: none;
+        }
+        .success-message {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9em;
+            color: #2c3e50;
+            justify-content: flex-end;
+            margin-bottom: 10px;
+        }
+        .user-info .material-icons {
+            font-size: 1.2em;
+        }
+        .user-info a {
+            color: #e74c3c;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .user-info a:hover {
+            text-decoration: underline;
+        }
+        .outros-input {
+            margin-top: 5px;
+            display: none;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        {% if user.is_authenticated %}
+            <div class="user-info">
+                <span class="material-icons">person</span> Olá, {{ user.username }}!
+                <form action="{% url 'logout' %}" method="post" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn" style="background-color: #e74c3c; margin-left: 0;">Sair</button>
+                </form>
+            </div>
+        {% endif %}
+        <h1>SISTEMA DE PROTOCOLO</h1>
+        <h2>ENTRADA DE PROCESSO</h2>
+        <a href="{% url 'listar_processos' %}" class="botao-processos">Ver todos os processos cadastrados</a>
+
+        <div id="successMessage" class="success-message">
+            Processo cadastrado com sucesso!
+        </div>
+
+        <form id="protocoloForm">
+            {% csrf_token %}
+            
+            <div class="form-row">
+                <div class="form-col">
+                    <div class="form-group required">
+                        <label for="numeroProcesso">NÚMERO DE PROCESSO</label>
+                        <input type="text" id="numeroProcesso" name="numero_processo" required>
+                        <div class="error" id="numeroProcessoError">Campo obrigatório</div>
+                    </div>
+                </div>
+                <div class="form-col">
+                        <div class="form-group required">
+                            <label for="volume">VOLUME</label>
+                            <input type="text" id="volume" name="volume" required>
+                            <div class="error" id="volumeError">Campo obrigatório</div>
+                        </div>
+                </div>
+            </div>
+
+            <div class="form-group required">
+                <label for="secretaria">SECRETARIA</label>
+                <select id="secretaria" name="secretaria" required>
+                    <option value="">Selecione uma secretaria</option>
+                    <option value="Administração, Receita e Tributação">Administração, Receita e Tributação</option>
+                    <option value="Agricultura, Abastecimento e Pesca">Agricultura, Abastecimento e Pesca</option>
+                    <option value="Comunicação Social">Comunicação Social</option>
+                    <option value="Desenvolvimento Social">Desenvolvimento Social</option>
+                    <option value="Direitos dos Animais">Direitos dos Animais</option>
+                    <option value="Educação, Cultura, Inclusão, Ciência e Tecnologia">Educação, Cultura, Inclusão, Ciência e Tecnologia</option>
+                    <option value="Esporte, Lazer e Turismo">Esporte, Lazer e Turismo</option>
+                    <option value="Finanças">Finanças</option>
+                    <option value="Gabinete">Gabinete</option>
+                    <option value="Gestão, Inovação e Tecnologia">Gestão, Inovação e Tecnologia</option>
+                    <option value="Governança e Sustentabilidade">Governança e Sustentabilidade</option>
+                    <option value="Municipal de Infraestrutura">Infraestrutura</option>
+                    <option value="Meio Ambiente">Meio Ambiente</option>
+                    <option value="Mulher">Mulher</option>
+                    <option value="Transporte e Serviços Públicos">Transporte e Serviços Públicos</option>
+                    <option value="Obras Públicas">Obras Públicas</option>
+                    <option value="Planejamento">Planejamento</option>
+                    <option value="Relações Institucionais">Relações Institucionais</option>
+                    <option value="Saúde">Saúde</option>
+                    <option value="Segurança e Ordem Pública">Segurança e Ordem Pública</option>
+                    <option value="Transparência e Integridade">Transparência e Integridade</option>
+                    <option value="Urbanismo">Urbanismo</option>
+                </select>
+                <div class="error" id="secretariaError">Campo obrigatório</div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-col">
+                    <div class="form-group required">
+                        <label for="dataEntrada">DATA DE ENTRADA</label>
+                        <input type="date" id="dataEntrada" name="data_entrada" required>
+                        <div class="error" id="dataEntradaError">Campo obrigatório</div>
+                    </div>
+                </div>
+                <div class="form-col">
+                    <div class="form-group required">
+                        <label for="horaEntrada">HORA DE ENTRADA</label>
+                        <input type="time" id="horaEntrada" name="hora_entrada" required>
+                        <div class="error" id="horaEntradaError">Campo obrigatório</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-col">
+                    <div class="form-group">
+                        <label for="dataSaida">DATA DE SAÍDA</label>
+                        <input type="date" id="dataSaida" name="data_saida">
+                    </div>
+                </div>
+                <div class="form-col">
+                    <div class="form-group">
+                        <label for="horaSaida">HORA DE SAÍDA</label>
+                        <input type="time" id="horaSaida" name="hora_saida">
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="destino">DESTINO</label>
+                <input type="text" id="destino" name="destino">
+            </div>
+
+            <div class="form-row">
+                <div class="form-col">
+                    <div class="form-group required">
+                        <label for="genero">GÊNERO</label>
+                        <select id="genero" name="genero_select" required>
+                            <option value="">Selecione um Gênero</option>
+                            <option value="LIQUIDACOES">LIQUIDAÇÕES</option>
+                            <option value="LICITACOES_E_CONTRATOS">LICITAÇÕES E CONTRATOS</option>
+                            <option value="OUTROS_GENERO">Outros</option>
+                        </select>
+                        <input type="text" id="generoOutrosInput" name="genero_outros_input" class="outros-input" placeholder="Digite o Gênero">
+                        <div class="error" id="generoError">Campo obrigatório</div>
+                    </div>
+                </div>
+                <div class="form-col">
+                    <div class="form-group required">
+                        <label for="especie">ESPÉCIE</label>
+                        <select id="especie" name="especie_select" required>
+                            <option value="">Selecione uma Espécie</option>
+                        </select>
+                        <input type="text" id="especieOutrosInput" name="especie_outros_input" class="outros-input" placeholder="Digite a Espécie">
+                        <div class="error" id="especieError">Campo obrigatório</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group required">
+                <label for="objeto">OBJETO</label>
+                <textarea id="objeto" name="objeto" required></textarea>
+                <div class="error" id="objetoError">Campo obrigatório</div>
+            </div>
+
+            <div class="form-group">
+                <label for="contratada">CONTRATADA/INTERESSADA</label>
+                <input type="text" id="contratada" name="contratada">
+            </div>
+
+            <div class="form-row">
+                <div class="form-col">
+                    <div class="form-group">
+                        <label for="recorrente">IDENTIFICAÇÃO SE É RECORRENTE OU NÃO</label>
+                        <select id="recorrente" name="recorrente">
+                            <option value="NAO">NÃO</option>
+                            <option value="SIM">SIM</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-col">
+                    <div class="form-group required">
+                        <label for="prioridade">GRAU DE PRIORIDADE</label>
+                        <select id="prioridade" name="prioridade" required>
+                            <option value="NAO">NÃO (Prazo: 7 dias)</option>
+                            <option value="SIM">SIM (Prazo: 2 dias)</option>
+                        </select>
+                        <div class="error" id="prioridadeError">Campo obrigatório</div>
+                    </div>
+                <div id="prazoExibicao" style="margin-top: 10px; font-weight: bold;">
+                    Prazo: <span id="prazoValor"></span>
+            </div>
+        </div>
+    </div>
+
+            <div class="form-group">
+                <label for="tecnico">TÉCNICO RESPONSÁVEL</label>
+                <input type="text" id="tecnico" name="tecnico">
+            </div>
+
+            <div class="form-group">
+                <label for="numeroDespacho">CONTROLE DO N° DE DESPACHO</label>
+                <input type="text" id="numeroDespacho" name="numero_despacho">
+            </div>
+
+            <div class="form-group">
+                <label for="observacao">OBSERVAÇÃO</label>
+                <textarea id="observacao" name="observacao"></textarea>
+            </div>
+
+            <div class="buttons">
+                <button type="button" class="btn-secondary" onclick="limparFormulario()">Limpar</button>
+                <button type="submit" class="btn-primary" id="submitButton">Salvar Processo</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        // --- FUNÇÕES AUXILIARES ---
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        
+        const csrftoken = getCookie('csrftoken');
+
+        function setCurrentDateTime() {
+            const now = new Date();
+            const year = String(now.getFullYear()).padStart(4, '0');
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            
+            document.getElementById('dataEntrada').value = `${year}-${month}-${day}`;
+            document.getElementById('horaEntrada').value = `${hours}:${minutes}`;
+        }
+
+        function limparFormulario() {
+            document.getElementById('protocoloForm').reset();
+            const requiredFields = [
+                'numeroProcesso', 'secretaria', 'dataEntrada', 'horaEntrada',
+                'genero', 'especie', 'objeto', 'prioridade'
+            ];
+            
+            requiredFields.forEach(fieldId => {
+                const element = document.getElementById(fieldId);
+                const errorElement = document.getElementById(fieldId + 'Error');
+                if (element) {
+                    element.style.borderColor = '#ddd';
+                }
+                if (errorElement) {
+                    errorElement.style.display = 'none';
+                }
+            });
+            
+            document.getElementById('generoOutrosInput').value = '';
+            document.getElementById('generoOutrosInput').style.display = 'none';
+            document.getElementById('especieOutrosInput').value = '';
+            document.getElementById('especieOutrosInput').style.display = 'none';
+            
+            // Reabilita o botão de submit se estiver desabilitado
+            const submitButton = document.getElementById('submitButton');
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.classList.remove('loading');
+                submitButton.textContent = 'Salvar Processo';
+            }
+            
+            updateEspecieOptions();
+            setCurrentDateTime();
+            updatePrazoDisplay();
+        }
+
+        // --- VARIÁVEIS DE ELEMENTOS DO DOM ---
+        const numeroProcessoInput = document.getElementById('numeroProcesso');
+        const secretariaSelect = document.getElementById('secretaria');
+        const destinoInput = document.getElementById('destino');
+        const generoSelect = document.getElementById('genero');
+        const generoOutrosInput = document.getElementById('generoOutrosInput');
+        const especieSelect = document.getElementById('especie');
+        const especieOutrosInput = document.getElementById('especieOutrosInput');
+        const prioridadeSelect = document.getElementById('prioridade');
+        const prazoExibicao = document.getElementById('prazoExibicao');
+        const prazoValor = document.getElementById('prazoValor');       
+
+        // --- DADOS PARA GÊNERO/ESPÉCIE (AGORA COM INFORMAÇÃO DE MONITORAMENTO) ---
+        const especiesPorGenero = {
+            'LIQUIDACOES': [
+                { name: 'Pagamento Geral', monitoramento: null },
+                { name: 'Concessão Aux. Bolsa Atleta', monitoramento: null }, 
+                { name: 'P.C. Bolsa Atleta', monitoramento: 'SEMESTRAL' }, 
+                { name: 'Concessão Aux. Aluguel Social', monitoramento: null }, 
+                { name: 'Concessão Adiantamento', monitoramento: null }, 
+                { name: 'P.C. Adiantamento', monitoramento: 'TRIMESTRAL' }, 
+                { name: 'Subvenção Social - Concessão', monitoramento: null }, 
+                { name: 'Subvenção Social - Pagamento', monitoramento: null },
+                { name: 'Subvenção Social - Prestação de Contas', monitoramento: 'QUADRIMESTRAL' }, 
+                { name: 'Subvenção Social - P.C. Anual', monitoramento: 'ANUAL' }, 
+                { name: 'Subvenção Social - Renovação', monitoramento: null },
+                { name: 'Subvenção Bloco Carnaval', monitoramento: null },
+                { name: 'P.C. Subvenção Bloco Carnaval', monitoramento: 'TRIMESTRAL' }, 
+                { name: 'Concessão Diária', monitoramento: null }, 
+                { name: 'P.C. Patrocínio', monitoramento: 'TRIMESTRAL' },
+                { name: 'Reanálise', monitoramento: null }
+
+            ],
+            'LICITACOES_E_CONTRATOS': [
+                { name: 'Análise Fase Inicial', monitoramento: null },
+                { name: 'Análise Fase Externa', monitoramento: null },
+                { name: 'Dispensa - Análise Fase Externa', monitoramento: null },
+                { name: 'Inexigibilidade', monitoramento: null },
+                { name: 'Adesão de Ata', monitoramento: null },
+                { name: 'Concessão Patrocínio', monitoramento: 'TRIMESTRAL' }, 
+                { name: 'Análise Aditivo', monitoramento: null },
+                { name: 'Reanálise', monitoramento: null }
+            ]
+        };
+
+        // --- FUNÇÕES DE LÓGICA DE NEGÓCIO ---
+        function updateEspecieOptions() {
+            const selectedGenero = generoSelect.value;
+            especieSelect.innerHTML = '<option value="">Selecione uma Espécie</option>';
+            
+            const outrosOption = document.createElement('option');
+            outrosOption.value = 'OUTROS_ESPECIE';
+            outrosOption.textContent = 'Outros';
+            especieSelect.appendChild(outrosOption);
+
+            if (selectedGenero === 'OUTROS_GENERO') {
+                generoOutrosInput.style.display = 'block';
+                generoOutrosInput.required = true;
+                especieSelect.value = 'OUTROS_ESPECIE'; 
+                handleEspecieOutros();
+            } else {
+                generoOutrosInput.style.display = 'none';
+                generoOutrosInput.required = false;
+                
+                if (especiesPorGenero[selectedGenero]) {
+                    especiesPorGenero[selectedGenero].forEach(especieData => {
+                        const option = document.createElement('option');
+                        option.value = especieData.name;
+                        option.textContent = especieData.name;
+                        // Pode adicionar um data attribute se precisar da info no frontend para algo
+                        if (especieData.monitoramento) {
+                            option.setAttribute('data-monitoramento-prazo', especieData.monitoramento);
+                        }
+                        especieSelect.appendChild(option);
+                    });
+                }
+            }
+        }
+
+        function handleEspecieOutros() {
+            if (especieSelect.value === 'OUTROS_ESPECIE' || generoSelect.value === 'OUTROS_GENERO') {
+                especieOutrosInput.style.display = 'block';
+                especieOutrosInput.required = true;
+            } else {
+                especieOutrosInput.style.display = 'none';
+                especieOutrosInput.required = false;
+            }
+        }
+
+        function handleGeneroOutros() {
+            if (generoSelect.value === 'OUTROS_GENERO') {
+                generoOutrosInput.style.display = 'block';
+                generoOutrosInput.required = true;
+            } else {
+                generoOutrosInput.style.display = 'none';
+                generoOutrosInput.required = false;
+            }
+        }
+        
+        function updatePrazoDisplay() {
+            const selectedPrioridade = prioridadeSelect.value;
+            if (selectedPrioridade === 'SIM') {
+                prazoValor.textContent = '2 dias';
+            } else if (selectedPrioridade === 'NAO') {
+                prazoValor.textContent = '7 dias';
+            } else {
+                prazoValor.textContent = '';
+            }
+            prazoExibicao.style.display = (selectedPrioridade === 'SIM' || selectedPrioridade === 'NAO') ? 'block' : 'none';
+        }
+
+        // Lógica de Preenchimento Automático (REATIVADA E AJUSTADA)
+        let debounceTimeoutId;
+        numeroProcessoInput.addEventListener('input', function() {
+            clearTimeout(debounceTimeoutId);
+
+            const numeroProcesso = this.value.trim();
+            if (numeroProcesso.length > 0) {
+                debounceTimeoutId = setTimeout(async () => {
+                    try {
+                        // Chama a URL que agora retorna o ÚLTIMO processo cadastrado
+                        const response = await fetch(`{% url 'get_process_by_number' numero_processo='123' %}`.replace('123', encodeURIComponent(numeroProcesso)));
+                        
+                        if (response.ok) {
+                            const data = await response.json(); // Isso será um ÚNICO objeto de processo
+                            
+                            // Preenche os campos com os dados do processo encontrado
+                            document.getElementById('volume').value = data.volume || '';
+                            secretariaSelect.value = data.secretaria || '';
+                            // dataEntrada e horaEntrada são para NOVOS cadastros, não puxados
+                            // document.getElementById('dataEntrada').value = data.data_entrada || '';
+                            // document.getElementById('horaEntrada').value = data.hora_entrada || '';
+                            //document.getElementById('dataSaida').value = data.data_saida || '';
+                            //document.getElementById('horaSaida').value = data.hora_saida || '';
+                            destinoInput.value = data.destino || '';
+
+                            const generoExistente = data.genero || '';
+                            const especieExistente = data.especie || '';
+
+                            const foundGeneroKey = Object.keys(especiesPorGenero).find(key => key === generoExistente);
+
+                            if (foundGeneroKey) {
+                                generoSelect.value = foundGeneroKey;
+                                handleGeneroOutros();
+                                updateEspecieOptions(); // This will populate species for the foundGeneroKey
+                                const foundEspecie = especiesPorGenero[foundGeneroKey].find(e => e.name === especieExistente);
+                                if (foundEspecie) {
+                                    especieSelect.value = especieExistente;
+                                    especieOutrosInput.value = '';
+                                    especieOutrosInput.style.display = 'none';
+                                    especieOutrosInput.required = false;
+                                    handleEspecieOutros();
+                                } else {
+                                    // Se espécie não está na lista, trata como Outros
+                                    especieSelect.value = 'OUTROS_ESPECIE';
+                                    especieOutrosInput.value = especieExistente;
+                                    especieOutrosInput.style.display = 'block';
+                                    especieOutrosInput.required = true;
+                                }
+                            } else {
+                                // Se gênero não está na lista, trata como Outros
+                                generoSelect.value = 'OUTROS_GENERO';
+                                generoOutrosInput.value = generoExistente;
+                                generoOutrosInput.style.display = 'block';
+                                generoOutrosInput.required = true;
+                                // Espécie também vira Outros
+                                especieSelect.value = 'OUTROS_ESPECIE';
+                                especieOutrosInput.value = especieExistente;
+                                especieOutrosInput.style.display = 'block';
+                                especieOutrosInput.required = true;
+                            }
+
+                            document.getElementById('objeto').value = data.objeto || '';
+                            document.getElementById('contratada').value = data.contratada || '';
+                            document.getElementById('recorrente').value = data.recorrente || 'NAO';
+                            prioridadeSelect.value = data.prioridade || 'NAO';
+                            document.getElementById('tecnico').value = data.tecnico || '';
+                            document.getElementById('numeroDespacho').value = data.numero_despacho || '';
+                            document.getElementById('observacao').value = data.observacao || '';
+
+                            updatePrazoDisplay();
+
+                        } else if (response.status === 404) {
+                            console.log('Processo não encontrado, limpando campos parciais.');
+                            limparFormularioParcial();
+                        } else {
+                            throw new Error('Erro ao buscar processo: ' + response.statusText);
+                        }
+                    } catch (error) {
+                        console.error('Erro na comunicação com o servidor ao buscar processo:', error);
+                        // Limpa o formulário parcialmente em caso de erro também
+                        limparFormularioParcial(); 
+                    }
+                }, 500);
+            } else {
+                // Se o campo numeroProcesso estiver vazio, limpa o formulário parcialmente
+                limparFormularioParcial();
+            }
+        });
+
+        // A função limparFormularioParcial já estava ajustada para não limpar data e hora de entrada,
+        // garantindo que elas sejam sempre preenchidas com o valor atual ao iniciar um novo registro.
+        function limparFormularioParcial() {
+            // Não zera numeroProcesso (pois é o gatilho)
+            document.getElementById('volume').value = '';
+            document.getElementById('secretaria').value = '';
+            document.getElementById('dataSaida').value = '';
+            document.getElementById('horaSaida').value = '';
+            document.getElementById('destino').value = '';
+
+            generoSelect.value = '';
+            generoOutrosInput.value = '';
+            generoOutrosInput.style.display = 'none';
+
+            especieSelect.innerHTML = '<option value="">Selecione uma Espécie</option>';
+            const outrosOption = document.createElement('option');
+            outrosOption.value = 'OUTROS_ESPECIE';
+            outrosOption.textContent = 'Outros';
+            especieSelect.appendChild(outrosOption);
+            especieSelect.value = '';
+            especieOutrosInput.value = '';
+            especieOutrosInput.style.display = 'none';
+
+            document.getElementById('objeto').value = '';
+            document.getElementById('contratada').value = '';
+            document.getElementById('recorrente').value = 'NAO';
+            prioridadeSelect.value = 'NAO';
+            updatePrazoDisplay();
+            document.getElementById('tecnico').value = '';
+            document.getElementById('numeroDespacho').value = '';
+            document.getElementById('observacao').value = '';
+
+            setCurrentDateTime(); // Garante que Data/Hora de Entrada sempre estejam com a data/hora atual
+        }
+
+        // --- EVENT LISTENERS GLOBAIS ---
+        document.addEventListener('DOMContentLoaded', function() {
+            setCurrentDateTime();
+            
+            generoSelect.addEventListener('change', function() {
+                handleGeneroOutros();
+                updateEspecieOptions();
+            });
+
+            especieSelect.addEventListener('change', handleEspecieOutros);
+            prioridadeSelect.addEventListener('change', updatePrazoDisplay);
+
+            secretariaSelect.addEventListener('change', function() {
+                destinoInput.value = this.value;
+            });
+
+            updateEspecieOptions();
+            handleGeneroOutros();
+            handleEspecieOutros();
+            updatePrazoDisplay();
+
+            document.getElementById('protocoloForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+
+                // Previne múltiplos cliques
+                const submitButton = document.getElementById('submitButton');
+                if (submitButton.disabled) {
+                    return;
+                }
+
+                // Desabilita o botão e adiciona indicador de carregamento
+                submitButton.disabled = true;
+                submitButton.classList.add('loading');
+                submitButton.textContent = 'Salvando...';
+
+                let isValid = true;
+                const requiredFields = [
+                    'numeroProcesso', 'volume', 'secretaria', 'dataEntrada', 'horaEntrada',
+                    'objeto', 'prioridade'
+                ];
+
+                requiredFields.forEach(fieldId => {
+                    const element = document.getElementById(fieldId);
+                    const errorElement = document.getElementById(fieldId + 'Error');
+                    if (element && !element.value.trim()) {
+                        element.style.borderColor = '#e74c3c';
+                        if (errorElement) errorElement.style.display = 'block';
+                        isValid = false;
+                    } else {
+                        if (element) element.style.borderColor = '#ddd';
+                        if (errorElement) errorElement.style.display = 'none';
+                    }
+                });
+
+                let finalGeneroValue = generoSelect.value;
+                if (generoSelect.value === 'OUTROS_GENERO') {
+                    if (!generoOutrosInput.value.trim()) {
+                        generoOutrosInput.style.borderColor = '#e74c3c';
+                        document.getElementById('generoError').style.display = 'block';
+                        isValid = false;
+                    } else {
+                        generoOutrosInput.style.borderColor = '#ddd';
+                        document.getElementById('generoError').style.display = 'none';
+                        finalGeneroValue = generoOutrosInput.value.trim();
+                    }
+                } else if (!generoSelect.value) {
+                    generoSelect.style.borderColor = '#e74c3c';
+                    document.getElementById('generoError').style.display = 'block';
+                    isValid = false;
+                } else {
+                    generoSelect.style.borderColor = '#ddd';
+                    document.getElementById('generoError').style.display = 'none';
+                }
+
+                let finalEspecieValue = especieSelect.value;
+                // Check if 'Outros' is selected for species OR if a non-predefined species is selected when the genre is not 'Outros'
+                if (especieSelect.value === 'OUTROS_ESPECIE' || 
+                    (especieSelect.value && especiesPorGenero[generoSelect.value] && !especiesPorGenero[generoSelect.value].some(e => e.name === especieSelect.value) && generoSelect.value !== 'OUTROS_GENERO')) {
+                    if (!especieOutrosInput.value.trim()) {
+                        especieOutrosInput.style.borderColor = '#e74c3c';
+                        document.getElementById('especieError').style.display = 'block';
+                        isValid = false;
+                    } else {
+                        especieOutrosInput.style.borderColor = '#ddd';
+                        document.getElementById('especieError').style.display = 'none';
+                        finalEspecieValue = especieOutrosInput.value.trim();
+                    }
+                } else if (!especieSelect.value) {
+                    especieSelect.style.borderColor = '#e74c3c';
+                    document.getElementById('especieError').style.display = 'block';
+                    isValid = false;
+                } else {
+                    especieSelect.style.borderColor = '#ddd';
+                    document.getElementById('especieError').style.display = 'none';
+                }
+
+
+                if (!isValid) {
+                    // Reabilita o botão em caso de erro de validação
+                    submitButton.disabled = false;
+                    submitButton.classList.remove('loading');
+                    submitButton.textContent = 'Salvar Processo';
+                    return;
+                }
+
+                try {
+                    const formData = {
+                        numero_processo: numeroProcessoInput.value,
+                        volume: document.getElementById('volume').value,
+                        secretaria: secretariaSelect.value,
+                        data_entrada: document.getElementById('dataEntrada').value,
+                        hora_entrada: document.getElementById('horaEntrada').value,
+                        data_saida: document.getElementById('dataSaida').value || null,
+                        hora_saida: document.getElementById('horaSaida').value || null,
+                        destino: destinoInput.value || null,
+                        genero: finalGeneroValue,
+                        especie: finalEspecieValue, // Use o valor final da espécie
+                        objeto: document.getElementById('objeto').value,
+                        contratada: document.getElementById('contratada').value || null,
+                        recorrente: document.getElementById('recorrente').value || 'NAO',
+                        prioridade: prioridadeSelect.value,
+                        tecnico: document.getElementById('tecnico').value || null,
+                        numero_despacho: document.getElementById('numeroDespacho').value || null,
+                        observacao: document.getElementById('observacao').value || null
+                    };
+
+                    const response = await fetch('{% url "salvar_processo" %}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrftoken,
+                        },
+                        body: JSON.stringify(formData)
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        document.getElementById('successMessage').style.display = 'block';
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+
+                        setTimeout(() => {
+                            document.getElementById('successMessage').style.display = 'none';
+                            limparFormulario();
+                            // Reabilita o botão após sucesso
+                            submitButton.disabled = false;
+                            submitButton.classList.remove('loading');
+                            submitButton.textContent = 'Salvar Processo';
+                        }, 3000);
+                    } else {
+                        alert('Erro ao salvar: ' + result.message);
+                        // Reabilita o botão em caso de erro
+                        submitButton.disabled = false;
+                        submitButton.classList.remove('loading');
+                        submitButton.textContent = 'Salvar Processo';
+                    }
+                } catch (error) {
+                    alert('Erro na comunicação com o servidor: ' + error.message);
+                    // Reabilita o botão em caso de erro de comunicação
+                    submitButton.disabled = false;
+                    submitButton.classList.remove('loading');
+                    submitButton.textContent = 'Salvar Processo';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
