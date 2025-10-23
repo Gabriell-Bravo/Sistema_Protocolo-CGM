@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Histórico do Processo</title>
+    {% load static %}
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h2 {
+            color: #3498db;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+            margin-top: 30px;
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .btn {
+            padding: 10px 15px;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            margin-top: 20px;
+            display: inline-block;
+        }
+        .btn:hover {
+            background-color: #2980b9;
+        }
+        .no-records {
+            text-align: center;
+            color: #777;
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px dashed #ccc;
+            border-radius: 5px;
+            background-color: #fdfdfd;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9em;
+            color: #2c3e50;
+            justify-content: flex-end;
+            margin-bottom: 10px;
+        }
+        .user-info .material-icons {
+            font-size: 1.2em;
+        }
+        .user-info a {
+            color: #e74c3c;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .user-info a:hover {
+            text-decoration: underline;
+        }
+
+        .btn-visualizar {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 3px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.75em;
+            margin-left: 5px;
+            vertical-align: middle;
+            display: inline-block;
+        }
+
+        .btn-visualizar:hover {
+            background-color: #0056b3;
+            text-align: center;
+        }
+
+        #observacaoModal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #observacaoModal > div {
+            background-color: #fefefe;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 700px;
+            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
+            animation-name: animatetop;
+            animation-duration: 0.4s;
+            border-radius: 8px;
+            position: relative;
+        }
+
+        @keyframes animatetop {
+            from {top: -300px; opacity: 0}
+            to {top: 0; opacity: 1}
+        }
+
+        #observacaoModal .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 35px;
+            font-weight: bold;
+            cursor: pointer;
+            position: absolute;
+            top: 10px;
+            right: 20px;
+        }
+
+        #observacaoModal .close-button:hover,
+        #observacaoModal .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        #observacaoConteudo {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            padding: 10px;
+            background-color: #f9f9f9;
+        }
+        .observacao-preview {
+            white-space: pre-wrap;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        {% if user.is_authenticated %}
+            <div class="user-info">
+                <span class="material-icons">person</span> Olá, {{ user.username }}!
+                <form action="{% url 'logout' %}" method="post" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn" style="background-color: #e74c3c; margin-top: 0; margin-left: 0;">Sair</button>
+                </form>
+            </div>
+        {% endif %}
+        <h1>Histórico de Edições do Processo: {{ process_number }}</h1>
+        <a href="{% url 'listar_processos' %}" class="btn">Voltar para Processos Ativos</a>
+
+        <h2>Histórico de Edições</h2>
+        {% if history %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Campo</th>
+                        <th>Valor Antigo</th>
+                        <th>Novo Valor</th>
+                        <th>Data/Hora da Mudança</th>
+                        <th>Alterado Por</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in history %}
+                    <tr>
+                        <td>{{ record.field_name }}</td>
+                        <td>
+                            <span class="observacao-preview">{{ record.old_value|default:''|truncatechars:50 }}</span>
+                            {% if record.old_value and record.old_value|length > 50 %}
+                                <button class="btn btn-sm btn-visualizar" onclick="visualizarObservacao('{{ record.old_value|escapejs }}')">Visualizar</button>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="observacao-preview">{{ record.new_value|default:''|truncatechars:50 }}</span>
+                            {% if record.new_value and record.new_value|length > 50 %}
+                                <button class="btn btn-sm btn-visualizar" onclick="visualizarObservacao('{{ record.new_value|escapejs }}')">Visualizar</button>
+                            {% endif %}
+                        </td>
+                        <td>{{ record.changed_at_formatted }}</td>
+                        <td>
+                            {% if record.changed_by_user %}
+                                {{ record.changed_by_user }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="no-records">Nenhum histórico de edições encontrado para este processo.</p>
+        {% endif %}
+
+        <h2>Histórico de Monitoramento</h2>
+        {% if monitoramento_records %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Data do Registro</th>
+                        <th>Observação</th>
+                        <th>Registrado Por</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in monitoramento_records %}
+                    <tr>
+                        <td>{{ record.data_registro }}</td>
+                        <td>
+                            <span class="observacao-preview">{{ record.observacao|default:''|truncatechars:50 }}</span>
+                            {% if record.observacao and record.observacao|length > 50 %}
+                                <button class="btn btn-sm btn-visualizar" onclick="visualizarObservacao('{{ record.observacao|escapejs }}')">Visualizar</button>
+                            {% endif %}
+                        </td>
+                        <td>{{ record.registrado_por }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="no-records">Nenhum registro de monitoramento para este processo.</p>
+        {% endif %}
+    </div>
+
+    <div id="observacaoModal" style="display: none;">
+        <div>
+            <span class="close-button" onclick="fecharModal()">&times;</span>
+            <h2>Conteúdo Completo</h2>
+            <p id="observacaoConteudo"></p>
+        </div>
+    </div>
+
+    <script>
+
+        function visualizarObservacao(conteudo) {
+            document.getElementById('observacaoConteudo').textContent = conteudo;
+            document.getElementById('observacaoModal').style.display = 'flex';
+        }
+
+        function fecharModal() {
+            document.getElementById('observacaoModal').style.display = 'none';
+        }
+
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('observacaoModal');
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+    </script>
+</body>
+</html>

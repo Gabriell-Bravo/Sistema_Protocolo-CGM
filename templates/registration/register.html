@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registrar Novo Usuário</title>
+    {% load static %}
+    
+<style>
+    /* register.css */
+
+body {
+    font-family: Arial, sans-serif;
+    background-image: url("https://github.com/Gabriell-Bravo/imgs/blob/main/prefeitura.jpg?raw=true");
+    background-repeat: no-repeat;
+    background-size: cover;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+}
+
+.register-container {
+    background-color: #ffffff;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+}
+
+.register-container h2 {
+    color: #333333;
+    margin-bottom: 20px;
+}
+
+.register-container form {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Alterado para que os campos sejam exibidos com flex */
+.register-container .form-group {
+    margin-bottom: 15px;
+    text-align: left; /* Alinhar rótulos e campos à esquerda */
+}
+
+.register-container label {
+    display: block;
+    margin-bottom: 5px;
+    color: #555555;
+    font-weight: bold;
+}
+
+.register-container input[type="text"],
+.register-container input[type="email"],
+.register-container input[type="password"] {
+    width: calc(100% - 20px); /* Ajustado para 100% menos padding para evitar overflow */
+    padding: 10px;
+    /* margin-bottom: 15px; - Removido aqui, pois o form-group já lida com o espaçamento */
+    border: 1px solid #dddddd;
+    border-radius: 4px;
+    font-size: 16px;
+    box-sizing: border-box; /* Include padding in the width */
+}
+
+.register-container button {
+    background-color: #28a745;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s ease;
+    margin-top: 10px;
+}
+
+.register-container button:hover {
+    background-color: #218838;
+}
+
+.register-container p a {
+    display: block;
+    margin-top: 20px;
+    color: #007bff;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.register-container p a:hover {
+    text-decoration: underline;
+}
+
+/* Novos estilos para os erros */
+.errorlist {
+    color: #e74c3c;
+    list-style-type: none;
+    padding: 0;
+    margin-top: 5px;
+    font-size: 0.9em;
+}
+.errorlist li {
+    margin-bottom: 3px;
+}
+.form-error { /* Estilo para erros não relacionados a campos específicos */
+    text-align: center;
+    margin-bottom: 15px;
+    font-weight: bold;
+}
+</style>
+</head>
+<body>
+    <div class="register-container">
+        <h2>Registrar Novo Usuário</h2>
+        
+        
+        {% if form.non_field_errors %}
+            <ul class="errorlist form-error">
+                {% for error in form.non_field_errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+
+        <form method="post">
+            {% csrf_token %}
+            
+            {% for field in form %}
+                <div class="form-group">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.help_text %}
+                        <small style="color: #666; display: block; margin-top: 5px;">{{ field.help_text }}</small>
+                    {% endif %}
+                    
+                    {% if field.errors %}
+                        <ul class="errorlist">
+                            {% for error in field.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            {% endfor %}
+            <button type="submit">Registrar</button>
+        </form>
+        <p><a href="{% url 'manage_users' %}">Voltar para Gerenciar Usuários</a></p>
+    </div>
+</body>
+</html>

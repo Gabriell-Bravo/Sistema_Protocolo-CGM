@@ -1,0 +1,9 @@
+# Ignore o cache da Vercel .vercel/
+
+# Ignore a pasta do ambiente virtual .venv/
+
+# Ignore a pasta de build de arquivos estáticos staticfiles_build/
+
+# Ignore a pasta de arquivos de mídia se você não precisar deles mediafiles/
+
+# Ignore pastas de cache do Python **/__pycache__

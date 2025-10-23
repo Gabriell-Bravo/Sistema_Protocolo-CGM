@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: America/Sao_Paulo
+      PGTZ: GMT-3
+    ports:
+      - "5432:5432"
+    healthcheck: # ADD THIS BLOCK
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    # Adicione collectstatic antes de iniciar o Gunicorn
+    # Alterado para usar DJANGO_SUPERUSER_USERNAME, DJANGO_SUPERUSER_EMAIL, DJANGO_SUPERUSER_PASSWORD
+    # e o flag --noinput para criação não interativa do superusuário.
+    command: >
+      bash -c "python manage.py makemigrations &&
+               python manage.py migrate &&
+               python manage.py createsuperuser --noinput || true &&
+               python manage.py collectstatic --noinput &&
+               gunicorn --bind 0.0.0.0:8800 protocolo_project.wsgi:application"
+    volumes:
+      - .:/app
+    ports:
+      - "8800:8800"
+    env_file:
+      - .env
+    environment:
+      DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME}
+      DJANGO_SUPERUSER_EMAIL: ${DJANGO_SUPERUSER_EMAIL}
+      DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD}
+      TZ: America/Sao_Paulo
+    depends_on:
+      db:
+        condition: service_healthy
+    
+
+volumes:
+  postgres_data:
+    
