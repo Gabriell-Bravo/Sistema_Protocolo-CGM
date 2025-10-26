@@ -1,19 +1,29 @@
-FROM python:3.11-slim-buster
+FROM python:3.11-slim
 
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Instalar dependências do sistema
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    binutils \
+    libproj-dev \
+    gdal-bin \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
+# Copiar e instalar dependências Python
 COPY requirements.txt /app/
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-RUN pip install --no-cache-dir -r requirements.txt \
-&& pip list # Adicionado para debug: mostra o que foi instalado
+# Copiar o código da aplicação
+COPY . /app/
 
-
-
-
-COPY . /app/ 
+# Criar diretórios necessários
+RUN mkdir -p /app/staticfiles_build /app/mediafiles
 
 EXPOSE 8800
 

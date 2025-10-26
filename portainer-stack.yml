@@ -8,15 +8,15 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-protocolo_db}
-      POSTGRES_USER: ${POSTGRES_USER:-protocolo_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this-password}
+      POSTGRES_DB: '${POSTGRES_DB}'
+      POSTGRES_USER: '${POSTGRES_USER}'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
       TZ: America/Sao_Paulo
       PGTZ: GMT-3
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - '5432:5432'
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-protocolo_user} -d ${POSTGRES_DB:-protocolo_db}"]
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -24,7 +24,7 @@ services:
       - protocolo_network
 
   web:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
     container_name: protocolo_web
@@ -44,18 +44,18 @@ services:
       - ./staticfiles_build:/app/staticfiles_build
       - ./mediafiles:/app/mediafiles
     ports:
-      - "${WEB_PORT:-8800}:8800"
+      - '8800:8800'
     environment:
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
-      DJANGO_DEBUG: ${DJANGO_DEBUG:-True}
-      DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME:-admin}
-      DJANGO_SUPERUSER_EMAIL: ${DJANGO_SUPERUSER_EMAIL:-admin@saquarema.rj.gov.br}
-      DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD:-admin123}
+      DJANGO_SECRET_KEY: '${DJANGO_SECRET_KEY}'
+      DJANGO_DEBUG: '${DJANGO_DEBUG}'
+      DJANGO_SUPERUSER_USERNAME: '${DJANGO_SUPERUSER_USERNAME}'
+      DJANGO_SUPERUSER_EMAIL: '${DJANGO_SUPERUSER_EMAIL}'
+      DJANGO_SUPERUSER_PASSWORD: '${DJANGO_SUPERUSER_PASSWORD}'
       TZ: America/Sao_Paulo
-      POSTGRES_DB: ${POSTGRES_DB:-protocolo_db}
-      POSTGRES_USER: ${POSTGRES_USER:-protocolo_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this-password}
-      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_DB: '${POSTGRES_DB}'
+      POSTGRES_USER: '${POSTGRES_USER}'
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
+      POSTGRES_HOST: '${POSTGRES_HOST}'
       POSTGRES_PORT: 5432
     depends_on:
       db:
@@ -70,4 +70,3 @@ volumes:
 networks:
   protocolo_network:
     driver: bridge
-    
