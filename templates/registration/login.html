@@ -1,111 +1,45 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login</title>
-    {% load static %}
-    <link rel="stylesheet" href="{% static 'css/login.css' %}"> 
-<style>
-      /* login.css */
+{% extends "base_auth.html" %}
 
-body {
-    
-    font-family: Arial, sans-serif;
-    background-image: url("https://github.com/Gabriell-Bravo/imgs/blob/main/prefeitura.jpg?raw=true");
-    background-repeat: no-repeat;
-    background-size: cover;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    margin: 0;
-}
+{% block title %}Entrar{% endblock %}
 
-.login-container {
-    background-color: #ffffff;
-    padding: 30px;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    width: 100%;
-    max-width: 400px;
-    text-align: center;
-}
+{% block content %}
+<h1 class="auth__title">Bem-vindo de volta</h1>
+<p class="auth__subtitle">Entre com suas credenciais para acessar o protocolo.</p>
 
-.login-container h2 {
-    color: #333333;
-    margin-bottom: 20px;
-}
-
-.login-container form {
-    display: flex;
-    flex-direction: column;
-}
-
-.login-container p { /* Styles for Django form paragraphs */
-    margin-bottom: 15px;
-    text-align: left;
-}
-
-.login-container label {
-    display: block;
-    margin-bottom: 5px;
-    color: #555555;
-    font-weight: bold;
-}
-
-.login-container input[type="text"],
-.login-container input[type="password"] {
-    width: calc(100% - 20px);
-    padding: 10px;
-    margin-bottom: 15px;
-    border: 1px solid #dddddd;
-    border-radius: 4px;
-    font-size: 16px;
-    box-sizing: border-box; /* Include padding in the width */
-}
-
-.login-container button {
-    background-color: #007bff;
-    color: white;
-    padding: 10px 15px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 16px;
-    transition: background-color 0.3s ease;
-    margin-top: 10px;
-}
-
-.login-container button:hover {
-    background-color: #0056b3;
-}
-
-.login-container .error {
-    color: #dc3545;
-    margin-top: 15px;
-    font-weight: bold;
-}
-
-.login-container p:last-child {
-    margin-top: 20px;
-    color: #666666;
-    font-size: 14px;
-}
-</style>
-</head>
-<body>
-    <div class="login-container">
-        <h2>Login</h2>
-        <form method="post">
-            {% csrf_token %}
-            {{ form.as_p }}
-            <button type="submit">Entrar</button>
-        </form>
-        {% if error_message %}
-            <p class="error">{{ error_message }}</p>
-        {% endif %}
-        <p>Não tem uma conta? Peça ao administrador para criar uma para você.</p>
+{% if error or error_message %}
+    <div class="alert alert--danger" style="margin-bottom:18px;">
+        <span class="material-symbols-rounded">error</span>
+        <span>{{ error|default:error_message }}</span>
     </div>
-</body>
-</html>
+{% endif %}
+
+{% if form.non_field_errors %}
+    <div class="alert alert--danger" style="margin-bottom:18px;">
+        <span class="material-symbols-rounded">error</span>
+        <span>{{ form.non_field_errors|join:" " }}</span>
+    </div>
+{% endif %}
+
+<form method="post" class="django-form">
+    {% csrf_token %}
+    {% for field in form %}
+        <div class="form-group">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}
+                <ul class="errorlist">
+                    {% for error in field.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+    {% endfor %}
+    <button type="submit" class="btn btn--primary">
+        <span class="material-symbols-rounded">login</span>
+        Entrar
+    </button>
+</form>
+
+<p class="auth__footnote">
+    Não tem uma conta? Solicite ao administrador do sistema.
+</p>
+{% endblock %}

@@ -105,6 +105,14 @@ def calcular_prazo(data_entrada, prioridade_value):
         return None
 
 
+def formatar_prazo(dias_restantes):
+    if dias_restantes < 0:
+        return f"{abs(dias_restantes)} dia(s) atrasado"
+    if dias_restantes == 0:
+        return "Vence hoje"
+    return f"{dias_restantes} dia(s) restante(s)"
+
+
 def calcular_proxima_data_monitoramento(data_base, prazo_monitoramento_tipo):
     """
     Calcula a próxima data de monitoramento com base na data base e no tipo de prazo.
@@ -323,13 +331,35 @@ def listar_processos(request):
 
     processos_query = processos_query.order_by('data_entrada', 'prioridade')
 
+    total_atrasados = 0
+    total_vence_hoje = 0
+    total_prioritarios = 0
+
     for processo in processos_query:
         prazo_obj = calcular_prazo(processo.data_entrada, processo.prioridade)
         if prazo_obj:
             dias_restantes = (prazo_obj - date.today()).days
-            processo.prazo_formatado = f"{dias_restantes} dia(s) {'atrasado' if dias_restantes < 0 else 'restante(s)'}"
+            processo.prazo_formatado = formatar_prazo(dias_restantes)
+            processo.dias_restantes = dias_restantes
+            processo.prazo_status = (
+                'atrasado' if dias_restantes < 0
+                else 'hoje' if dias_restantes == 0
+                else 'atencao' if dias_restantes <= 2
+                else 'ok'
+            )
+            if dias_restantes < 0:
+                total_atrasados += 1
+            elif dias_restantes == 0:
+                total_vence_hoje += 1
         else:
             processo.prazo_formatado = "-"
+            processo.dias_restantes = None
+            processo.prazo_status = 'indefinido'
+
+        if processo.prioridade == 'SIM':
+            total_prioritarios += 1
+
+    total_processos = len(processos_query)
 
     all_generos = Processo.objects.values_list(
         'genero', flat=True).distinct().order_by('genero')
@@ -364,6 +394,10 @@ def listar_processos(request):
 
     return render(request, 'lista_processos.html', {
         'processos': processos_query,
+        'total_processos': total_processos,
+        'total_atrasados': total_atrasados,
+        'total_vence_hoje': total_vence_hoje,
+        'total_prioritarios': total_prioritarios,
         'prioridade_filtro': prioridade_filtro,
         'termo_pesquisa': termo_pesquisa,
         'genero_filtro': genero_filtro,
@@ -769,11 +803,14 @@ def listar_finalizados(request):
     processos_query = processos_query.order_by('-data_saida')
 
     processos_data = []
+    total_monitoramento_pendente = 0
+    total_monitoramento_atrasado = 0
+    total_monitoramento_concluido = 0
     for processo in processos_query:
         prazo_obj = calcular_prazo(processo.data_entrada, processo.prioridade)
         if prazo_obj:
             dias_restantes = (prazo_obj - date.today()).days
-            processo.prazo_formatado = f"{dias_restantes} dia(s) {'atrasado' if dias_restantes < 0 else 'restante(s)'}"
+            processo.prazo_formatado = formatar_prazo(dias_restantes)
         else:
             processo.prazo_formatado = "-"
 
@@ -808,6 +845,13 @@ def listar_finalizados(request):
             'status_analise_display': processo.get_status_analise_display()
         }
         processos_data.append(p_dict)
+
+        if processo.status_monitoramento == 'PENDENTE':
+            total_monitoramento_pendente += 1
+        elif processo.status_monitoramento == 'ATRASADO':
+            total_monitoramento_atrasado += 1
+        elif processo.status_monitoramento == 'CONCLUIDO':
+            total_monitoramento_concluido += 1
 
     all_generos = Processo.objects.values_list(
         'genero', flat=True).distinct().order_by('genero')
@@ -844,6 +888,11 @@ def listar_finalizados(request):
 
     return render(request, 'finalizados.html', {
         'processos': processos_data,
+        'total_processos': len(processos_data),
+        'total_monitoramento_pendente': total_monitoramento_pendente,
+        'total_monitoramento_atrasado': total_monitoramento_atrasado,
+        'total_monitoramento_concluido': total_monitoramento_concluido,
+        'can_export': request.user.is_superuser or (hasattr(request.user, 'profile') and request.user.profile.level in ['0', '3']),
         'prioridade_filtro': prioridade_filtro,
         'termo_pesquisa': termo_pesquisa,
         'data_inicial_filtro': data_inicial_filtro,

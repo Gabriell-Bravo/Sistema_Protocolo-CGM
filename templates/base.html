@@ -1,0 +1,122 @@
+{% load static %}<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Sistema de Protocolo{% endblock %} · CGM Saquarema</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+<script>
+    // Aplicado antes da renderização do layout para a sidebar não "piscar" ao recarregar.
+    if (localStorage.getItem('sidebarCollapsed') === '1') {
+        document.body.classList.add('sidebar-collapsed');
+    }
+</script>
+{% with nav=request.resolver_match.url_name %}
+<div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar__brand">
+            <span class="sidebar__logo">CGM</span>
+            <span class="sidebar__brand-text">
+                <span class="sidebar__title">Protocolo</span>
+                <span class="sidebar__subtitle">Controladoria Geral</span>
+            </span>
+        </div>
+
+        <nav class="sidebar__nav">
+            <div class="sidebar__group-label">Processos</div>
+
+            {% if user.is_superuser or user.profile.level == '0' or user.profile.level == '3' %}
+                <a href="{% url 'cadastrar_processo' %}"
+                   class="nav-item {% if nav == 'cadastrar_processo' %}is-active{% endif %}" title="Novo Processo">
+                    <span class="material-symbols-rounded">note_add</span>
+                    <span class="nav-item__label">Novo Processo</span>
+                </a>
+            {% endif %}
+
+            <a href="{% url 'listar_processos' %}"
+               class="nav-item {% if nav == 'listar_processos' or nav == 'index' or nav == 'ver_historico_processo' %}is-active{% endif %}"
+               title="Processos Ativos">
+                <span class="material-symbols-rounded">inbox</span>
+                <span class="nav-item__label">Processos Ativos</span>
+            </a>
+
+            <a href="{% url 'listar_finalizados' %}"
+               class="nav-item {% if nav == 'listar_finalizados' %}is-active{% endif %}" title="Finalizados">
+                <span class="material-symbols-rounded">task_alt</span>
+                <span class="nav-item__label">Finalizados</span>
+            </a>
+
+            {% if user.is_superuser or user.is_staff %}
+                <div class="sidebar__group-label">Administração</div>
+                <a href="{% url 'manage_users' %}"
+                   class="nav-item {% if nav == 'manage_users' or nav == 'register' %}is-active{% endif %}" title="Usuários">
+                    <span class="material-symbols-rounded">group</span>
+                    <span class="nav-item__label">Usuários</span>
+                </a>
+            {% endif %}
+
+            <div class="sidebar__group-label">Conta</div>
+            <a href="{% url 'password_change' %}"
+               class="nav-item {% if nav == 'password_change' or nav == 'password_change_done' %}is-active{% endif %}"
+               title="Alterar Senha">
+                <span class="material-symbols-rounded">key</span>
+                <span class="nav-item__label">Alterar Senha</span>
+            </a>
+            <form action="{% url 'logout' %}" method="post">
+                {% csrf_token %}
+                <button type="submit" class="nav-item nav-item--danger" title="Sair">
+                    <span class="material-symbols-rounded">logout</span>
+                    <span class="nav-item__label">Sair</span>
+                </button>
+            </form>
+        </nav>
+
+        {% if user.is_authenticated %}
+            <div class="sidebar__footer">
+                <div class="user-card" title="{{ user.username }}">
+                    <span class="avatar">{{ user.username|slice:":2" }}</span>
+                    <span class="user-card__info">
+                        <span class="user-card__name">{{ user.username }}</span>
+                        <span class="user-card__role">
+                            {% if user.is_superuser %}Super Administrador{% else %}{{ user.profile.get_level_display|default:"Usuário" }}{% endif %}
+                        </span>
+                    </span>
+                </div>
+            </div>
+        {% endif %}
+    </aside>
+
+    <div class="sidebar-overlay" data-sidebar-close></div>
+
+    <div class="main">
+        <header class="topbar">
+            <button type="button" class="btn btn--ghost btn--icon" data-sidebar-toggle aria-label="Alternar menu">
+                <span class="material-symbols-rounded">menu</span>
+            </button>
+            <div class="topbar__heading">
+                <div class="topbar__title">{% block page_title %}{% endblock %}</div>
+                <div class="topbar__subtitle">{% block page_subtitle %}{% endblock %}</div>
+            </div>
+            <div class="topbar__actions">
+                {% block topbar_actions %}{% endblock %}
+            </div>
+        </header>
+
+        <main class="content {% block content_class %}{% endblock %}">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</div>
+{% endwith %}
+
+<script src="{% static 'js/app.js' %}"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

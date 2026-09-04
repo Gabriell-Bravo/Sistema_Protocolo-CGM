@@ -1,3 +1,10 @@
 .env
 .venv/
 venv/
+
+__pycache__/
+*.pyc
+
+# Preview local
+preview.sqlite3
+protocolo_project/settings_preview.py
