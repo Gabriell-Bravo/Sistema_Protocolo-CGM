@@ -165,6 +165,7 @@
                         <th>Valor</th>
                         <th>Período</th>
                         <th>Status Análise</th>
+                        <th>Pendência</th>
                         <th class="col-actions" data-column-lock="1">Ações</th>
                     </tr>
                 </thead>
@@ -214,6 +215,13 @@
                         <td class="editable" data-field="status_analise" data-status-analise-raw="{{ processo.status_analise }}">
                             <span class="badge {% if processo.status_analise == 'PROSSEGUIMENTO_SEM_RESSALVA' %}badge--success{% elif processo.status_analise == 'PROSSEGUIMENTO_COM_RESSALVA' %}badge--warning{% elif processo.status_analise == 'NAO_PROSSEGUIMENTO' or processo.status_analise == 'DEVOLUCAO_PARA_SANEAMENTO' %}badge--danger{% endif %}">{{ processo.get_status_analise_display }}</span>
                         </td>
+                        <td>
+                            {% if processo.tem_pendencia == 'SIM' %}
+                                <span class="badge badge--danger">Sim</span>
+                            {% else %}
+                                <span class="badge">Não</span>
+                            {% endif %}
+                        </td>
                         <td class="col-actions">
                             <div class="actions">
                                 {% if can_edit %}
@@ -226,8 +234,9 @@
                                         <span class="material-symbols-rounded">logout</span>
                                     </button>
                                 {% endif %}
-                                <a href="{% url 'ver_historico_processo' process_id=processo.id %}" class="icon-btn" title="Histórico">
+                                <a href="{% url 'ver_historico_processo' process_id=processo.id %}" class="icon-btn icon-btn--count" title="Histórico — {{ processo.total_passagens|default:1 }} passagem{{ processo.total_passagens|default:1|pluralize:'ns' }}">
                                     <span class="material-symbols-rounded">history</span>
+                                    <span class="icon-btn__count">{{ processo.total_passagens|default:1 }}</span>
                                 </a>
                                 {% if can_delete %}
                                     <button type="button" class="icon-btn icon-btn--danger" title="Excluir" onclick="deletarProcesso('{{ processo.id }}')">

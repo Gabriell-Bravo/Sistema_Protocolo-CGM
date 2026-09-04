@@ -4,7 +4,7 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    path('', views.listar_processos, name='index'),
+    path('', views.inicio, name='index'),
     path('cadastrar', views.cadastrar_processo, name='cadastrar_processo'),
     path('salvar', views.salvar_processo, name='salvar_processo'),
     path('listar', views.listar_processos, name='listar_processos'),
@@ -19,18 +19,22 @@ urlpatterns = [
     path('deletar/<int:id>', views.deletar_processo, name='deletar_processo'),
     path('processo/<int:process_id>/concluir_monitoramento/',
          views.concluir_monitoramento, name='concluir_monitoramento'),
-    # New URL for marking exit date/time
     path('processo/<int:process_id>/marcar_saida/',
-         views.marcar_saida_processo, name='marcar_saida_processo'),  # NEW
-    # User management
+         views.marcar_saida_processo, name='marcar_saida_processo'),
     path('register/', views.register, name='register'),
     path('manage_users/', views.manage_users, name='manage_users'),
     path('manage_users/update_level/<int:user_id>/',
          views.update_user_level, name='update_user_level'),
     path('manage_users/delete/<int:user_id>/',
          views.delete_user, name='delete_user'),
-    # API endpoints for dynamic filters
     path('api/get_especies_by_genero/', views.get_especies_by_genero,
          name='get_especies_by_genero'),
     path('api/get_all_especies/', views.get_all_especies, name='get_all_especies'),
+    path('analista/', views.area_analista, name='area_analista'),
+    path('analista/processo/<int:process_id>/',
+         views.analista_processo, name='analista_processo'),
+    path('analista/processo/<int:process_id>/pendencia/',
+         views.adicionar_pendencia, name='adicionar_pendencia'),
+    path('analista/pendencia/<int:pendencia_id>/remover/',
+         views.remover_pendencia, name='remover_pendencia'),
 ]

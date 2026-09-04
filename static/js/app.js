@@ -222,7 +222,40 @@
         return null;
     };
 
+    /* ---------------------------------------------------------- Tema claro/escuro */
+    function isDarkTheme() {
+        return document.documentElement.getAttribute('data-theme') === 'dark';
+    }
+
+    function updateThemeButtons() {
+        var dark = isDarkTheme();
+        var buttons = document.querySelectorAll('[data-theme-toggle]');
+        for (var i = 0; i < buttons.length; i++) {
+            buttons[i].setAttribute('aria-label', dark ? 'Ativar modo claro' : 'Ativar modo escuro');
+            buttons[i].setAttribute('title', dark ? 'Modo claro' : 'Modo escuro');
+        }
+    }
+
+    function initTheme() {
+        updateThemeButtons();
+
+        document.addEventListener('click', function (event) {
+            var toggle = event.target.closest('[data-theme-toggle]');
+            if (!toggle) return;
+
+            if (isDarkTheme()) {
+                document.documentElement.removeAttribute('data-theme');
+                localStorage.setItem('theme', 'light');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+            }
+            updateThemeButtons();
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
+        initTheme();
         initSidebar();
         initDropdowns();
         initFilters();

@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block title %}Analisar {{ processo.numero_processo }}{% endblock %}
+{% block page_title %}{{ processo.numero_processo }}{% endblock %}
+{% block page_subtitle %}{{ processo.secretaria }} · {{ processo.especie }}{% endblock %}
+
+{% block topbar_actions %}
+    <a href="{% url 'area_analista' %}" class="btn btn--outline">
+        <span class="material-symbols-rounded">arrow_back</span>
+        Voltar à fila
+    </a>
+{% endblock %}
+
+{% block content %}
+<div class="stack">
+
+    <section class="meta-grid">
+        <div class="meta-item">
+            <span class="meta-item__label">Volume</span>
+            <span class="meta-item__value">{{ processo.volume|default:'—' }}</span>
+        </div>
+        <div class="meta-item">
+            <span class="meta-item__label">Entrada</span>
+            <span class="meta-item__value">{{ processo.data_entrada|date:"d/m/Y" }} {% if processo.hora_entrada %}às {{ processo.hora_entrada|time:"H:i" }}{% endif %}</span>
+        </div>
+        <div class="meta-item">
+            <span class="meta-item__label">Prazo</span>
+            <span class="badge badge--dot {% if processo.prazo_status == 'atrasado' %}badge--danger{% elif processo.prazo_status == 'hoje' or processo.prazo_status == 'atencao' %}badge--warning{% elif processo.prazo_status == 'ok' %}badge--success{% endif %}">
+                {{ processo.prazo_formatado }}
+            </span>
+        </div>
+        <div class="meta-item">
+            <span class="meta-item__label">Gênero</span>
+            <span class="meta-item__value">{{ processo.genero }}</span>
+        </div>
+        <div class="meta-item">
+            <span class="meta-item__label">Prioridade</span>
+            {% if processo.prioridade == 'SIM' %}
+                <span class="badge badge--danger">SIM</span>
+            {% else %}
+                <span class="badge">NÃO</span>
+            {% endif %}
+        </div>
+        <div class="meta-item">
+            <span class="meta-item__label">Contratada</span>
+            <span class="meta-item__value">{{ processo.contratada|default:'—' }}</span>
+        </div>
+        <div class="meta-item meta-item--wide">
+            <span class="meta-item__label">Objeto</span>
+            <span class="meta-item__value">{{ processo.objeto }}</span>
+        </div>
+    </section>
+
+    <form method="post" class="card" id="formAnalise">
+        {% csrf_token %}
+        <div class="form-section">
+            <div class="form-section__title">
+                <span class="material-symbols-rounded">edit_note</span>
+                Alimentar análise
+            </div>
+            <div class="form-grid form-grid--full">
+                <div class="field">
+                    <label class="field__label" for="valor">Valor</label>
+                    <input type="text" id="valor" name="valor" class="input" value="{{ processo.valor|default:'' }}" placeholder="R$ 0,00">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="destino">Destino</label>
+                    <input type="text" id="destino" name="destino" class="input" value="{{ processo.destino|default:'' }}">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="periodo">Período</label>
+                    <input type="text" id="periodo" name="periodo" class="input" value="{{ processo.periodo|default:'' }}">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="tecnico">Técnico responsável</label>
+                    <input type="text" id="tecnico" name="tecnico" class="input" value="{{ processo.tecnico|default:'' }}">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="data_analise">Data da análise</label>
+                    <input type="date" id="data_analise" name="data_analise" class="input" value="{{ processo.data_analise|date:'Y-m-d' }}">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="numero_despacho">Nº de despacho</label>
+                    <input type="text" id="numero_despacho" name="numero_despacho" class="input" value="{{ processo.numero_despacho|default:'' }}">
+                </div>
+                <div class="field">
+                    <label class="field__label" for="status_analise">Status da análise</label>
+                    <select id="status_analise" name="status_analise" class="select">
+                        {% for value, label in all_status_analise %}
+                            <option value="{{ value }}" {% if processo.status_analise == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="tem_pendencia">Tem pendência?</label>
+                    <select id="tem_pendencia" name="tem_pendencia" class="select">
+                        <option value="NAO" {% if processo.tem_pendencia != 'SIM' %}selected{% endif %}>Não</option>
+                        <option value="SIM" {% if processo.tem_pendencia == 'SIM' %}selected{% endif %}>Sim</option>
+                    </select>
+                    <span class="field__hint">Se sim, descreva cada pendência na lista abaixo.</span>
+                </div>
+                <div class="field field--wide">
+                    <label class="field__label" for="observacao">Observação</label>
+                    <textarea id="observacao" name="observacao" class="textarea" rows="4">{{ processo.observacao|default:'' }}</textarea>
+                </div>
+            </div>
+        </div>
+        <div class="form-section">
+            <div class="form-actions">
+                <button type="submit" class="btn btn--primary">
+                    <span class="material-symbols-rounded">save</span>
+                    Salvar análise
+                </button>
+            </div>
+        </div>
+    </form>
+
+    <section class="card" id="blocoPendencias">
+        <div class="card__header">
+            <span class="card__title">Lista de pendências</span>
+            <span class="card__hint">{{ pendencias|length }} item{{ pendencias|length|pluralize:"ns" }}</span>
+        </div>
+
+        {% if pendencias %}
+            <ul class="pendencia-list">
+                {% for pendencia in pendencias %}
+                    <li class="pendencia-item">
+                        <div>
+                            <div class="pendencia-item__text">{{ pendencia.descricao }}</div>
+                            <div class="pendencia-item__meta">
+                                {{ pendencia.criada_em_formatted }}
+                                {% if pendencia.criada_por %} · {{ pendencia.criada_por }}{% endif %}
+                            </div>
+                        </div>
+                        <form action="{% url 'remover_pendencia' pendencia.id %}" method="post">
+                            {% csrf_token %}
+                            <button type="submit" class="icon-btn icon-btn--danger" title="Remover pendência" onclick="return confirm('Remover esta pendência?');">
+                                <span class="material-symbols-rounded">delete</span>
+                            </button>
+                        </form>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <div class="empty" style="padding: 24px;">
+                <span class="material-symbols-rounded">playlist_add</span>
+                <div class="empty__title">Nenhuma pendência ainda</div>
+                <div>Marque “Sim” e descreva cada item. Pode adicionar quantas quiser.</div>
+            </div>
+        {% endif %}
+
+        <form action="{% url 'adicionar_pendencia' processo.id %}" method="post" class="pendencia-add" id="formPendencia">
+            {% csrf_token %}
+            <label class="field__label" for="descricaoPendencia">Nova pendência</label>
+            <div class="pendencia-add__row">
+                <textarea id="descricaoPendencia" name="descricao" class="textarea" rows="2" placeholder="Descreva a pendência…" required></textarea>
+                <button type="submit" class="btn btn--primary">
+                    <span class="material-symbols-rounded">add</span>
+                    Adicionar pendência
+                </button>
+            </div>
+        </form>
+    </section>
+
+    {% if passagens %}
+    <section class="table-card">
+        <div class="table-card__header">
+            <span class="table-card__title">Passagens pela CGM</span>
+            <span class="table-card__count">{{ passagens|length }} entrada{{ passagens|length|pluralize:"s" }}</span>
+        </div>
+        <div class="table-scroll">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Volume</th>
+                        <th>Entrada</th>
+                        <th>Saída</th>
+                        <th>Situação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for passagem in passagens %}
+                    <tr {% if passagem.is_atual %}class="is-current"{% endif %}>
+                        <td>{{ passagem.ordem }}ª</td>
+                        <td>{{ passagem.volume|default:'—' }}</td>
+                        <td>{{ passagem.entrada|default:'—' }}</td>
+                        <td>{{ passagem.saida|default:'—' }}</td>
+                        <td>
+                            {% if passagem.em_andamento %}
+                                <span class="badge badge--warning">Em tramitação</span>
+                            {% else %}
+                                <span class="badge badge--success">Concluída</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const selPendencia = document.getElementById('tem_pendencia');
+    const formPendencia = document.getElementById('formPendencia');
+
+    function atualizarBlocoPendencia() {
+        if (!selPendencia || !formPendencia) return;
+        formPendencia.style.display = selPendencia.value === 'SIM' ? '' : 'none';
+    }
+
+    selPendencia?.addEventListener('change', atualizarBlocoPendencia);
+    atualizarBlocoPendencia();
+</script>
+{% endblock %}

@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Sistema de Protocolo{% endblock %} · CGM Saquarema</title>
+    <script>
+        try {
+            if (localStorage.getItem('theme') === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        } catch (e) {}
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -24,34 +31,51 @@
         <div class="sidebar__brand">
             <span class="sidebar__logo">CGM</span>
             <span class="sidebar__brand-text">
-                <span class="sidebar__title">Protocolo</span>
-                <span class="sidebar__subtitle">Controladoria Geral</span>
+                {% if user.profile.level == '1' or user.profile.level == '2' %}
+                    <span class="sidebar__title">Análise</span>
+                    <span class="sidebar__subtitle">{{ user.profile.get_level_display }}</span>
+                {% else %}
+                    <span class="sidebar__title">Protocolo</span>
+                    <span class="sidebar__subtitle">Controladoria Geral</span>
+                {% endif %}
             </span>
         </div>
 
         <nav class="sidebar__nav">
-            <div class="sidebar__group-label">Processos</div>
-
             {% if user.is_superuser or user.profile.level == '0' or user.profile.level == '3' %}
-                <a href="{% url 'cadastrar_processo' %}"
-                   class="nav-item {% if nav == 'cadastrar_processo' %}is-active{% endif %}" title="Novo Processo">
-                    <span class="material-symbols-rounded">note_add</span>
-                    <span class="nav-item__label">Novo Processo</span>
+                <div class="sidebar__group-label">Protocolo</div>
+
+                {% if user.is_superuser or user.profile.level == '0' or user.profile.level == '3' %}
+                    <a href="{% url 'cadastrar_processo' %}"
+                       class="nav-item {% if nav == 'cadastrar_processo' %}is-active{% endif %}" title="Novo Processo">
+                        <span class="material-symbols-rounded">note_add</span>
+                        <span class="nav-item__label">Novo Processo</span>
+                    </a>
+                {% endif %}
+
+                <a href="{% url 'listar_processos' %}"
+                   class="nav-item {% if nav == 'listar_processos' or nav == 'index' or nav == 'ver_historico_processo' %}is-active{% endif %}"
+                   title="Processos Ativos">
+                    <span class="material-symbols-rounded">inbox</span>
+                    <span class="nav-item__label">Processos Ativos</span>
+                </a>
+
+                <a href="{% url 'listar_finalizados' %}"
+                   class="nav-item {% if nav == 'listar_finalizados' %}is-active{% endif %}" title="Finalizados">
+                    <span class="material-symbols-rounded">task_alt</span>
+                    <span class="nav-item__label">Finalizados</span>
                 </a>
             {% endif %}
 
-            <a href="{% url 'listar_processos' %}"
-               class="nav-item {% if nav == 'listar_processos' or nav == 'index' or nav == 'ver_historico_processo' %}is-active{% endif %}"
-               title="Processos Ativos">
-                <span class="material-symbols-rounded">inbox</span>
-                <span class="nav-item__label">Processos Ativos</span>
-            </a>
-
-            <a href="{% url 'listar_finalizados' %}"
-               class="nav-item {% if nav == 'listar_finalizados' %}is-active{% endif %}" title="Finalizados">
-                <span class="material-symbols-rounded">task_alt</span>
-                <span class="nav-item__label">Finalizados</span>
-            </a>
+            {% if user.is_superuser or user.profile.level == '1' or user.profile.level == '2' or user.profile.level == '3' %}
+                <div class="sidebar__group-label">Análise</div>
+                <a href="{% url 'area_analista' %}"
+                   class="nav-item {% if nav == 'area_analista' or nav == 'analista_processo' %}is-active{% endif %}"
+                   title="Meus processos">
+                    <span class="material-symbols-rounded">fact_check</span>
+                    <span class="nav-item__label">Meus processos</span>
+                </a>
+            {% endif %}
 
             {% if user.is_superuser or user.is_staff %}
                 <div class="sidebar__group-label">Administração</div>
@@ -105,11 +129,25 @@
                 <div class="topbar__subtitle">{% block page_subtitle %}{% endblock %}</div>
             </div>
             <div class="topbar__actions">
+                <button type="button" class="btn btn--ghost btn--icon" data-theme-toggle title="Modo escuro" aria-label="Ativar modo escuro">
+                    <span class="material-symbols-rounded theme-icon theme-icon--moon" aria-hidden="true">dark_mode</span>
+                    <span class="material-symbols-rounded theme-icon theme-icon--sun" aria-hidden="true">light_mode</span>
+                </button>
                 {% block topbar_actions %}{% endblock %}
             </div>
         </header>
 
         <main class="content {% block content_class %}{% endblock %}">
+            {% if messages %}
+                <div class="stack" style="margin-bottom: 16px;">
+                    {% for message in messages %}
+                        <div class="alert {% if message.tags == 'error' %}alert--danger{% elif message.tags == 'success' %}alert--success{% else %}alert--info{% endif %}">
+                            <span class="material-symbols-rounded">{% if message.tags == 'error' %}error{% elif message.tags == 'success' %}check_circle{% else %}info{% endif %}</span>
+                            <span>{{ message }}</span>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
             {% block content %}{% endblock %}
         </main>
     </div>

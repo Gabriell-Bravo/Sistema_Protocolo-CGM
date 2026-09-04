@@ -2,10 +2,11 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
-from .models import Processo, ProcessHistory, MonitoramentoRecord, Profile
+from .models import Processo, ProcessHistory, MonitoramentoRecord, Profile, Pendencia
 import json
 from datetime import datetime, date, timedelta, time
-from django.db.models import Q
+from django.db.models import Q, Count
+from django.contrib import messages
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.decorators import login_required, user_passes_test
 from .forms import CustomUserCreationForm
@@ -58,6 +59,37 @@ def filter_processes_by_user_level(user, queryset):
     elif user_level == '0':  # Protocolo sees all processes, but might have limitations on functions
         return queryset
     return queryset.none()  # Default to no access if level is not recognized
+
+
+def is_analista(user):
+    return (not user.is_superuser
+            and hasattr(user, 'profile')
+            and user.profile.level in ['1', '2'])
+
+
+def pode_usar_area_analista(user):
+    return (user.is_superuser
+            or (hasattr(user, 'profile') and user.profile.level in ['1', '2', '3']))
+
+
+def anotar_total_passagens(processos):
+    """Quantas vezes cada número de processo já entrou na CGM."""
+    numeros = {getattr(p, 'numero_processo', None) or (p.get('numero_processo') if isinstance(p, dict) else None)
+               for p in processos}
+    numeros.discard(None)
+    if not numeros:
+        return
+    counts = dict(
+        Processo.objects.filter(numero_processo__in=numeros)
+        .values('numero_processo')
+        .annotate(n=Count('id'))
+        .values_list('numero_processo', 'n')
+    )
+    for processo in processos:
+        if isinstance(processo, dict):
+            processo['total_passagens'] = counts.get(processo['numero_processo'], 1)
+        else:
+            processo.total_passagens = counts.get(processo.numero_processo, 1)
 
 
 @login_required
@@ -293,6 +325,9 @@ def salvar_processo(request):
 
 @login_required
 def listar_processos(request):
+    if is_analista(request.user):
+        return redirect('area_analista')
+
     termo_pesquisa = request.GET.get('termo', '').strip()
     prioridade_filtro = request.GET.get('prioridade', 'todas')
     genero_filtro = request.GET.get('genero', 'todas')
@@ -359,6 +394,8 @@ def listar_processos(request):
         if processo.prioridade == 'SIM':
             total_prioritarios += 1
 
+    processos_query = list(processos_query)
+    anotar_total_passagens(processos_query)
     total_processos = len(processos_query)
 
     all_generos = Processo.objects.values_list(
@@ -380,7 +417,7 @@ def listar_processos(request):
     # Pre-calculate flags for template logic
     can_edit = request.user.is_superuser or \
         (hasattr(request.user, 'profile')
-         and request.user.profile.level in ['1', '2', '3', '0'])
+         and request.user.profile.level in ['0', '3'])
 
     can_delete = request.user.is_superuser
 
@@ -593,6 +630,49 @@ def deletar_processo(request, id):
     return JsonResponse({'success': False, 'message': 'Método não permitido.'}, status=405)
 
 
+def montar_passagens(processo):
+    """Lista todas as vezes que o processo entrou na CGM.
+
+    Cada retorno do processo gera um novo registro com o mesmo numero_processo,
+    entao as passagens sao os registros irmaos ordenados pela entrada.
+    """
+    registros = Processo.objects.filter(
+        numero_processo=processo.numero_processo
+    ).order_by('data_entrada', 'hora_entrada', 'id')
+
+    hoje = date.today()
+    passagens = []
+
+    for ordem, registro in enumerate(registros, start=1):
+        if registro.data_saida:
+            dias_permanencia = (registro.data_saida - registro.data_entrada).days
+        else:
+            dias_permanencia = (hoje - registro.data_entrada).days
+
+        passagens.append({
+            'ordem': ordem,
+            'process_id': registro.id,
+            'is_atual': registro.id == processo.id,
+            'em_andamento': registro.data_saida is None,
+            'volume': registro.volume,
+            'secretaria': registro.secretaria,
+            'destino': registro.destino,
+            'entrada': formatar_data_hora(registro.data_entrada, registro.hora_entrada),
+            'saida': formatar_data_hora(registro.data_saida, registro.hora_saida),
+            'dias_permanencia': dias_permanencia,
+        })
+
+    return passagens
+
+
+def formatar_data_hora(data, hora):
+    if not data:
+        return None
+    if not hora:
+        return data.strftime('%d/%m/%Y')
+    return f"{data.strftime('%d/%m/%Y')} às {hora.strftime('%H:%M')}"
+
+
 @login_required
 def ver_historico_processo(request, process_id):
     processo = get_object_or_404(Processo, id=process_id)
@@ -606,8 +686,6 @@ def ver_historico_processo(request, process_id):
 
     formatted_history = []
     for record in history_records:
-        print(
-            f"Raw changed_at: {record.changed_at}, Type: {type(record.changed_at)}")
         rec_dict = {
             'field_name': record.field_name,
             'old_value': record.old_value,
@@ -626,11 +704,17 @@ def ver_historico_processo(request, process_id):
         }
         formatted_monitoramento_records.append(mon_dict)
 
+    passagens = montar_passagens(processo)
+
     return render(request, 'historico_processo.html', {
         'history': formatted_history,
         'monitoramento_records': formatted_monitoramento_records,
         'process_id': process_id,
         'process_number': processo.numero_processo,
+        'passagens': passagens,
+        'total_passagens': len(passagens),
+        'pendencias': processo.pendencias.select_related('criada_por').all(),
+        'tem_pendencia': processo.tem_pendencia,
     })
 
 
@@ -697,6 +781,9 @@ def concluir_monitoramento(request, process_id):
 
 @login_required
 def listar_finalizados(request):
+    if is_analista(request.user):
+        return redirect('area_analista')
+
     data_inicial_filtro = request.GET.get('data_inicial', '').strip()
     data_final_filtro = request.GET.get('data_final', '').strip()
     prioridade_filtro = request.GET.get('prioridade', 'todas')
@@ -842,7 +929,8 @@ def listar_finalizados(request):
             'periodo': processo.periodo or '',
             'status_analise': processo.status_analise,  # Pass the raw value
             # Pass the display value
-            'status_analise_display': processo.get_status_analise_display()
+            'status_analise_display': processo.get_status_analise_display(),
+            'tem_pendencia': processo.tem_pendencia,
         }
         processos_data.append(p_dict)
 
@@ -852,6 +940,8 @@ def listar_finalizados(request):
             total_monitoramento_atrasado += 1
         elif processo.status_monitoramento == 'CONCLUIDO':
             total_monitoramento_concluido += 1
+
+    anotar_total_passagens(processos_data)
 
     all_generos = Processo.objects.values_list(
         'genero', flat=True).distinct().order_by('genero')
@@ -1166,7 +1256,7 @@ def user_login(request):
             user = authenticate(request, username=username, password=password)
             if user is not None:
                 login(request, user)
-                return redirect('listar_processos')
+                return redirect('index')
             else:
                 return render(request, 'registration/login.html', {'form': form, 'error': 'Nome de usuário ou senha inválidos.'})
     else:
@@ -1247,3 +1337,249 @@ def get_all_especies(request):
     especies = Processo.objects.filter(genero__in=allowed_generos).values_list(
         'especie', flat=True).distinct().order_by('especie')
     return JsonResponse({'especies': list(especies)})
+
+
+# ---------------------------------------------------------------------------
+# Area do analista
+# ---------------------------------------------------------------------------
+
+CAMPOS_ANALISE = [
+    'valor',
+    'destino',
+    'periodo',
+    'tecnico',
+    'data_analise',
+    'numero_despacho',
+    'status_analise',
+    'tem_pendencia',
+    'observacao',
+]
+
+
+@login_required
+def inicio(request):
+    """Envia cada usuario para a area correspondente ao seu nivel de acesso."""
+    if is_analista(request.user):
+        return redirect('area_analista')
+    return redirect('listar_processos')
+
+
+@login_required
+@user_passes_test(pode_usar_area_analista)
+def area_analista(request):
+    termo_pesquisa = request.GET.get('pesquisa', '')
+    pendencia_filtro = request.GET.get('pendencia', 'todas')
+    status_analise_filtro = request.GET.get('status_analise', 'todas')
+
+    base_query = Processo.objects.filter(data_saida__isnull=True)
+    processos_query = filter_processes_by_user_level(request.user, base_query)
+
+    if termo_pesquisa:
+        processos_query = processos_query.filter(
+            Q(numero_processo__icontains=termo_pesquisa) |
+            Q(objeto__icontains=termo_pesquisa) |
+            Q(contratada__icontains=termo_pesquisa) |
+            Q(secretaria__icontains=termo_pesquisa)
+        )
+
+    if pendencia_filtro in ['SIM', 'NAO']:
+        processos_query = processos_query.filter(tem_pendencia=pendencia_filtro)
+
+    if status_analise_filtro != 'todas':
+        processos_query = processos_query.filter(
+            status_analise=status_analise_filtro)
+
+    processos_query = processos_query.prefetch_related(
+        'pendencias').order_by('-prioridade', 'data_entrada', 'hora_entrada')
+
+    processos = list(processos_query)
+    anotar_total_passagens(processos)
+
+    total_atrasados = 0
+    total_com_pendencia = 0
+    total_sem_analise = 0
+
+    for processo in processos:
+        prazo_obj = calcular_prazo(processo.data_entrada, processo.prioridade)
+        if prazo_obj:
+            dias_restantes = (prazo_obj - date.today()).days
+            processo.prazo_formatado = formatar_prazo(dias_restantes)
+            processo.prazo_status = (
+                'atrasado' if dias_restantes < 0
+                else 'hoje' if dias_restantes == 0
+                else 'atencao' if dias_restantes <= 2
+                else 'ok'
+            )
+            if dias_restantes < 0:
+                total_atrasados += 1
+        else:
+            processo.prazo_formatado = "-"
+            processo.prazo_status = 'indefinido'
+
+        processo.total_pendencias = processo.pendencias.count()
+        if processo.tem_pendencia == 'SIM':
+            total_com_pendencia += 1
+        if processo.status_analise == 'NAO_APLICAVEL':
+            total_sem_analise += 1
+
+    return render(request, 'analista/lista.html', {
+        'processos': processos,
+        'total_processos': len(processos),
+        'total_atrasados': total_atrasados,
+        'total_com_pendencia': total_com_pendencia,
+        'total_sem_analise': total_sem_analise,
+        'termo_pesquisa': termo_pesquisa,
+        'pendencia_filtro': pendencia_filtro,
+        'status_analise_filtro': status_analise_filtro,
+        'all_status_analise': Processo.STATUS_ANALISE_CHOICES,
+    })
+
+
+@login_required
+@user_passes_test(pode_usar_area_analista)
+def analista_processo(request, process_id):
+    processo = get_object_or_404(Processo, id=process_id)
+
+    if not can_access_genero(request.user, processo.genero):
+        return HttpResponse("Você não tem permissão para analisar este processo.", status=403)
+
+    if request.method == 'POST':
+        alteracoes = registrar_analise(request, processo)
+        if alteracoes:
+            messages.success(
+                request, f"Análise salva. {alteracoes} campo(s) atualizado(s).")
+        else:
+            messages.info(request, "Nenhuma alteração para salvar.")
+        return redirect('analista_processo', process_id=processo.id)
+
+    prazo_obj = calcular_prazo(processo.data_entrada, processo.prioridade)
+    if prazo_obj:
+        dias_restantes = (prazo_obj - date.today()).days
+        processo.prazo_formatado = formatar_prazo(dias_restantes)
+        processo.prazo_status = (
+            'atrasado' if dias_restantes < 0
+            else 'hoje' if dias_restantes == 0
+            else 'atencao' if dias_restantes <= 2
+            else 'ok'
+        )
+    else:
+        processo.prazo_formatado = "-"
+        processo.prazo_status = 'indefinido'
+
+    return render(request, 'analista/processo.html', {
+        'processo': processo,
+        'pendencias': processo.pendencias.select_related('criada_por').all(),
+        'all_status_analise': Processo.STATUS_ANALISE_CHOICES,
+        'passagens': montar_passagens(processo),
+    })
+
+
+def registrar_analise(request, processo):
+    """Grava os campos de analise enviados e registra cada mudanca no historico."""
+    alteracoes = 0
+
+    for campo in CAMPOS_ANALISE:
+        if campo not in request.POST:
+            continue
+
+        valor_bruto = request.POST.get(campo, '').strip()
+
+        if campo == 'data_analise':
+            novo_valor = datetime.strptime(
+                valor_bruto, '%Y-%m-%d').date() if valor_bruto else None
+        elif campo in ['status_analise', 'tem_pendencia']:
+            novo_valor = valor_bruto
+        else:
+            novo_valor = valor_bruto or None
+
+        valor_atual = getattr(processo, campo)
+        if valor_atual == novo_valor:
+            continue
+
+        setattr(processo, campo, novo_valor)
+        ProcessHistory.objects.create(
+            process=processo,
+            field_name=campo,
+            old_value=texto_para_historico(campo, valor_atual),
+            new_value=texto_para_historico(campo, novo_valor),
+            changed_by=request.user,
+        )
+        alteracoes += 1
+
+    if alteracoes:
+        processo.save()
+
+    return alteracoes
+
+
+def texto_para_historico(campo, valor):
+    if valor is None or valor == '':
+        return ''
+    if campo == 'status_analise':
+        return dict(Processo.STATUS_ANALISE_CHOICES).get(valor, valor)
+    if isinstance(valor, date):
+        return valor.strftime('%Y-%m-%d')
+    return str(valor)
+
+
+@login_required
+@user_passes_test(pode_usar_area_analista)
+def adicionar_pendencia(request, process_id):
+    processo = get_object_or_404(Processo, id=process_id)
+
+    if not can_access_genero(request.user, processo.genero):
+        return HttpResponse("Você não tem permissão para alterar este processo.", status=403)
+
+    if request.method != 'POST':
+        return redirect('analista_processo', process_id=processo.id)
+
+    descricao = request.POST.get('descricao', '').strip()
+    if not descricao:
+        messages.error(request, "Descreva a pendência antes de adicionar.")
+        return redirect('analista_processo', process_id=processo.id)
+
+    Pendencia.objects.create(
+        processo=processo,
+        descricao=descricao,
+        criada_por=request.user,
+    )
+    if processo.tem_pendencia != 'SIM':
+        processo.tem_pendencia = 'SIM'
+        processo.save(update_fields=['tem_pendencia'])
+    ProcessHistory.objects.create(
+        process=processo,
+        field_name='pendencia_adicionada',
+        old_value='',
+        new_value=descricao,
+        changed_by=request.user,
+    )
+    messages.success(request, "Pendência adicionada.")
+    return redirect('analista_processo', process_id=processo.id)
+
+
+@login_required
+@user_passes_test(pode_usar_area_analista)
+def remover_pendencia(request, pendencia_id):
+    pendencia = get_object_or_404(Pendencia, id=pendencia_id)
+    processo = pendencia.processo
+
+    if not can_access_genero(request.user, processo.genero):
+        return HttpResponse("Você não tem permissão para alterar este processo.", status=403)
+
+    if request.method != 'POST':
+        return redirect('analista_processo', process_id=processo.id)
+
+    descricao = pendencia.descricao
+    pendencia.delete()
+    if not processo.pendencias.exists():
+        processo.tem_pendencia = 'NAO'
+        processo.save(update_fields=['tem_pendencia'])
+    ProcessHistory.objects.create(
+        process=processo,
+        field_name='pendencia_removida',
+        old_value=descricao,
+        new_value='',
+        changed_by=request.user,
+    )
+    messages.success(request, "Pendência removida.")
+    return redirect('analista_processo', process_id=processo.id)

@@ -2,7 +2,7 @@
 
 {% block title %}Histórico do Processo{% endblock %}
 {% block page_title %}Histórico do processo {{ process_number }}{% endblock %}
-{% block page_subtitle %}Alterações registradas e histórico de monitoramento{% endblock %}
+{% block page_subtitle %}Passagens pela CGM, alterações registradas e monitoramento{% endblock %}
 
 {% block topbar_actions %}
     <a href="{% url 'listar_processos' %}" class="btn btn--outline">
@@ -13,6 +13,96 @@
 
 {% block content %}
 <div class="stack">
+
+    <section class="table-card">
+        <div class="table-card__header">
+            <span class="table-card__title">Passagens pela CGM</span>
+            <span class="table-card__count">
+                {{ total_passagens }} entrada{{ total_passagens|pluralize:"s" }} registrada{{ total_passagens|pluralize:"s" }}
+            </span>
+        </div>
+        <div class="table-scroll">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Volume</th>
+                        <th>Secretaria de origem</th>
+                        <th>Entrada</th>
+                        <th>Saída</th>
+                        <th>Destino</th>
+                        <th>Permanência</th>
+                        <th>Situação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for passagem in passagens %}
+                    <tr>
+                        <td>{{ passagem.ordem }}ª</td>
+                        <td>{{ passagem.volume|default:'—' }}</td>
+                        <td class="cell-wrap">{{ passagem.secretaria|default:'—' }}</td>
+                        <td>{{ passagem.entrada|default:'—' }}</td>
+                        <td>{{ passagem.saida|default:'—' }}</td>
+                        <td class="cell-wrap">{{ passagem.destino|default:'—' }}</td>
+                        <td>{{ passagem.dias_permanencia }} dia{{ passagem.dias_permanencia|pluralize:"s" }}</td>
+                        <td>
+                            {% if passagem.em_andamento %}
+                                <span class="badge badge--warning">Em tramitação</span>
+                            {% else %}
+                                <span class="badge badge--success">Concluída</span>
+                            {% endif %}
+                            {% if passagem.is_atual %}
+                                <span class="badge badge--primary">Esta</span>
+                            {% else %}
+                                <a href="{% url 'ver_historico_processo' passagem.process_id %}" class="link-more">Abrir</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="table-card">
+        <div class="table-card__header">
+            <span class="table-card__title">Pendências</span>
+            <span class="table-card__count">
+                {% if tem_pendencia == 'SIM' %}Com pendência{% else %}Sem pendência{% endif %}
+                · {{ pendencias|length }} item{{ pendencias|length|pluralize:"ns" }}
+            </span>
+        </div>
+        {% if pendencias %}
+            <div class="table-scroll">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Descrição</th>
+                            <th>Registrada em</th>
+                            <th>Por</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pendencia in pendencias %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td class="cell-wrap">{{ pendencia.descricao }}</td>
+                            <td>{{ pendencia.criada_em_formatted }}</td>
+                            <td>{{ pendencia.criada_por|default:"N/A" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="empty">
+                <span class="material-symbols-rounded">playlist_add_check</span>
+                <div class="empty__title">Nenhuma pendência listada</div>
+                <div>O analista ainda não descreveu pendências neste processo.</div>
+            </div>
+        {% endif %}
+    </section>
 
     <section class="table-card">
         <div class="table-card__header">

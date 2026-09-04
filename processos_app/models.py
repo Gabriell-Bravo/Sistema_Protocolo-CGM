@@ -13,6 +13,11 @@ class Processo(models.Model):
         ('NAO', 'NÃO'),
     ]
 
+    PENDENCIA_CHOICES = [
+        ('SIM', 'SIM'),
+        ('NAO', 'NÃO'),
+    ]
+
     MONITORAMENTO_CHOICES = [
         ('SEMESTRAL', 'Semestral'),
         ('QUADRIMESTRAL', 'Quadrimestral'),
@@ -37,13 +42,6 @@ class Processo(models.Model):
         ('DEVOLUCAO_PARA_SANEAMENTO', 'Devolução para saneamento'),
         ('NAO_APLICAVEL', 'Não Aplicável'),
     ]
-
-    status_analise = models.CharField(
-        max_length=50,
-        choices=STATUS_ANALISE_CHOICES,
-        default='NAO_APLICAVEL',
-        verbose_name="Status da Análise"
-    )
 
     numero_processo = models.CharField(
         max_length=255, verbose_name="Número de Processo")
@@ -123,6 +121,13 @@ class Processo(models.Model):
         verbose_name="Status da Análise"
     )
 
+    tem_pendencia = models.CharField(
+        max_length=3,
+        default='NAO',
+        choices=PENDENCIA_CHOICES,
+        verbose_name="Tem Pendência"
+    )
+
     def __str__(self):
         return self.numero_processo
 
@@ -174,6 +179,29 @@ class MonitoramentoRecord(models.Model):
         db_table = 'monitoramento_registros'
         verbose_name = "Registro de Monitoramento"
         verbose_name_plural = "Registros de Monitoramento"
+
+class Pendencia(models.Model):
+    processo = models.ForeignKey(
+        Processo, on_delete=models.CASCADE, related_name='pendencias', verbose_name="Processo")
+    descricao = models.TextField(verbose_name="Descrição da Pendência")
+    criada_em = models.DateTimeField(
+        auto_now_add=True, verbose_name="Criada em")
+    criada_por = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Criada Por")
+
+    def __str__(self):
+        return f"Pendência de {self.processo.numero_processo}"
+
+    @property
+    def criada_em_formatted(self):
+        return self.criada_em.strftime("%d/%m/%Y %H:%M")
+
+    class Meta:
+        db_table = 'pendencias'
+        ordering = ['criada_em']
+        verbose_name = "Pendência"
+        verbose_name_plural = "Pendências"
+
 
 # NEW PROFILE MODEL
 

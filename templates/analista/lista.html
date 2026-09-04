@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block title %}Análise de Processos{% endblock %}
+{% block page_title %}Meus processos{% endblock %}
+{% block page_subtitle %}Clique em um processo para alimentar valor, destino, status e pendências{% endblock %}
+
+{% block content %}
+<div class="stack">
+    <section class="stats">
+        <div class="stat stat--primary">
+            <span class="stat__icon"><span class="material-symbols-rounded">fact_check</span></span>
+            <div>
+                <div class="stat__value">{{ total_processos }}</div>
+                <div class="stat__label">Na sua fila</div>
+            </div>
+        </div>
+        <div class="stat stat--warning">
+            <span class="stat__icon"><span class="material-symbols-rounded">pending_actions</span></span>
+            <div>
+                <div class="stat__value">{{ total_sem_analise }}</div>
+                <div class="stat__label">Sem análise</div>
+            </div>
+        </div>
+        <div class="stat stat--danger">
+            <span class="stat__icon"><span class="material-symbols-rounded">assignment_late</span></span>
+            <div>
+                <div class="stat__value">{{ total_com_pendencia }}</div>
+                <div class="stat__label">Com pendência</div>
+            </div>
+        </div>
+        <div class="stat stat--violet">
+            <span class="stat__icon"><span class="material-symbols-rounded">running_with_errors</span></span>
+            <div>
+                <div class="stat__value">{{ total_atrasados }}</div>
+                <div class="stat__label">Prazo vencido</div>
+            </div>
+        </div>
+    </section>
+
+    <section class="filters is-open">
+        <div class="filters__bar">
+            <form method="get" class="search">
+                <div class="search__field">
+                    <span class="material-symbols-rounded search__icon">search</span>
+                    <input type="text" name="pesquisa" class="input"
+                           placeholder="Buscar por nº, secretaria, objeto, contratada…"
+                           value="{{ termo_pesquisa|default:'' }}">
+                </div>
+                <input type="hidden" name="pendencia" value="{{ pendencia_filtro }}">
+                <input type="hidden" name="status_analise" value="{{ status_analise_filtro }}">
+                <button type="submit" class="btn btn--primary">Buscar</button>
+            </form>
+            <a href="{% url 'area_analista' %}" class="btn btn--ghost">
+                <span class="material-symbols-rounded">filter_alt_off</span>
+                Limpar
+            </a>
+        </div>
+        <div class="filters__panel">
+            <form method="get" class="filters__grid">
+                <input type="hidden" name="pesquisa" value="{{ termo_pesquisa }}">
+                <div class="field">
+                    <label class="field__label" for="filtroPendencia">Pendência</label>
+                    <select id="filtroPendencia" name="pendencia" class="select" onchange="this.form.submit()">
+                        <option value="todas" {% if pendencia_filtro == 'todas' %}selected{% endif %}>Todas</option>
+                        <option value="SIM" {% if pendencia_filtro == 'SIM' %}selected{% endif %}>Com pendência</option>
+                        <option value="NAO" {% if pendencia_filtro == 'NAO' %}selected{% endif %}>Sem pendência</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="filtroStatus">Status da análise</label>
+                    <select id="filtroStatus" name="status_analise" class="select" onchange="this.form.submit()">
+                        <option value="todas" {% if status_analise_filtro == 'todas' %}selected{% endif %}>Todos</option>
+                        {% for value, label in all_status_analise %}
+                            <option value="{{ value }}" {% if status_analise_filtro == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    {% if processos %}
+        <section class="process-grid">
+            {% for processo in processos %}
+                <a href="{% url 'analista_processo' processo.id %}" class="process-card">
+                    <div class="process-card__top">
+                        <strong class="process-card__number">{{ processo.numero_processo }}</strong>
+                        <span class="badge badge--dot {% if processo.prazo_status == 'atrasado' %}badge--danger{% elif processo.prazo_status == 'hoje' or processo.prazo_status == 'atencao' %}badge--warning{% elif processo.prazo_status == 'ok' %}badge--success{% endif %}">
+                            {{ processo.prazo_formatado }}
+                        </span>
+                    </div>
+                    <div class="process-card__meta">{{ processo.secretaria }} · vol. {{ processo.volume|default:'—' }}</div>
+                    <div class="process-card__object">{{ processo.objeto|truncatechars:140 }}</div>
+                    <div class="process-card__tags">
+                        <span class="badge">{{ processo.get_status_analise_display }}</span>
+                        {% if processo.prioridade == 'SIM' %}
+                            <span class="badge badge--danger">Prioritário</span>
+                        {% endif %}
+                        {% if processo.tem_pendencia == 'SIM' %}
+                            <span class="badge badge--warning">{{ processo.total_pendencias }} pendência{{ processo.total_pendencias|pluralize:"s" }}</span>
+                        {% endif %}
+                        {% if processo.total_passagens > 1 %}
+                            <span class="badge badge--primary">{{ processo.total_passagens }}ª passagem</span>
+                        {% endif %}
+                    </div>
+                    <div class="process-card__footer">
+                        Entrada {{ processo.data_entrada|date:"d/m/Y" }}
+                        {% if processo.hora_entrada %}às {{ processo.hora_entrada|time:"H:i" }}{% endif %}
+                        <span class="process-card__cta">Analisar <span class="material-symbols-rounded">arrow_forward</span></span>
+                    </div>
+                </a>
+            {% endfor %}
+        </section>
+    {% else %}
+        <div class="empty">
+            <span class="material-symbols-rounded">fact_check</span>
+            <div class="empty__title">Nenhum processo na sua fila</div>
+            <div>Quando o protocolo registrar um processo do seu gênero, ele aparece aqui.</div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

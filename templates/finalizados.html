@@ -260,8 +260,9 @@
                                         <span class="material-symbols-rounded">check_circle</span>
                                     </button>
                                 {% endif %}
-                                <a href="{% url 'ver_historico_processo' process_id=processo.id %}" class="icon-btn" title="Histórico">
+                                <a href="{% url 'ver_historico_processo' process_id=processo.id %}" class="icon-btn icon-btn--count" title="Histórico — {{ processo.total_passagens|default:1 }} passagem{{ processo.total_passagens|default:1|pluralize:'ns' }}">
                                     <span class="material-symbols-rounded">history</span>
+                                    <span class="icon-btn__count">{{ processo.total_passagens|default:1 }}</span>
                                 </a>
                                 {% if user.is_superuser %}
                                     <button type="button" class="icon-btn icon-btn--danger" title="Excluir" onclick="deletarProcesso('{{ processo.id }}')">
