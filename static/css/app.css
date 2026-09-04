@@ -493,16 +493,33 @@ body.sidebar-collapsed .main {
     flex-shrink: 0;
 }
 
-.theme-icon--sun {
-    display: none;
+.theme-toggle {
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
 }
 
-[data-theme="dark"] .theme-icon--moon {
-    display: none;
+.theme-toggle:hover {
+    background: var(--surface-3);
+    color: var(--text);
 }
 
-[data-theme="dark"] .theme-icon--sun {
+.theme-toggle .theme-icon {
+    width: 18px;
+    height: 18px;
     display: block;
+    flex-shrink: 0;
+}
+
+.theme-toggle .theme-icon--sun,
+html[data-theme="dark"] .theme-toggle .theme-icon--moon,
+.theme-toggle.is-dark .theme-icon--moon {
+    display: none !important;
+}
+
+html[data-theme="dark"] .theme-toggle .theme-icon--sun,
+.theme-toggle.is-dark .theme-icon--sun {
+    display: block !important;
 }
 
 .theme-fab {

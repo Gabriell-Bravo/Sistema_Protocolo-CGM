@@ -32,10 +32,7 @@
     </section>
 
     <section class="auth__panel">
-        <button type="button" class="btn btn--ghost btn--icon theme-fab" data-theme-toggle title="Modo escuro" aria-label="Ativar modo escuro">
-            <span class="material-symbols-rounded theme-icon theme-icon--moon" aria-hidden="true">dark_mode</span>
-            <span class="material-symbols-rounded theme-icon theme-icon--sun" aria-hidden="true">light_mode</span>
-        </button>
+        {% include "includes/theme_toggle.html" with fab=True %}
         <div class="auth__box">
             {% block content %}{% endblock %}
         </div>

@@ -233,6 +233,11 @@
         for (var i = 0; i < buttons.length; i++) {
             buttons[i].setAttribute('aria-label', dark ? 'Ativar modo claro' : 'Ativar modo escuro');
             buttons[i].setAttribute('title', dark ? 'Modo claro' : 'Modo escuro');
+            if (dark) {
+                buttons[i].classList.add('is-dark');
+            } else {
+                buttons[i].classList.remove('is-dark');
+            }
         }
     }
 
