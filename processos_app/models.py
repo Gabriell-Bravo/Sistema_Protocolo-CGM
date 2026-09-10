@@ -128,8 +128,18 @@ class Processo(models.Model):
         verbose_name="Tem Pendência"
     )
 
+    GENERO_LABELS = {
+        'LICITACOES_E_CONTRATOS': 'Licitações e Contratos',
+        'LIQUIDACOES': 'Liquidações',
+        'OUTROS_GENERO': 'Outros',
+    }
+
     def __str__(self):
         return self.numero_processo
+
+    @property
+    def genero_display(self):
+        return self.GENERO_LABELS.get(self.genero, self.genero)
 
     class Meta:
         db_table = 'processos'

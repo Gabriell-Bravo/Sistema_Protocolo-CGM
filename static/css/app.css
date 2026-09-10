@@ -214,6 +214,7 @@ a:hover {
    -------------------------------------------------------------------------- */
 .app-shell {
     min-height: 100vh;
+    overflow-x: hidden;
 }
 
 .sidebar {
@@ -442,6 +443,7 @@ body.sidebar-collapsed .main {
 .main {
     margin-left: var(--sidebar-w);
     min-height: 100vh;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     transition: margin-left .18s ease;
@@ -493,13 +495,20 @@ body.sidebar-collapsed .main {
     flex-shrink: 0;
 }
 
-.theme-toggle {
+.btn.theme-toggle {
+    width: 38px;
+    min-width: 38px;
+    max-width: 38px;
+    height: 38px;
+    padding: 0;
+    overflow: hidden;
+    flex-shrink: 0;
     border: 1px solid var(--border-strong);
     background: var(--surface);
     color: var(--text);
 }
 
-.theme-toggle:hover {
+.btn.theme-toggle:hover {
     background: var(--surface-3);
     color: var(--text);
 }
@@ -531,6 +540,7 @@ html[data-theme="dark"] .theme-toggle .theme-icon--sun,
 
 .content {
     flex: 1;
+    min-width: 0;
     padding: 22px;
     max-width: 1900px;
     width: 100%;
@@ -540,10 +550,15 @@ html[data-theme="dark"] .theme-toggle .theme-icon--sun,
     max-width: 980px;
 }
 
+.content--analysis {
+    max-width: 1120px;
+}
+
 .stack {
     display: flex;
     flex-direction: column;
     gap: 18px;
+    min-width: 0;
 }
 
 /* --------------------------------------------------------------------------
@@ -658,6 +673,13 @@ html[data-theme="dark"] .theme-toggle .theme-icon--sun,
 
 .btn--sm .material-symbols-rounded {
     font-size: 16px;
+}
+
+a.btn,
+a.btn:hover,
+a.icon-btn,
+a.icon-btn:hover {
+    text-decoration: none;
 }
 
 .btn--icon {
@@ -908,12 +930,29 @@ input[type="password"].form-control {
 
 .form-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
     gap: 16px;
+}
+
+.form-grid--full {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .form-grid--full>.field--wide {
     grid-column: 1 / -1;
+}
+
+@media (min-width: 900px) {
+    .form-grid--full {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 700px) {
+    .form-grid,
+    .form-grid--full {
+        grid-template-columns: 1fr;
+    }
 }
 
 .form-section {
@@ -1118,6 +1157,7 @@ input[type="password"].form-control {
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
     overflow: hidden;
+    min-width: 0;
 }
 
 .table-card__header {
@@ -1152,8 +1192,14 @@ input[type="password"].form-control {
     min-height: 320px;
 }
 
+.table-scroll--compact {
+    min-height: 0;
+    max-height: none;
+}
+
 .table {
-    width: 100%;
+    width: max-content;
+    min-width: 100%;
     border-collapse: separate;
     border-spacing: 0;
     font-size: 13px;
@@ -1183,6 +1229,17 @@ input[type="password"].form-control {
 
 .table tbody tr:hover>td {
     background: var(--primary-soft);
+}
+
+.table tbody tr.is-current>td {
+    background: var(--primary-soft);
+    box-shadow: inset 3px 0 0 var(--primary);
+}
+
+.cell-muted {
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--text-muted);
 }
 
 .table tbody tr:last-child>td {
@@ -1217,8 +1274,16 @@ input[type="password"].form-control {
     position: sticky;
     right: 0;
     z-index: 2;
+    width: 148px;
+    min-width: 148px;
+    white-space: nowrap;
     background: var(--surface);
     box-shadow: -1px 0 0 var(--border);
+}
+
+.table .col-actions .btn {
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .table thead .col-actions {
@@ -1569,6 +1634,10 @@ input[type="password"].form-control {
     color: var(--text);
 }
 
+.empty--compact {
+    padding: 28px 20px;
+}
+
 .alert {
     display: flex;
     align-items: flex-start;
@@ -1737,7 +1806,7 @@ input[type="password"].form-control {
     text-align: center;
 }
 
-.auth .btn {
+.auth .btn:not(.theme-toggle) {
     width: 100%;
     height: 42px;
 }
@@ -1852,8 +1921,20 @@ input[type="password"].form-control {
 
 .meta-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
+}
+
+@media (max-width: 900px) {
+    .meta-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    .meta-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .meta-item {

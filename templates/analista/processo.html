@@ -3,6 +3,7 @@
 {% block title %}Analisar {{ processo.numero_processo }}{% endblock %}
 {% block page_title %}{{ processo.numero_processo }}{% endblock %}
 {% block page_subtitle %}{{ processo.secretaria }} · {{ processo.especie }}{% endblock %}
+{% block content_class %}content--analysis{% endblock %}
 
 {% block topbar_actions %}
     <a href="{% url 'area_analista' %}" class="btn btn--outline">
@@ -31,7 +32,7 @@
         </div>
         <div class="meta-item">
             <span class="meta-item__label">Gênero</span>
-            <span class="meta-item__value">{{ processo.genero }}</span>
+            <span class="meta-item__value">{{ processo.genero_display }}</span>
         </div>
         <div class="meta-item">
             <span class="meta-item__label">Prioridade</span>
@@ -142,7 +143,7 @@
                 {% endfor %}
             </ul>
         {% else %}
-            <div class="empty" style="padding: 24px;">
+            <div class="empty empty--compact">
                 <span class="material-symbols-rounded">playlist_add</span>
                 <div class="empty__title">Nenhuma pendência ainda</div>
                 <div>Marque “Sim” e descreva cada item. Pode adicionar quantas quiser.</div>
@@ -156,7 +157,7 @@
                 <textarea id="descricaoPendencia" name="descricao" class="textarea" rows="2" placeholder="Descreva a pendência…" required></textarea>
                 <button type="submit" class="btn btn--primary">
                     <span class="material-symbols-rounded">add</span>
-                    Adicionar pendência
+                    Adicionar
                 </button>
             </div>
         </form>
@@ -168,7 +169,7 @@
             <span class="table-card__title">Passagens pela CGM</span>
             <span class="table-card__count">{{ passagens|length }} entrada{{ passagens|length|pluralize:"s" }}</span>
         </div>
-        <div class="table-scroll">
+        <div class="table-scroll table-scroll--compact">
             <table class="table">
                 <thead>
                     <tr>

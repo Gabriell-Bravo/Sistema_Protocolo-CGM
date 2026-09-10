@@ -1422,6 +1422,10 @@ def area_analista(request):
         if processo.status_analise == 'NAO_APLICAVEL':
             total_sem_analise += 1
 
+    status_analise_filtro_label = dict(Processo.STATUS_ANALISE_CHOICES).get(
+        status_analise_filtro, ''
+    )
+
     return render(request, 'analista/lista.html', {
         'processos': processos,
         'total_processos': len(processos),
@@ -1431,6 +1435,7 @@ def area_analista(request):
         'termo_pesquisa': termo_pesquisa,
         'pendencia_filtro': pendencia_filtro,
         'status_analise_filtro': status_analise_filtro,
+        'status_analise_filtro_label': status_analise_filtro_label,
         'all_status_analise': Processo.STATUS_ANALISE_CHOICES,
     })
 

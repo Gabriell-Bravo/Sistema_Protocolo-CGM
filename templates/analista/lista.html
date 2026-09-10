@@ -2,7 +2,7 @@
 
 {% block title %}Análise de Processos{% endblock %}
 {% block page_title %}Meus processos{% endblock %}
-{% block page_subtitle %}Clique em um processo para alimentar valor, destino, status e pendências{% endblock %}
+{% block page_subtitle %}Clique em Analisar para preencher valor, destino, status e pendências{% endblock %}
 
 {% block content %}
 <div class="stack">
@@ -37,7 +37,7 @@
         </div>
     </section>
 
-    <section class="filters is-open">
+    <section class="filters" data-filters="analista">
         <div class="filters__bar">
             <form method="get" class="search">
                 <div class="search__field">
@@ -50,11 +50,18 @@
                 <input type="hidden" name="status_analise" value="{{ status_analise_filtro }}">
                 <button type="submit" class="btn btn--primary">Buscar</button>
             </form>
+
+            <button type="button" class="btn btn--outline" data-filters-toggle>
+                <span class="material-symbols-rounded">tune</span>
+                Filtros
+            </button>
+
             <a href="{% url 'area_analista' %}" class="btn btn--ghost">
                 <span class="material-symbols-rounded">filter_alt_off</span>
                 Limpar
             </a>
         </div>
+
         <div class="filters__panel">
             <form method="get" class="filters__grid">
                 <input type="hidden" name="pesquisa" value="{{ termo_pesquisa }}">
@@ -77,46 +84,106 @@
                 </div>
             </form>
         </div>
+
+        {% if termo_pesquisa or pendencia_filtro != 'todas' or status_analise_filtro != 'todas' %}
+            <div class="filters__chips">
+                {% if termo_pesquisa %}
+                    <span class="chip" data-filter-chip><span class="chip__label">Busca:</span> {{ termo_pesquisa }}</span>
+                {% endif %}
+                {% if pendencia_filtro == 'SIM' %}
+                    <span class="chip" data-filter-chip><span class="chip__label">Pendência:</span> Com pendência</span>
+                {% elif pendencia_filtro == 'NAO' %}
+                    <span class="chip" data-filter-chip><span class="chip__label">Pendência:</span> Sem pendência</span>
+                {% endif %}
+                {% if status_analise_filtro != 'todas' %}
+                    <span class="chip" data-filter-chip><span class="chip__label">Status:</span> {{ status_analise_filtro_label }}</span>
+                {% endif %}
+            </div>
+        {% endif %}
     </section>
 
-    {% if processos %}
-        <section class="process-grid">
-            {% for processo in processos %}
-                <a href="{% url 'analista_processo' processo.id %}" class="process-card">
-                    <div class="process-card__top">
-                        <strong class="process-card__number">{{ processo.numero_processo }}</strong>
-                        <span class="badge badge--dot {% if processo.prazo_status == 'atrasado' %}badge--danger{% elif processo.prazo_status == 'hoje' or processo.prazo_status == 'atencao' %}badge--warning{% elif processo.prazo_status == 'ok' %}badge--success{% endif %}">
-                            {{ processo.prazo_formatado }}
-                        </span>
-                    </div>
-                    <div class="process-card__meta">{{ processo.secretaria }} · vol. {{ processo.volume|default:'—' }}</div>
-                    <div class="process-card__object">{{ processo.objeto|truncatechars:140 }}</div>
-                    <div class="process-card__tags">
-                        <span class="badge">{{ processo.get_status_analise_display }}</span>
-                        {% if processo.prioridade == 'SIM' %}
-                            <span class="badge badge--danger">Prioritário</span>
-                        {% endif %}
-                        {% if processo.tem_pendencia == 'SIM' %}
-                            <span class="badge badge--warning">{{ processo.total_pendencias }} pendência{{ processo.total_pendencias|pluralize:"s" }}</span>
-                        {% endif %}
-                        {% if processo.total_passagens > 1 %}
-                            <span class="badge badge--primary">{{ processo.total_passagens }}ª passagem</span>
-                        {% endif %}
-                    </div>
-                    <div class="process-card__footer">
-                        Entrada {{ processo.data_entrada|date:"d/m/Y" }}
-                        {% if processo.hora_entrada %}às {{ processo.hora_entrada|time:"H:i" }}{% endif %}
-                        <span class="process-card__cta">Analisar <span class="material-symbols-rounded">arrow_forward</span></span>
-                    </div>
-                </a>
-            {% endfor %}
-        </section>
-    {% else %}
-        <div class="empty">
-            <span class="material-symbols-rounded">fact_check</span>
-            <div class="empty__title">Nenhum processo na sua fila</div>
-            <div>Quando o protocolo registrar um processo do seu gênero, ele aparece aqui.</div>
+    <section class="table-card">
+        <div class="table-card__header">
+            <span class="table-card__title">Fila de análise</span>
+            <span class="table-card__count">{{ total_processos }} processo{{ total_processos|pluralize:"s" }}</span>
         </div>
-    {% endif %}
+
+        <div class="table-scroll">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th class="col-sticky">N° Processo</th>
+                        <th>Volume</th>
+                        <th>Secretaria</th>
+                        <th>Entrada</th>
+                        <th>Prazo</th>
+                        <th>Objeto</th>
+                        <th>Prioridade</th>
+                        <th>Status da análise</th>
+                        <th>Pendência</th>
+                        <th class="col-actions">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for processo in processos %}
+                    <tr>
+                        <td class="col-sticky">
+                            <strong>{{ processo.numero_processo }}</strong>
+                        </td>
+                        <td>{{ processo.volume|default:'—' }}</td>
+                        <td>{{ processo.secretaria }}</td>
+                        <td>
+                            {{ processo.data_entrada|date:"d/m/Y" }}
+                            {% if processo.hora_entrada %}<div class="cell-muted">{{ processo.hora_entrada|time:"H:i" }}</div>{% endif %}
+                        </td>
+                        <td>
+                            <span class="badge badge--dot {% if processo.prazo_status == 'atrasado' %}badge--danger{% elif processo.prazo_status == 'hoje' or processo.prazo_status == 'atencao' %}badge--warning{% elif processo.prazo_status == 'ok' %}badge--success{% endif %}">
+                                {{ processo.prazo_formatado }}
+                            </span>
+                        </td>
+                        <td class="cell-wrap">
+                            <span class="cell-preview">{{ processo.objeto|truncatechars:70 }}</span>
+                        </td>
+                        <td>
+                            {% if processo.prioridade == 'SIM' %}
+                                <span class="badge badge--danger">SIM</span>
+                            {% else %}
+                                <span class="badge">NÃO</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge {% if processo.status_analise == 'PROSSEGUIMENTO_SEM_RESSALVA' %}badge--success{% elif processo.status_analise == 'PROSSEGUIMENTO_COM_RESSALVA' %}badge--warning{% elif processo.status_analise == 'NAO_PROSSEGUIMENTO' or processo.status_analise == 'DEVOLUCAO_PARA_SANEAMENTO' %}badge--danger{% endif %}">
+                                {{ processo.get_status_analise_display }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if processo.tem_pendencia == 'SIM' %}
+                                <span class="badge badge--warning">{{ processo.total_pendencias }} item{{ processo.total_pendencias|pluralize:"ns" }}</span>
+                            {% else %}
+                                <span class="badge">Não</span>
+                            {% endif %}
+                        </td>
+                        <td class="col-actions">
+                            <div class="actions">
+                                <a href="{% url 'analista_processo' processo.id %}" class="btn btn--primary btn--sm">
+                                    <span class="material-symbols-rounded">edit_note</span>
+                                    Analisar
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            {% if not processos %}
+                <div class="empty">
+                    <span class="material-symbols-rounded">fact_check</span>
+                    <div class="empty__title">Nenhum processo na sua fila</div>
+                    <div>Quando o protocolo registrar um processo do seu gênero, ele aparece aqui.</div>
+                </div>
+            {% endif %}
+        </div>
+    </section>
 </div>
 {% endblock %}
