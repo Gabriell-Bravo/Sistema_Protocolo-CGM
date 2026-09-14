@@ -174,6 +174,17 @@ class Processo(models.Model):
         return self.GENERO_LABELS.get(self.genero, self.genero)
 
     @property
+    def prioridade_display(self):
+        labels = {
+            'NORMAL': 'Normal',
+            'PRIORITARIO': 'Prioritário',
+            'URGENTE': 'Urgente',
+            'SIM': 'Prioritário',
+            'NAO': 'Normal',
+        }
+        return labels.get(self.prioridade, self.get_prioridade_display())
+
+    @property
     def prioridade_badge_class(self):
         if self.prioridade == 'URGENTE':
             return 'badge--danger'
