@@ -33,8 +33,13 @@ urlpatterns = [
     path('analista/', views.area_analista, name='area_analista'),
     path('analista/processo/<int:process_id>/',
          views.analista_processo, name='analista_processo'),
+    path('analista/processo/<int:process_id>/assumir/',
+         views.assumir_processo, name='assumir_processo'),
     path('analista/processo/<int:process_id>/pendencia/',
          views.adicionar_pendencia, name='adicionar_pendencia'),
     path('analista/pendencia/<int:pendencia_id>/remover/',
          views.remover_pendencia, name='remover_pendencia'),
+    path('gestao/', views.gestao_processos, name='gestao_processos'),
+    path('gestao/processo/<int:process_id>/prioridade/',
+         views.gestao_alterar_prioridade, name='gestao_alterar_prioridade'),
 ]

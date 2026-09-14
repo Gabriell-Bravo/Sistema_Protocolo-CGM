@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Gestão de Processos{% endblock %}
+{% block page_title %}Gestão de Processos{% endblock %}
+{% block page_subtitle %}Acompanhe Licitações e Contratos e Liquidações. Altere a prioridade quando necessário.{% endblock %}
+
+{% block content %}
+<div class="stack">
+    <section class="stats">
+        <div class="stat stat--primary">
+            <span class="stat__icon"><span class="material-symbols-rounded">account_tree</span></span>
+            <div>
+                <div class="stat__value">{{ total_processos }}</div>
+                <div class="stat__label">Em tramitação</div>
+            </div>
+        </div>
+        <div class="stat stat--success">
+            <span class="stat__icon"><span class="material-symbols-rounded">front_hand</span></span>
+            <div>
+                <div class="stat__value">{{ total_disponiveis }}</div>
+                <div class="stat__label">Disponíveis</div>
+            </div>
+        </div>
+        <div class="stat stat--violet">
+            <span class="stat__icon"><span class="material-symbols-rounded">manage_accounts</span></span>
+            <div>
+                <div class="stat__value">{{ total_em_analise }}</div>
+                <div class="stat__label">Em análise</div>
+            </div>
+        </div>
+        <div class="stat stat--danger">
+            <span class="stat__icon"><span class="material-symbols-rounded">priority_high</span></span>
+            <div>
+                <div class="stat__value">{{ total_urgentes }}</div>
+                <div class="stat__label">Urgentes</div>
+            </div>
+        </div>
+    </section>
+
+    <section class="filters">
+        <div class="filters__bar">
+            <form method="get" class="search">
+                <div class="search__field">
+                    <span class="material-symbols-rounded search__icon">search</span>
+                    <input type="text" name="pesquisa" class="input"
+                           placeholder="Buscar por nº, secretaria, objeto, contratada…"
+                           value="{{ termo_pesquisa|default:'' }}">
+                </div>
+                <button type="submit" class="btn btn--primary">Buscar</button>
+            </form>
+            {% if termo_pesquisa %}
+                <a href="{% url 'gestao_processos' %}" class="btn btn--ghost">
+                    <span class="material-symbols-rounded">filter_alt_off</span>
+                    Limpar
+                </a>
+            {% endif %}
+        </div>
+    </section>
+
+    {% include "analista/_fila_grupo.html" with titulo="Licitações e Contratos" grupo_css="licitacoes" icone="gavel" processos=licitacoes mostrar_contratada=True modo_gestao=True pode_assumir=False %}
+
+    {% include "analista/_fila_grupo.html" with titulo="Liquidações" grupo_css="liquidacoes" icone="payments" processos=liquidacoes mostrar_contratada=False modo_gestao=True pode_assumir=False %}
+</div>
+{% endblock %}

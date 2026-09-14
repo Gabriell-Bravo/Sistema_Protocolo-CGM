@@ -29,11 +29,11 @@ class CustomUserCreationForm(UserCreationForm):
 
 # ... (rest of your forms like ProcessoForm, AuthenticationForm remain the same)
 class ProcessoForm(forms.ModelForm):
-    # Your existing ProcessoForm...
     volume = forms.CharField(required=True, max_length=255, label='Volume')
+
     class Meta:
         model = Processo
-        fields = '__all__'
+        exclude = ['destino']
 
 
 # If you have an existing AuthenticationForm, ensure it's here

@@ -1,0 +1,97 @@
+<section class="fila-grupo fila-grupo--{{ grupo_css }}">
+    <div class="fila-grupo__banner">
+        <span class="material-symbols-rounded">{{ icone }}</span>
+        <span class="fila-grupo__title">{{ titulo }}</span>
+        <span class="fila-grupo__count">{{ processos|length }} processo{{ processos|length|pluralize:"s" }}</span>
+    </div>
+
+    <div class="table-scroll table-scroll--fila">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Prioridade</th>
+                    <th class="col-sticky">Processo</th>
+                    <th>Secretaria</th>
+                    {% if mostrar_contratada %}
+                        <th>Empresa / Contratada</th>
+                    {% endif %}
+                    <th>Objeto</th>
+                    <th>Entrada</th>
+                    <th>Analista</th>
+                    <th>Situação</th>
+                    <th class="col-actions">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for processo in processos %}
+                <tr class="tr-situacao-{{ processo.situacao_fila }}">
+                    <td>
+                        {% if modo_gestao %}
+                            <form method="post" action="{% url 'gestao_alterar_prioridade' processo.id %}" class="prio-form">
+                                {% csrf_token %}
+                                <select name="prioridade" class="select select--prio" onchange="this.form.submit()" aria-label="Prioridade">
+                                    {% for value, label in prioridades %}
+                                        <option value="{{ value }}" {% if processo.prioridade == value %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </form>
+                        {% else %}
+                            {% include "includes/badge_prioridade.html" with processo=processo %}
+                        {% endif %}
+                    </td>
+                    <td class="col-sticky"><strong>{{ processo.numero_processo }}</strong></td>
+                    <td>{{ processo.secretaria }}</td>
+                    {% if mostrar_contratada %}
+                        <td>{{ processo.contratada|default:'—' }}</td>
+                    {% endif %}
+                    <td class="cell-wrap">
+                        <span class="cell-preview">{{ processo.objeto|truncatechars:70 }}</span>
+                    </td>
+                    <td>
+                        {{ processo.data_entrada|date:"d/m/Y" }}
+                        {% if processo.hora_entrada %}
+                            <div class="cell-muted">{{ processo.hora_entrada|time:"H:i" }}</div>
+                        {% endif %}
+                    </td>
+                    <td>{{ processo.nome_analista|default:'—' }}</td>
+                    <td>
+                        <span class="badge {{ processo.situacao_class }}">{{ processo.situacao_label }}</span>
+                    </td>
+                    <td class="col-actions">
+                        <div class="actions">
+                            {% if pode_assumir and processo.pode_assumir %}
+                                <form method="post" action="{% url 'assumir_processo' processo.id %}">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn--primary btn--sm">
+                                        <span class="material-symbols-rounded">handshake</span>
+                                        Assumir processo
+                                    </button>
+                                </form>
+                            {% elif processo.eh_meu %}
+                                <a href="{% url 'analista_processo' processo.id %}" class="btn btn--primary btn--sm">
+                                    <span class="material-symbols-rounded">edit_note</span>
+                                    Analisar
+                                </a>
+                            {% else %}
+                                <a href="{% url 'analista_processo' processo.id %}" class="btn btn--outline btn--sm">
+                                    <span class="material-symbols-rounded">visibility</span>
+                                    Ver
+                                </a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="{% if mostrar_contratada %}9{% else %}8{% endif %}">
+                        <div class="empty empty--compact">
+                            <span class="material-symbols-rounded">inbox</span>
+                            <div class="empty__title">Nenhum processo neste grupo</div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>

@@ -103,8 +103,9 @@
                     <label class="field__label" for="filtroPrioridade">Prioridade</label>
                     <select id="filtroPrioridade" class="select">
                         <option value="todas" {% if prioridade_filtro == 'todas' %}selected{% endif %}>Todas</option>
-                        <option value="SIM" {% if prioridade_filtro == 'SIM' %}selected{% endif %}>Prioritários</option>
-                        <option value="NAO" {% if prioridade_filtro == 'NAO' %}selected{% endif %}>Normais</option>
+                        <option value="NORMAL" {% if prioridade_filtro == 'NORMAL' %}selected{% endif %}>Normal</option>
+                        <option value="PRIORITARIO" {% if prioridade_filtro == 'PRIORITARIO' %}selected{% endif %}>Prioritário</option>
+                        <option value="URGENTE" {% if prioridade_filtro == 'URGENTE' %}selected{% endif %}>Urgente</option>
                     </select>
                 </div>
                 <div class="field">
@@ -212,7 +213,7 @@
                         <td class="editable" data-field="hora_entrada">{{ processo.hora_entrada|time:"H:i" }}</td>
                         <td class="editable" data-field="data_saida">{{ processo.data_saida|default:''|date:"Y-m-d" }}</td>
                         <td class="editable" data-field="hora_saida">{{ processo.hora_saida|default:''|time:"H:i" }}</td>
-                        <td class="editable" data-field="destino">{{ processo.destino|default:'' }}</td>
+                        <td>{{ processo.destino|default:'' }}</td>
                         <td class="editable" data-field="genero">{{ processo.genero }}</td>
                         <td class="editable" data-field="especie">{{ processo.especie }}</td>
                         <td class="editable cell-wrap" data-field="objeto" data-full-text="{{ processo.objeto|default:'' }}">
@@ -223,12 +224,8 @@
                         </td>
                         <td class="editable" data-field="contratada">{{ processo.contratada|default:'' }}</td>
                         <td class="editable" data-field="recorrente">{{ processo.recorrente|default:'NAO' }}</td>
-                        <td class="editable" data-field="prioridade">
-                            {% if processo.prioridade == 'SIM' %}
-                                <span class="badge badge--danger">SIM</span>
-                            {% else %}
-                                <span class="badge">NAO</span>
-                            {% endif %}
+                        <td class="editable" data-field="prioridade" data-prioridade-raw="{{ processo.prioridade }}">
+                            {% include "includes/badge_prioridade.html" with processo=processo %}
                         </td>
                         <td class="editable" data-field="tecnico">{{ processo.tecnico|default:'' }}</td>
                         <td class="editable" data-field="numero_despacho">{{ processo.numero_despacho|default:'' }}</td>
@@ -342,6 +339,8 @@
                 value = cell.getAttribute('data-full-text') || cell.textContent.trim();
             } else if (field === 'status_analise') {
                 value = cell.getAttribute('data-status-analise-raw');
+            } else if (field === 'prioridade') {
+                value = cell.getAttribute('data-prioridade-raw') || cell.textContent.trim();
             }
             else {
                 value = cell.textContent.trim();
@@ -510,8 +509,9 @@
                 inputElement = document.createElement('select');
                 inputElement.className = 'edit-field';
                 const prioridadeOptions = [
-                    { value: 'NAO', text: 'NÃO' },
-                    { value: 'SIM', text: 'SIM' }
+                    { value: 'NORMAL', text: 'Normal' },
+                    { value: 'PRIORITARIO', text: 'Prioritário' },
+                    { value: 'URGENTE', text: 'Urgente' }
                 ];
                 prioridadeOptions.forEach(optionData => {
                     const option = document.createElement('option');

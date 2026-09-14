@@ -2,11 +2,11 @@
 
 {% block title %}Analisar {{ processo.numero_processo }}{% endblock %}
 {% block page_title %}{{ processo.numero_processo }}{% endblock %}
-{% block page_subtitle %}{{ processo.secretaria }} · {{ processo.especie }}{% endblock %}
+{% block page_subtitle %}{{ processo.genero_display }} · {{ processo.secretaria }}{% endblock %}
 {% block content_class %}content--analysis{% endblock %}
 
 {% block topbar_actions %}
-    <a href="{% url 'area_analista' %}" class="btn btn--outline">
+    <a href="{% if user.profile.level == '3' or user.is_superuser %}{% url 'gestao_processos' %}{% else %}{% url 'area_analista' %}{% endif %}" class="btn btn--outline">
         <span class="material-symbols-rounded">arrow_back</span>
         Voltar à fila
     </a>
@@ -17,6 +17,24 @@
 
     <section class="meta-grid">
         <div class="meta-item">
+            <span class="meta-item__label">Grupo</span>
+            <span class="badge {% if processo.genero == 'LICITACOES_E_CONTRATOS' %}badge--grupo-licitacoes{% else %}badge--grupo-liquidacoes{% endif %}">
+                {{ processo.genero_display }}
+            </span>
+        </div>
+        <div class="meta-item">
+            <span class="meta-item__label">Prioridade</span>
+            {% include "includes/badge_prioridade.html" with processo=processo %}
+        </div>
+        <div class="meta-item">
+            <span class="meta-item__label">Situação</span>
+            <span class="badge {{ processo.situacao_class }}">{{ processo.situacao_label }}</span>
+        </div>
+        <div class="meta-item">
+            <span class="meta-item__label">Analista / relator</span>
+            <span class="meta-item__value">{{ processo.nome_analista|default:'—' }}</span>
+        </div>
+        <div class="meta-item">
             <span class="meta-item__label">Volume</span>
             <span class="meta-item__value">{{ processo.volume|default:'—' }}</span>
         </div>
@@ -24,69 +42,84 @@
             <span class="meta-item__label">Entrada</span>
             <span class="meta-item__value">{{ processo.data_entrada|date:"d/m/Y" }} {% if processo.hora_entrada %}às {{ processo.hora_entrada|time:"H:i" }}{% endif %}</span>
         </div>
+        {% if processo.data_hora_assumido %}
+        <div class="meta-item">
+            <span class="meta-item__label">Assumido em</span>
+            <span class="meta-item__value">{{ processo.data_hora_assumido|date:"d/m/Y H:i" }}</span>
+        </div>
+        {% endif %}
         <div class="meta-item">
             <span class="meta-item__label">Prazo</span>
             <span class="badge badge--dot {% if processo.prazo_status == 'atrasado' %}badge--danger{% elif processo.prazo_status == 'hoje' or processo.prazo_status == 'atencao' %}badge--warning{% elif processo.prazo_status == 'ok' %}badge--success{% endif %}">
                 {{ processo.prazo_formatado }}
             </span>
         </div>
+        {% if processo.genero == 'LICITACOES_E_CONTRATOS' %}
         <div class="meta-item">
-            <span class="meta-item__label">Gênero</span>
-            <span class="meta-item__value">{{ processo.genero_display }}</span>
-        </div>
-        <div class="meta-item">
-            <span class="meta-item__label">Prioridade</span>
-            {% if processo.prioridade == 'SIM' %}
-                <span class="badge badge--danger">SIM</span>
-            {% else %}
-                <span class="badge">NÃO</span>
-            {% endif %}
-        </div>
-        <div class="meta-item">
-            <span class="meta-item__label">Contratada</span>
+            <span class="meta-item__label">Empresa / Contratada</span>
             <span class="meta-item__value">{{ processo.contratada|default:'—' }}</span>
         </div>
+        {% endif %}
         <div class="meta-item meta-item--wide">
             <span class="meta-item__label">Objeto</span>
             <span class="meta-item__value">{{ processo.objeto }}</span>
         </div>
     </section>
 
+    {% if processo.pode_assumir %}
+        <div class="alert alert--info">
+            <span class="material-symbols-rounded">info</span>
+            <span>Este processo está disponível. Ao assumir, você passa a ser o responsável e os demais analistas veem “Em análise por você”.</span>
+        </div>
+        <form method="post" action="{% url 'assumir_processo' processo.id %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn--primary">
+                <span class="material-symbols-rounded">handshake</span>
+                Assumir processo
+            </button>
+        </form>
+    {% endif %}
+
     <form method="post" class="card" id="formAnalise">
         {% csrf_token %}
         <div class="form-section">
             <div class="form-section__title">
                 <span class="material-symbols-rounded">edit_note</span>
-                Alimentar análise
+                {% if eh_liquidacao %}Informações da liquidação{% else %}Alimentar análise{% endif %}
             </div>
             <div class="form-grid form-grid--full">
+                {% if eh_liquidacao %}
                 <div class="field">
-                    <label class="field__label" for="valor">Valor</label>
-                    <input type="text" id="valor" name="valor" class="input" value="{{ processo.valor|default:'' }}" placeholder="R$ 0,00">
+                    <label class="field__label" for="numero_relatorio">Número do relatório</label>
+                    <input type="text" id="numero_relatorio" class="input" value="{% if processo.numero_relatorio %}Relatório {{ processo.numero_relatorio }}{% endif %}" readonly>
+                    <span class="field__hint">Sequência única do grupo de Liquidações, gerada ao assumir.</span>
+                </div>
+                {% endif %}
+                <div class="field">
+                    <label class="field__label" for="valor">{% if eh_liquidacao %}Valor analisado{% else %}Valor{% endif %}</label>
+                    <input type="text" id="valor" name="valor" class="input" value="{{ processo.valor|default:'' }}" placeholder="R$ 0,00" {% if not pode_editar %}readonly{% endif %}>
                 </div>
                 <div class="field">
                     <label class="field__label" for="destino">Destino</label>
-                    <input type="text" id="destino" name="destino" class="input" value="{{ processo.destino|default:'' }}">
+                    <input type="text" id="destino" name="destino" class="input" value="{{ processo.destino|default:'' }}" placeholder="Órgão de destino do processo" {% if not pode_editar %}readonly{% endif %}>
                 </div>
                 <div class="field">
                     <label class="field__label" for="periodo">Período</label>
-                    <input type="text" id="periodo" name="periodo" class="input" value="{{ processo.periodo|default:'' }}">
+                    <input type="text" id="periodo" name="periodo" class="input" value="{{ processo.periodo|default:'' }}" {% if not pode_editar %}readonly{% endif %}>
                 </div>
                 <div class="field">
-                    <label class="field__label" for="tecnico">Técnico responsável</label>
-                    <input type="text" id="tecnico" name="tecnico" class="input" value="{{ processo.tecnico|default:'' }}">
+                    <label class="field__label" for="tecnico">Analista / relator</label>
+                    <input type="text" id="tecnico" class="input" value="{{ processo.nome_analista|default:'' }}" readonly>
                 </div>
-                <div class="field">
-                    <label class="field__label" for="data_analise">Data da análise</label>
-                    <input type="date" id="data_analise" name="data_analise" class="input" value="{{ processo.data_analise|date:'Y-m-d' }}">
-                </div>
+                {% if not eh_liquidacao %}
                 <div class="field">
                     <label class="field__label" for="numero_despacho">Nº de despacho</label>
-                    <input type="text" id="numero_despacho" name="numero_despacho" class="input" value="{{ processo.numero_despacho|default:'' }}">
+                    <input type="text" id="numero_despacho" name="numero_despacho" class="input" value="{{ processo.numero_despacho|default:'' }}" {% if not pode_editar %}readonly{% endif %}>
                 </div>
+                {% endif %}
                 <div class="field">
                     <label class="field__label" for="status_analise">Status da análise</label>
-                    <select id="status_analise" name="status_analise" class="select">
+                    <select id="status_analise" name="status_analise" class="select" {% if not pode_editar %}disabled{% endif %}>
                         {% for value, label in all_status_analise %}
                             <option value="{{ value }}" {% if processo.status_analise == value %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
@@ -94,7 +127,7 @@
                 </div>
                 <div class="field">
                     <label class="field__label" for="tem_pendencia">Tem pendência?</label>
-                    <select id="tem_pendencia" name="tem_pendencia" class="select">
+                    <select id="tem_pendencia" name="tem_pendencia" class="select" {% if not pode_editar %}disabled{% endif %}>
                         <option value="NAO" {% if processo.tem_pendencia != 'SIM' %}selected{% endif %}>Não</option>
                         <option value="SIM" {% if processo.tem_pendencia == 'SIM' %}selected{% endif %}>Sim</option>
                     </select>
@@ -102,18 +135,24 @@
                 </div>
                 <div class="field field--wide">
                     <label class="field__label" for="observacao">Observação</label>
-                    <textarea id="observacao" name="observacao" class="textarea" rows="4">{{ processo.observacao|default:'' }}</textarea>
+                    <textarea id="observacao" name="observacao" class="textarea" rows="4" {% if not pode_editar %}readonly{% endif %}>{{ processo.observacao|default:'' }}</textarea>
                 </div>
             </div>
         </div>
+        {% if pode_editar %}
         <div class="form-section">
             <div class="form-actions">
-                <button type="submit" class="btn btn--primary">
+                <button type="submit" name="acao" value="salvar" class="btn btn--outline">
                     <span class="material-symbols-rounded">save</span>
                     Salvar análise
                 </button>
+                <button type="submit" name="acao" value="concluir" class="btn btn--primary" onclick="return confirm('Concluir a análise e enviar o processo para assinatura?');">
+                    <span class="material-symbols-rounded">task_alt</span>
+                    Concluir análise
+                </button>
             </div>
         </div>
+        {% endif %}
     </form>
 
     <section class="card" id="blocoPendencias">
@@ -133,12 +172,14 @@
                                 {% if pendencia.criada_por %} · {{ pendencia.criada_por }}{% endif %}
                             </div>
                         </div>
+                        {% if pode_editar %}
                         <form action="{% url 'remover_pendencia' pendencia.id %}" method="post">
                             {% csrf_token %}
                             <button type="submit" class="icon-btn icon-btn--danger" title="Remover pendência" onclick="return confirm('Remover esta pendência?');">
                                 <span class="material-symbols-rounded">delete</span>
                             </button>
                         </form>
+                        {% endif %}
                     </li>
                 {% endfor %}
             </ul>
@@ -150,6 +191,7 @@
             </div>
         {% endif %}
 
+        {% if pode_editar %}
         <form action="{% url 'adicionar_pendencia' processo.id %}" method="post" class="pendencia-add" id="formPendencia">
             {% csrf_token %}
             <label class="field__label" for="descricaoPendencia">Nova pendência</label>
@@ -161,6 +203,7 @@
                 </button>
             </div>
         </form>
+        {% endif %}
     </section>
 
     {% if passagens %}

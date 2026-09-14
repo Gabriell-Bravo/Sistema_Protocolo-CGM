@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 
 {% block title %}Análise de Processos{% endblock %}
-{% block page_title %}Meus processos{% endblock %}
-{% block page_subtitle %}Clique em Analisar para preencher valor, destino, status e pendências{% endblock %}
+{% block page_title %}Fila de análise{% endblock %}
+{% block page_subtitle %}Assuma um processo disponível. Os demais analistas continuam vendo a fila.{% endblock %}
 
 {% block content %}
 <div class="stack">
@@ -11,24 +11,24 @@
             <span class="stat__icon"><span class="material-symbols-rounded">fact_check</span></span>
             <div>
                 <div class="stat__value">{{ total_processos }}</div>
-                <div class="stat__label">Na sua fila</div>
+                <div class="stat__label">Na fila</div>
             </div>
         </div>
-        <div class="stat stat--warning">
-            <span class="stat__icon"><span class="material-symbols-rounded">pending_actions</span></span>
+        <div class="stat stat--success">
+            <span class="stat__icon"><span class="material-symbols-rounded">front_hand</span></span>
             <div>
-                <div class="stat__value">{{ total_sem_analise }}</div>
-                <div class="stat__label">Sem análise</div>
-            </div>
-        </div>
-        <div class="stat stat--danger">
-            <span class="stat__icon"><span class="material-symbols-rounded">assignment_late</span></span>
-            <div>
-                <div class="stat__value">{{ total_com_pendencia }}</div>
-                <div class="stat__label">Com pendência</div>
+                <div class="stat__value">{{ total_disponiveis }}</div>
+                <div class="stat__label">Disponíveis</div>
             </div>
         </div>
         <div class="stat stat--violet">
+            <span class="stat__icon"><span class="material-symbols-rounded">person</span></span>
+            <div>
+                <div class="stat__value">{{ total_comigo }}</div>
+                <div class="stat__label">Em análise por você</div>
+            </div>
+        </div>
+        <div class="stat stat--danger">
             <span class="stat__icon"><span class="material-symbols-rounded">running_with_errors</span></span>
             <div>
                 <div class="stat__value">{{ total_atrasados }}</div>
@@ -37,7 +37,7 @@
         </div>
     </section>
 
-    <section class="filters" data-filters="analista">
+    <section class="filters">
         <div class="filters__bar">
             <form method="get" class="search">
                 <div class="search__field">
@@ -46,144 +46,31 @@
                            placeholder="Buscar por nº, secretaria, objeto, contratada…"
                            value="{{ termo_pesquisa|default:'' }}">
                 </div>
-                <input type="hidden" name="pendencia" value="{{ pendencia_filtro }}">
-                <input type="hidden" name="status_analise" value="{{ status_analise_filtro }}">
                 <button type="submit" class="btn btn--primary">Buscar</button>
             </form>
-
-            <button type="button" class="btn btn--outline" data-filters-toggle>
-                <span class="material-symbols-rounded">tune</span>
-                Filtros
-            </button>
-
-            <a href="{% url 'area_analista' %}" class="btn btn--ghost">
-                <span class="material-symbols-rounded">filter_alt_off</span>
-                Limpar
-            </a>
-        </div>
-
-        <div class="filters__panel">
-            <form method="get" class="filters__grid">
-                <input type="hidden" name="pesquisa" value="{{ termo_pesquisa }}">
-                <div class="field">
-                    <label class="field__label" for="filtroPendencia">Pendência</label>
-                    <select id="filtroPendencia" name="pendencia" class="select" onchange="this.form.submit()">
-                        <option value="todas" {% if pendencia_filtro == 'todas' %}selected{% endif %}>Todas</option>
-                        <option value="SIM" {% if pendencia_filtro == 'SIM' %}selected{% endif %}>Com pendência</option>
-                        <option value="NAO" {% if pendencia_filtro == 'NAO' %}selected{% endif %}>Sem pendência</option>
-                    </select>
-                </div>
-                <div class="field">
-                    <label class="field__label" for="filtroStatus">Status da análise</label>
-                    <select id="filtroStatus" name="status_analise" class="select" onchange="this.form.submit()">
-                        <option value="todas" {% if status_analise_filtro == 'todas' %}selected{% endif %}>Todos</option>
-                        {% for value, label in all_status_analise %}
-                            <option value="{{ value }}" {% if status_analise_filtro == value %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </form>
-        </div>
-
-        {% if termo_pesquisa or pendencia_filtro != 'todas' or status_analise_filtro != 'todas' %}
-            <div class="filters__chips">
-                {% if termo_pesquisa %}
-                    <span class="chip" data-filter-chip><span class="chip__label">Busca:</span> {{ termo_pesquisa }}</span>
-                {% endif %}
-                {% if pendencia_filtro == 'SIM' %}
-                    <span class="chip" data-filter-chip><span class="chip__label">Pendência:</span> Com pendência</span>
-                {% elif pendencia_filtro == 'NAO' %}
-                    <span class="chip" data-filter-chip><span class="chip__label">Pendência:</span> Sem pendência</span>
-                {% endif %}
-                {% if status_analise_filtro != 'todas' %}
-                    <span class="chip" data-filter-chip><span class="chip__label">Status:</span> {{ status_analise_filtro_label }}</span>
-                {% endif %}
-            </div>
-        {% endif %}
-    </section>
-
-    <section class="table-card">
-        <div class="table-card__header">
-            <span class="table-card__title">Fila de análise</span>
-            <span class="table-card__count">{{ total_processos }} processo{{ total_processos|pluralize:"s" }}</span>
-        </div>
-
-        <div class="table-scroll">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th class="col-sticky">N° Processo</th>
-                        <th>Volume</th>
-                        <th>Secretaria</th>
-                        <th>Entrada</th>
-                        <th>Prazo</th>
-                        <th>Objeto</th>
-                        <th>Prioridade</th>
-                        <th>Status da análise</th>
-                        <th>Pendência</th>
-                        <th class="col-actions">Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for processo in processos %}
-                    <tr>
-                        <td class="col-sticky">
-                            <strong>{{ processo.numero_processo }}</strong>
-                        </td>
-                        <td>{{ processo.volume|default:'—' }}</td>
-                        <td>{{ processo.secretaria }}</td>
-                        <td>
-                            {{ processo.data_entrada|date:"d/m/Y" }}
-                            {% if processo.hora_entrada %}<div class="cell-muted">{{ processo.hora_entrada|time:"H:i" }}</div>{% endif %}
-                        </td>
-                        <td>
-                            <span class="badge badge--dot {% if processo.prazo_status == 'atrasado' %}badge--danger{% elif processo.prazo_status == 'hoje' or processo.prazo_status == 'atencao' %}badge--warning{% elif processo.prazo_status == 'ok' %}badge--success{% endif %}">
-                                {{ processo.prazo_formatado }}
-                            </span>
-                        </td>
-                        <td class="cell-wrap">
-                            <span class="cell-preview">{{ processo.objeto|truncatechars:70 }}</span>
-                        </td>
-                        <td>
-                            {% if processo.prioridade == 'SIM' %}
-                                <span class="badge badge--danger">SIM</span>
-                            {% else %}
-                                <span class="badge">NÃO</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <span class="badge {% if processo.status_analise == 'PROSSEGUIMENTO_SEM_RESSALVA' %}badge--success{% elif processo.status_analise == 'PROSSEGUIMENTO_COM_RESSALVA' %}badge--warning{% elif processo.status_analise == 'NAO_PROSSEGUIMENTO' or processo.status_analise == 'DEVOLUCAO_PARA_SANEAMENTO' %}badge--danger{% endif %}">
-                                {{ processo.get_status_analise_display }}
-                            </span>
-                        </td>
-                        <td>
-                            {% if processo.tem_pendencia == 'SIM' %}
-                                <span class="badge badge--warning">{{ processo.total_pendencias }} item{{ processo.total_pendencias|pluralize:"ns" }}</span>
-                            {% else %}
-                                <span class="badge">Não</span>
-                            {% endif %}
-                        </td>
-                        <td class="col-actions">
-                            <div class="actions">
-                                <a href="{% url 'analista_processo' processo.id %}" class="btn btn--primary btn--sm">
-                                    <span class="material-symbols-rounded">edit_note</span>
-                                    Analisar
-                                </a>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-
-            {% if not processos %}
-                <div class="empty">
-                    <span class="material-symbols-rounded">fact_check</span>
-                    <div class="empty__title">Nenhum processo na sua fila</div>
-                    <div>Quando o protocolo registrar um processo do seu gênero, ele aparece aqui.</div>
-                </div>
+            {% if termo_pesquisa %}
+                <a href="{% url 'area_analista' %}" class="btn btn--ghost">
+                    <span class="material-symbols-rounded">filter_alt_off</span>
+                    Limpar
+                </a>
             {% endif %}
         </div>
     </section>
+
+    {% if mostra_licitacoes %}
+        {% include "analista/_fila_grupo.html" with titulo="Licitações e Contratos" grupo_css="licitacoes" icone="gavel" processos=licitacoes mostrar_contratada=True modo_gestao=False pode_assumir=pode_assumir %}
+    {% endif %}
+
+    {% if mostra_liquidacoes %}
+        {% include "analista/_fila_grupo.html" with titulo="Liquidações" grupo_css="liquidacoes" icone="payments" processos=liquidacoes mostrar_contratada=False modo_gestao=False pode_assumir=pode_assumir %}
+    {% endif %}
+
+    {% if not mostra_licitacoes and not mostra_liquidacoes %}
+        <div class="empty">
+            <span class="material-symbols-rounded">fact_check</span>
+            <div class="empty__title">Nenhum processo na fila</div>
+            <div>Quando o protocolo registrar um processo do seu grupo, ele aparece aqui.</div>
+        </div>
+    {% endif %}
 </div>
 {% endblock %}

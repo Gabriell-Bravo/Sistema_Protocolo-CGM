@@ -9,8 +9,15 @@ from django.contrib.auth.models import User
 
 class Processo(models.Model):
     PRIORIDADE_CHOICES = [
-        ('SIM', 'SIM'),
-        ('NAO', 'NÃO'),
+        ('NORMAL', 'Normal'),
+        ('PRIORITARIO', 'Prioritário'),
+        ('URGENTE', 'Urgente'),
+    ]
+
+    SITUACAO_TRAMITE_CHOICES = [
+        ('DISPONIVEL', 'Disponível para análise'),
+        ('EM_ANALISE', 'Em análise'),
+        ('AGUARDANDO_ASSINATURA', 'Aguardando assinatura'),
     ]
 
     PENDENCIA_CHOICES = [
@@ -72,8 +79,33 @@ class Processo(models.Model):
     prioridade = models.CharField(
         max_length=50,
         choices=PRIORIDADE_CHOICES,
-        default='NAO',
+        default='NORMAL',
         verbose_name="Prioridade"
+    )
+    situacao_tramite = models.CharField(
+        max_length=30,
+        choices=SITUACAO_TRAMITE_CHOICES,
+        default='DISPONIVEL',
+        verbose_name="Situação da análise"
+    )
+    analista_responsavel = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='processos_em_analise',
+        verbose_name="Analista responsável"
+    )
+    data_hora_assumido = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Data/hora em que foi assumido"
+    )
+    numero_relatorio = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        verbose_name="Número do relatório"
     )
     prazo_dias = models.IntegerField(
         null=True, blank=True, verbose_name="Prazo em Dias")
@@ -140,6 +172,23 @@ class Processo(models.Model):
     @property
     def genero_display(self):
         return self.GENERO_LABELS.get(self.genero, self.genero)
+
+    @property
+    def prioridade_badge_class(self):
+        if self.prioridade == 'URGENTE':
+            return 'badge--danger'
+        if self.prioridade in ('PRIORITARIO', 'SIM'):
+            return 'badge--warning'
+        return ''
+
+    @property
+    def nome_analista(self):
+        if self.analista_responsavel:
+            return (
+                self.analista_responsavel.get_full_name()
+                or self.analista_responsavel.username
+            )
+        return self.tecnico or ''
 
     class Meta:
         db_table = 'processos'
@@ -211,6 +260,20 @@ class Pendencia(models.Model):
         ordering = ['criada_em']
         verbose_name = "Pendência"
         verbose_name_plural = "Pendências"
+
+
+class SequenciaRelatorio(models.Model):
+    grupo = models.CharField(max_length=50, unique=True, verbose_name="Grupo")
+    proximo_numero = models.PositiveIntegerField(
+        default=1540, verbose_name="Próximo número")
+
+    def __str__(self):
+        return f"{self.grupo} → {self.proximo_numero}"
+
+    class Meta:
+        db_table = 'sequencia_relatorio'
+        verbose_name = "Sequência de Relatório"
+        verbose_name_plural = "Sequências de Relatório"
 
 
 # NEW PROFILE MODEL

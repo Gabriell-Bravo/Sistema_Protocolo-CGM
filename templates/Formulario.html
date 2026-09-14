@@ -95,10 +95,6 @@
                     <label class="field__label" for="horaSaida">Hora de saída</label>
                     <input type="time" id="horaSaida" name="hora_saida" class="input">
                 </div>
-                <div class="field field--wide">
-                    <label class="field__label" for="destino">Destino</label>
-                    <input type="text" id="destino" name="destino" class="input">
-                </div>
             </div>
         </div>
 
@@ -155,8 +151,9 @@
                 <div class="field field--required">
                     <label class="field__label" for="prioridade">Grau de prioridade</label>
                     <select id="prioridade" name="prioridade" class="select" required>
-                        <option value="NAO">NÃO (Prazo: 7 dias)</option>
-                        <option value="SIM">SIM (Prazo: 2 dias)</option>
+                        <option value="NORMAL">Normal (Prazo: 7 dias)</option>
+                        <option value="PRIORITARIO">Prioritário (Prazo: 2 dias)</option>
+                        <option value="URGENTE">Urgente (Prazo: 1 dia)</option>
                     </select>
                     <div class="field__error" id="prioridadeError">Campo obrigatório</div>
                     <div id="prazoExibicao">
@@ -247,7 +244,6 @@
     // --- VARIÁVEIS DE ELEMENTOS DO DOM ---
     const numeroProcessoInput = document.getElementById('numeroProcesso');
     const secretariaSelect = document.getElementById('secretaria');
-    const destinoInput = document.getElementById('destino');
     const generoSelect = document.getElementById('genero');
     const generoOutrosInput = document.getElementById('generoOutrosInput');
     const especieSelect = document.getElementById('especie');
@@ -341,16 +337,24 @@
         }
     }
 
+    function normalizarPrioridade(value) {
+        if (value === 'SIM') return 'PRIORITARIO';
+        if (value === 'NAO') return 'NORMAL';
+        return value || 'NORMAL';
+    }
+
     function updatePrazoDisplay() {
         const selectedPrioridade = prioridadeSelect.value;
-        if (selectedPrioridade === 'SIM') {
+        if (selectedPrioridade === 'URGENTE') {
+            prazoValor.textContent = '1 dia';
+        } else if (selectedPrioridade === 'PRIORITARIO') {
             prazoValor.textContent = '2 dias';
-        } else if (selectedPrioridade === 'NAO') {
+        } else if (selectedPrioridade === 'NORMAL') {
             prazoValor.textContent = '7 dias';
         } else {
             prazoValor.textContent = '';
         }
-        prazoExibicao.style.display = (selectedPrioridade === 'SIM' || selectedPrioridade === 'NAO') ? 'block' : 'none';
+        prazoExibicao.style.display = ['NORMAL', 'PRIORITARIO', 'URGENTE'].includes(selectedPrioridade) ? 'block' : 'none';
     }
 
     // Preenchimento automático a partir do número do processo
@@ -369,7 +373,6 @@
 
                         document.getElementById('volume').value = data.volume || '';
                         secretariaSelect.value = data.secretaria || '';
-                        destinoInput.value = data.destino || '';
 
                         const generoExistente = data.genero || '';
                         const especieExistente = data.especie || '';
@@ -407,7 +410,7 @@
                         document.getElementById('objeto').value = data.objeto || '';
                         document.getElementById('contratada').value = data.contratada || '';
                         document.getElementById('recorrente').value = data.recorrente || 'NAO';
-                        prioridadeSelect.value = data.prioridade || 'NAO';
+                        prioridadeSelect.value = normalizarPrioridade(data.prioridade);
                         document.getElementById('tecnico').value = data.tecnico || '';
                         document.getElementById('numeroDespacho').value = data.numero_despacho || '';
                         document.getElementById('observacao').value = data.observacao || '';
@@ -434,7 +437,6 @@
         document.getElementById('secretaria').value = '';
         document.getElementById('dataSaida').value = '';
         document.getElementById('horaSaida').value = '';
-        document.getElementById('destino').value = '';
 
         generoSelect.value = '';
         generoOutrosInput.value = '';
@@ -452,7 +454,7 @@
         document.getElementById('objeto').value = '';
         document.getElementById('contratada').value = '';
         document.getElementById('recorrente').value = 'NAO';
-        prioridadeSelect.value = 'NAO';
+        prioridadeSelect.value = 'NORMAL';
         updatePrazoDisplay();
         document.getElementById('tecnico').value = '';
         document.getElementById('numeroDespacho').value = '';
@@ -471,10 +473,6 @@
 
         especieSelect.addEventListener('change', handleEspecieOutros);
         prioridadeSelect.addEventListener('change', updatePrazoDisplay);
-
-        secretariaSelect.addEventListener('change', function() {
-            destinoInput.value = this.value;
-        });
 
         updateEspecieOptions();
         handleGeneroOutros();
@@ -566,7 +564,6 @@
                     hora_entrada: document.getElementById('horaEntrada').value,
                     data_saida: document.getElementById('dataSaida').value || null,
                     hora_saida: document.getElementById('horaSaida').value || null,
-                    destino: destinoInput.value || null,
                     genero: finalGeneroValue,
                     especie: finalEspecieValue,
                     objeto: document.getElementById('objeto').value,
