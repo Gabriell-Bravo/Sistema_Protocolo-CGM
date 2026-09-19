@@ -92,6 +92,7 @@ def equipe(inicio, fim, referencia=None):
         em_analise = list(ativos.filter(
             analista_responsavel=analista,
             situacao_tramite__in=['EM_ANALISE', 'ASSINATURA_DIRECIONADA'])
+            .select_related(None)
             .only('id', 'data_entrada', 'prioridade'))
         vencidos = sum(1 for p in em_analise
                        if (prazos.dias_restantes(p, hoje) or 0) < 0)

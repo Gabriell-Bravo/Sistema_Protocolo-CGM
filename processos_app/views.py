@@ -404,9 +404,12 @@ def listar_processos(request):
     ).order_by('data_entrada', 'hora_entrada', 'id')
 
     # Totais sobre o conjunto filtrado (antes da paginação).
+    # select_related(None) evita o FieldError do Django 5.2: um FK não pode
+    # estar em select_related e ser omitido pelo only() ao mesmo tempo.
     hoje = timezone.localdate()
     total_atrasados = total_vence_hoje = total_prioritarios = 0
-    for processo in processos_query.only('id', 'data_entrada', 'prioridade'):
+    for processo in processos_query.select_related(None).only(
+            'id', 'data_entrada', 'prioridade'):
         dias = prazos_service.dias_restantes(processo, hoje)
         if dias is not None and dias < 0:
             total_atrasados += 1
