@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}Gestão de Pessoas CGM{% endblock %}
+{% block page_title %}Gestão de Pessoas CGM{% endblock %}
+{% block page_subtitle %}Disponibilidade operacional da equipe da Controladoria. Não é sistema de RH.{% endblock %}
+
+{% block content %}
+<div class="stack">
+
+    <section class="table-card">
+        <div class="table-card__header">
+            <span class="table-card__title">Equipe hoje — {{ hoje|date:"d/m/Y" }}</span>
+            <span class="table-card__count">{{ quadro|length }} servidor{{ quadro|length|pluralize:"es" }}</span>
+        </div>
+        <div class="table-scroll table-scroll--compact">
+            <table class="table">
+                <thead>
+                    <tr><th>Servidor</th><th>Papel</th><th>Disponibilidade</th></tr>
+                </thead>
+                <tbody>
+                    {% for linha in quadro %}
+                    <tr>
+                        <td><strong>{{ linha.nome }}</strong></td>
+                        <td>{{ linha.papel }}</td>
+                        <td>
+                            <span class="badge badge--dot {% if linha.disponivel %}badge--success{% else %}badge--warning{% endif %}">
+                                {{ linha.disponibilidade }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="card__header">
+            <span class="card__title">Registrar indisponibilidade</span>
+            <span class="card__hint">Quem registrou e quando ficam gravados automaticamente.</span>
+        </div>
+        <form method="post" action="{% url 'gestao_pessoas_registrar' %}" class="card__body">
+            {% csrf_token %}
+            <div class="form-grid form-grid--full">
+                <div class="field field--required">
+                    <label class="field__label" for="usuario">Servidor</label>
+                    <select id="usuario" name="usuario" class="select" required>
+                        {% for servidor in servidores %}
+                            <option value="{{ servidor.id }}">{{ servidor.get_full_name|default:servidor.username }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field field--required">
+                    <label class="field__label" for="tipo">Tipo</label>
+                    <select id="tipo" name="tipo" class="select" required>
+                        {% for tipo in tipos %}
+                            <option value="{{ tipo.id }}">{{ tipo.nome }}</option>
+                        {% endfor %}
+                    </select>
+                    <span class="field__hint">Os tipos são mantidos em Cadastros.</span>
+                </div>
+                <div class="field field--wide">
+                    <label class="field__label">
+                        <input type="checkbox" id="recorrente" name="recorrente">
+                        Ocorrência recorrente (ex.: ausente todas as quartas-feiras)
+                    </label>
+                </div>
+
+                <div class="field js-periodo">
+                    <label class="field__label" for="data_inicio">Início</label>
+                    <input type="date" id="data_inicio" name="data_inicio" class="input">
+                </div>
+                <div class="field js-periodo">
+                    <label class="field__label" for="data_fim">Fim</label>
+                    <input type="date" id="data_fim" name="data_fim" class="input">
+                    <span class="field__hint">Em branco: vale só para o dia de início.</span>
+                </div>
+
+                <div class="field js-recorrencia is-hidden">
+                    <label class="field__label" for="dia_semana">Dia da semana</label>
+                    <select id="dia_semana" name="dia_semana" class="select">
+                        {% for valor, rotulo in dias_semana %}
+                            <option value="{{ valor }}">{{ rotulo }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field js-recorrencia is-hidden">
+                    <label class="field__label" for="vigencia_inicio">Vigência — início</label>
+                    <input type="date" id="vigencia_inicio" name="vigencia_inicio" class="input">
+                </div>
+                <div class="field js-recorrencia is-hidden">
+                    <label class="field__label" for="vigencia_fim">Vigência — fim</label>
+                    <input type="date" id="vigencia_fim" name="vigencia_fim" class="input">
+                    <span class="field__hint">Em branco: sem data para terminar.</span>
+                </div>
+
+                <div class="field field--wide">
+                    <label class="field__label" for="observacao">Observação (opcional)</label>
+                    <textarea id="observacao" name="observacao" class="textarea" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn--primary">
+                    <span class="material-symbols-rounded">event_busy</span>
+                    Registrar
+                </button>
+            </div>
+        </form>
+    </section>
+
+    <section class="table-card">
+        <div class="table-card__header">
+            <span class="table-card__title">Registros ativos</span>
+            <span class="table-card__count">{{ registros.paginator.count }} registro{{ registros.paginator.count|pluralize:"s" }}</span>
+        </div>
+        <div class="table-scroll">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Servidor</th><th>Tipo</th><th>Quando</th>
+                        <th>Observação</th><th>Registrado por</th>
+                        <th class="col-actions">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for registro in registros %}
+                    <tr>
+                        <td>{{ registro.usuario.get_full_name|default:registro.usuario.username }}</td>
+                        <td>{{ registro.tipo }}</td>
+                        <td>
+                            {% if registro.recorrente %}
+                                Toda {{ registro.get_dia_semana_display|lower }}
+                                <div class="cell-muted">
+                                    {% if registro.vigencia_inicio or registro.vigencia_fim %}
+                                        de {{ registro.vigencia_inicio|date:"d/m/Y"|default:"—" }}
+                                        até {{ registro.vigencia_fim|date:"d/m/Y"|default:"sem fim" }}
+                                    {% else %}sem vigência definida{% endif %}
+                                </div>
+                            {% else %}
+                                {{ registro.data_inicio|date:"d/m/Y" }}
+                                {% if registro.data_fim and registro.data_fim != registro.data_inicio %}
+                                    a {{ registro.data_fim|date:"d/m/Y" }}
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <td class="cell-wrap">{{ registro.observacao|default:"—" }}</td>
+                        <td>
+                            {{ registro.criado_por.get_full_name|default:registro.criado_por.username|default:"—" }}
+                            <div class="cell-muted">{{ registro.criado_em|date:"d/m/Y H:i" }}</div>
+                        </td>
+                        <td class="col-actions">
+                            <form method="post" action="{% url 'gestao_pessoas_desativar' registro_id=registro.id %}"
+                                  onsubmit="return confirm('Desativar este registro? Ele continua no histórico.');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn--sm btn--ghost">Desativar</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6"><div class="empty empty--compact">
+                        <span class="material-symbols-rounded">event_available</span>
+                        <div class="empty__title">Nenhuma indisponibilidade registrada</div>
+                    </div></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% include "includes/paginacao.html" with pagina=registros %}
+    </section>
+
+    <p class="cell-muted">
+        A indisponibilidade é informação, não bloqueio: aparece no quadro da equipe
+        e no seletor de direcionamento de assinatura, mas nunca impede uma operação.
+    </p>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (function () {
+        const chk = document.getElementById('recorrente');
+        function alternar() {
+            const rec = chk.checked;
+            document.querySelectorAll('.js-recorrencia').forEach(e => e.classList.toggle('is-hidden', !rec));
+            document.querySelectorAll('.js-periodo').forEach(e => e.classList.toggle('is-hidden', rec));
+        }
+        chk.addEventListener('change', alternar);
+        alternar();
+    })();
+</script>
+{% endblock %}

@@ -64,11 +64,78 @@
         </div>
     </section>
 
+    {# item 50: tempos do fluxo deste processo #}
+    {% if tempos.em_fila is not None or tempos.total is not None %}
+    <section class="table-card">
+        <div class="table-card__header">
+            <span class="table-card__title">Tempos do fluxo (dias)</span>
+        </div>
+        <div class="table-scroll table-scroll--compact">
+            <table class="table">
+                <thead>
+                    <tr><th>Em fila</th><th>Análise</th><th>Pós-análise</th><th>Aguardando retirada</th><th>Total</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>{{ tempos.em_fila|default_if_none:"—" }}</td>
+                        <td>{{ tempos.analise|default_if_none:"—" }}</td>
+                        <td>{{ tempos.pos_analise|default_if_none:"—" }}</td>
+                        <td>{{ tempos.aguardando_retirada|default_if_none:"—" }}</td>
+                        <td><strong>{{ tempos.total|default_if_none:"—" }}</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
+
+    {# item 45: atos administrativos da tramitação — quem, o quê, quando #}
+    <section class="table-card">
+        <div class="table-card__header">
+            <span class="table-card__title">Eventos da tramitação</span>
+            <span class="table-card__count">{{ eventos|length }} evento{{ eventos|length|pluralize:"s" }}</span>
+        </div>
+        {% if eventos %}
+            <div class="table-scroll">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Data/hora</th>
+                            <th>Evento</th>
+                            <th>Descrição</th>
+                            <th>Usuário</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for evento in eventos %}
+                        <tr>
+                            <td>{{ evento.criado_em_formatted }}</td>
+                            <td><span class="badge badge--primary">{{ evento.get_tipo_display }}</span></td>
+                            <td class="cell-wrap">
+                                {{ evento.descricao }}
+                                {% if evento.dados.autorizado_por %}<div class="cell-muted">Autorizado por: {{ evento.dados.autorizado_por }}</div>{% endif %}
+                                {% if evento.dados.observacao %}<div class="cell-muted">Observação: {{ evento.dados.observacao }}</div>{% endif %}
+                            </td>
+                            <td>{{ evento.usuario.get_full_name|default:evento.usuario.username|default:"—" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="empty empty--compact">
+                <span class="material-symbols-rounded">timeline</span>
+                <div class="empty__title">Nenhum evento registrado</div>
+                <div>Processos anteriores à nova tramitação não têm eventos; as alterações de campo aparecem abaixo.</div>
+            </div>
+        {% endif %}
+    </section>
+
     <section class="table-card">
         <div class="table-card__header">
             <span class="table-card__title">Pendências</span>
             <span class="table-card__count">
-                {% if tem_pendencia == 'SIM' %}Com pendência{% else %}Sem pendência{% endif %}
+                {% if tem_pendencia_aberta %}Com pendência aberta{% else %}Sem pendência aberta{% endif %}
                 · {{ pendencias|length }} item{{ pendencias|length|pluralize:"ns" }}
             </span>
         </div>
@@ -79,17 +146,22 @@
                         <tr>
                             <th>#</th>
                             <th>Descrição</th>
+                            <th>Situação</th>
                             <th>Registrada em</th>
-                            <th>Por</th>
+                            <th>Responsável técnico</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for pendencia in pendencias %}
                         <tr>
                             <td>{{ forloop.counter }}</td>
-                            <td class="cell-wrap">{{ pendencia.descricao }}</td>
+                            <td class="cell-wrap">
+                                {{ pendencia.descricao }}
+                                {% if pendencia.status == 'CANCELADA' and pendencia.motivo_cancelamento %}<div class="cell-muted">Cancelada: {{ pendencia.motivo_cancelamento }}</div>{% endif %}
+                            </td>
+                            <td><span class="badge">{{ pendencia.get_status_display }}</span></td>
                             <td>{{ pendencia.criada_em_formatted }}</td>
-                            <td>{{ pendencia.criada_por|default:"N/A" }}</td>
+                            <td>{{ pendencia.responsavel_tecnico|default:pendencia.criada_por|default:"N/A" }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>

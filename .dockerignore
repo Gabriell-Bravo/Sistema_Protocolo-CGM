@@ -1,0 +1,20 @@
+# item 61: nada disso pode entrar na imagem
+.env
+.env.*
+!env.example
+*.db
+*.sqlite3
+processos_app/database/
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+staticfiles_build
+mediafiles
+backups
+*.sql
+*.dump
+*.rar
+*.zip

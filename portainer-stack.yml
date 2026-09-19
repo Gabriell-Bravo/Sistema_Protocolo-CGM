@@ -14,7 +14,7 @@ services:
       TZ: America/Sao_Paulo
       PGTZ: GMT-3
     ports:
-      - '5432:5432'
+      - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
       interval: 10s
@@ -31,10 +31,10 @@ services:
     restart: unless-stopped
     command: >
       bash -c "
+        set -e;
         echo 'Aguardando banco de dados...';
         sleep 5;
-        python manage.py makemigrations;
-        python manage.py migrate;
+        python manage.py migrate --noinput;
         python manage.py createsuperuser --noinput || true;
         python manage.py collectstatic --noinput;
         echo 'Iniciando aplicação...';
@@ -44,10 +44,13 @@ services:
       - ./staticfiles_build:/app/staticfiles_build
       - ./mediafiles:/app/mediafiles
     ports:
-      - '8800:8800'
+      - '${WEB_PORT:-8800}:8800'
     environment:
       DJANGO_SECRET_KEY: '${DJANGO_SECRET_KEY}'
-      DJANGO_DEBUG: '${DJANGO_DEBUG}'
+      DJANGO_DEBUG: '${DJANGO_DEBUG:-False}'
+      DJANGO_ALLOWED_HOSTS: '${DJANGO_ALLOWED_HOSTS:-controladoria.saquarema.rj.gov.br,localhost,127.0.0.1}'
+      DJANGO_CSRF_TRUSTED_ORIGINS: '${DJANGO_CSRF_TRUSTED_ORIGINS:-https://controladoria.saquarema.rj.gov.br,http://localhost:8800,http://127.0.0.1:8800}'
+      DJANGO_HTTPS: '${DJANGO_HTTPS:-False}'
       DJANGO_SUPERUSER_USERNAME: '${DJANGO_SUPERUSER_USERNAME}'
       DJANGO_SUPERUSER_EMAIL: '${DJANGO_SUPERUSER_EMAIL}'
       DJANGO_SUPERUSER_PASSWORD: '${DJANGO_SUPERUSER_PASSWORD}'

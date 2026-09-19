@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Liberados para Assinatura{% endblock %}
+{% block page_title %}Liberados para assinatura — {{ total }}{% endblock %}
+{% block page_subtitle %}Processos prontos para coleta e assinatura do Controlador.{% endblock %}
+
+{% block content %}
+<div class="stack">
+    <section class="card">
+        {% if processos %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Processo</th>
+                    <th>Secretaria</th>
+                    <th>Volumes</th>
+                    <th>Analisado por</th>
+                    <th>Liberado por</th>
+                    <th>Liberado em</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for processo in processos %}
+                <tr>
+                    <td>{{ processo.numero_processo }}</td>
+                    <td>{{ processo.secretaria }}</td>
+                    <td>{{ processo.volume }}</td>
+                    <td>{{ processo.nome_analista|default:"—" }}</td>
+                    <td>{{ processo.liberado_assinatura_por|default:"—" }}</td>
+                    <td>{{ processo.liberado_assinatura_em|date:"d/m/Y H:i"|default:"—" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty">Nenhum processo aguardando assinatura.</p>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

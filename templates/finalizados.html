@@ -188,10 +188,10 @@
                         <th>Gênero</th>
                         <th>Espécie</th>
                         <th>Objeto</th>
-                        <th>Contratada</th>
+                        <th>Contratada / Favorecido / Interessado</th>
                         <th>Recorrente</th>
                         <th>Prioridade</th>
-                        <th>Técnico</th>
+                        <th>Analista</th>
                         <th>N° Despacho</th>
                         <th>Observação</th>
                         <th>Valor</th>
@@ -211,8 +211,8 @@
                         <td class="editable" data-field="secretaria">{{ processo.secretaria }}</td>
                         <td class="editable" data-field="data_entrada">{{ processo.data_entrada|date:"Y-m-d" }}</td>
                         <td class="editable" data-field="hora_entrada">{{ processo.hora_entrada|time:"H:i" }}</td>
-                        <td class="editable" data-field="data_saida">{{ processo.data_saida|default:''|date:"Y-m-d" }}</td>
-                        <td class="editable" data-field="hora_saida">{{ processo.hora_saida|default:''|time:"H:i" }}</td>
+                        <td class="" data-field="data_saida">{{ processo.data_saida|default:''|date:"Y-m-d" }}</td>
+                        <td class="" data-field="hora_saida">{{ processo.hora_saida|default:''|time:"H:i" }}</td>
                         <td>{{ processo.destino|default:'' }}</td>
                         <td class="editable" data-field="genero">{{ processo.genero }}</td>
                         <td class="editable" data-field="especie">{{ processo.especie }}</td>
@@ -224,20 +224,20 @@
                         </td>
                         <td class="editable" data-field="contratada">{{ processo.contratada|default:'' }}</td>
                         <td class="editable" data-field="recorrente">{{ processo.recorrente|default:'NAO' }}</td>
-                        <td class="editable" data-field="prioridade" data-prioridade-raw="{{ processo.prioridade }}">
+                        <td class="" data-field="prioridade" data-prioridade-raw="{{ processo.prioridade }}">
                             {% include "includes/badge_prioridade.html" with processo=processo %}
                         </td>
-                        <td class="editable" data-field="tecnico">{{ processo.tecnico|default:'' }}</td>
-                        <td class="editable" data-field="numero_despacho">{{ processo.numero_despacho|default:'' }}</td>
-                        <td class="editable cell-wrap" data-field="observacao" data-full-text="{{ processo.observacao|default:'' }}">
+                        <td class="" data-field="tecnico">{{ processo.tecnico|default:'' }}</td>
+                        <td class="" data-field="numero_despacho">{{ processo.numero_despacho|default:'' }}</td>
+                        <td class="cell-wrap" data-field="observacao" data-full-text="{{ processo.observacao|default:'' }}">
                             <span class="cell-preview">{{ processo.observacao|default:''|truncatechars:70 }}</span>
                             {% if processo.observacao and processo.observacao|length > 70 %}
                                 <button type="button" class="link-more" onclick="visualizarObservacao('{{ processo.observacao|escapejs }}', 'Observação')">Ver tudo</button>
                             {% endif %}
                         </td>
-                        <td class="editable" data-field="valor">{{ processo.valor|default:'' }}</td>
-                        <td class="editable" data-field="periodo">{{ processo.periodo|default:'' }}</td>
-                        <td class="editable" data-field="status_analise" data-status-analise-raw="{{ processo.status_analise }}">
+                        <td class="" data-field="valor">{{ processo.valor|default:'' }}</td>
+                        <td class="" data-field="periodo">{{ processo.periodo|default:'' }}</td>
+                        <td class="" data-field="status_analise" data-status-analise-raw="{{ processo.status_analise }}">
                             <span class="badge {% if processo.status_analise == 'PROSSEGUIMENTO_SEM_RESSALVA' %}badge--success{% elif processo.status_analise == 'PROSSEGUIMENTO_COM_RESSALVA' %}badge--warning{% elif processo.status_analise == 'NAO_PROSSEGUIMENTO' or processo.status_analise == 'DEVOLUCAO_PARA_SANEAMENTO' %}badge--danger{% endif %}">{{ processo.status_analise_display }}</span>
                         </td>
                         <td>{{ processo.prazo_monitoramento_display }}</td>
@@ -252,7 +252,7 @@
                                         <span class="material-symbols-rounded">edit</span>
                                     </button>
                                 {% endif %}
-                                {% if can_edit and processo.status_monitoramento_raw != 'NAO_APLICAVEL' and processo.status_monitoramento_raw != 'CONCLUIDO' %}
+                                {% if can_concluir_monitoramento and processo.status_monitoramento_raw != 'NAO_APLICAVEL' and processo.status_monitoramento_raw != 'CONCLUIDO' %}
                                     <button type="button" class="icon-btn icon-btn--success" title="Concluir monitoramento" onclick="concluirMonitoramento('{{ processo.id }}')">
                                         <span class="material-symbols-rounded">check_circle</span>
                                     </button>
@@ -261,9 +261,9 @@
                                     <span class="material-symbols-rounded">history</span>
                                     <span class="icon-btn__count">{{ processo.total_passagens|default:1 }}</span>
                                 </a>
-                                {% if user.is_superuser %}
-                                    <button type="button" class="icon-btn icon-btn--danger" title="Excluir" onclick="deletarProcesso('{{ processo.id }}')">
-                                        <span class="material-symbols-rounded">delete</span>
+                                {% if can_delete %}
+                                    <button type="button" class="icon-btn icon-btn--danger" title="Cancelar processo (o registro é preservado)" onclick="deletarProcesso('{{ processo.id }}')">
+                                        <span class="material-symbols-rounded">block</span>
                                     </button>
                                 {% endif %}
                             </div>
@@ -281,7 +281,9 @@
                 </div>
             {% endif %}
         </div>
+        {% include "includes/paginacao.html" with pagina=pagina %}
     </section>
+    {{ dados_formulario|json_script:"dados-formulario" }}
 </div>
 
 <div class="modal" id="observacaoModal">
@@ -306,20 +308,12 @@
 
     const csrftoken = getCookie('csrftoken');
 
-    const especiesPorGenero = {
-        'LIQUIDACOES': [
-            'Pagamento Geral', 'Concessão Aux. Bolsa Atleta', 'P.C. Bolsa Atleta',
-            'Concessão Aux. Aluguel Social', 'Concessão Adiantamento', 'P.C. Adiantamento',
-            'Subvenção Social - Concessão', 'Subvenção Social - Pagamento',
-            'Subvenção Social - Prestação de Contas', 'Subvenção Social - P.C. Anual',
-            'Subvenção Social - Renovação', 'Subvenção Bloco Carnaval', 'P.C. Subvenção Bloco Carnaval',
-            'Concessão Diária', 'P.C. Patrocínio'
-        ],
-        'LICITACOES_E_CONTRATOS': [
-            'Análise Fase Inicial', 'Análise Fase Externa', 'Dispensa - Análise Fase Externa',
-            'Inexigibilidade', 'Adesão de Ata', 'Concessão Patrocínio', 'Análise Aditivo'
-        ]
-    };
+    // itens 19 a 21: listas vêm dos cadastros, não mais fixas no JavaScript.
+    const DADOS_FORMULARIO = JSON.parse(document.getElementById('dados-formulario').textContent);
+    const especiesPorGenero = DADOS_FORMULARIO.especies.reduce(function (acc, e) {
+        (acc[e.grupo] = acc[e.grupo] || []).push(e.nome);
+        return acc;
+    }, {});
 
     function editarProcesso(btn) {
         if (editingRow) {
@@ -361,15 +355,9 @@
             } else if (field === 'secretaria') {
                 inputElement = document.createElement('select');
                 inputElement.className = 'edit-field';
-                const options = [
-                    "Administração, Receita e Tributação", "Agricultura, Abastecimento e Pesca", "Comunicação Social",
-                    "Procuradoria Geral do Município", "Desenvolvimento Social", "Direitos dos Animais",
-                    "Educação, Cultura, Inclusão, Ciência e Tecnologia",
-                    "Esporte, Lazer e Turismo", "Finanças", "Gabinete", "Gestão, Inovação e Tecnologia",
-                    "Governança e Sustentabilidade", "Municipal de Infraestrutura", "Meio Ambiente", "Mulher",
-                    "Transporte e Serviços Públicos", "Obras Públicas", "Planejamento", "Relações Institucionais",
-                    "Saúde", "Segurança e Ordem Pública", "Transparência e Integridade", "Urbanismo"
-                ];
+                // item 20: Secretarias vêm do cadastro de Unidades Administrativas.
+                const options = DADOS_FORMULARIO.unidades.slice();
+                if (value && !options.includes(value)) { options.unshift(value); }
                 options.forEach(optionText => {
                     const option = document.createElement('option');
                     option.value = optionText;
@@ -656,6 +644,8 @@
             const result = await response.json();
 
             if (result.success) {
+                // item 51: campos fora da whitelist do papel são recusados pelo backend.
+                if (result.aviso) { alert(result.aviso); }
                 location.reload();
             } else {
                 alert('Erro ao salvar: ' + result.message);
@@ -713,28 +703,28 @@
         }
     }
 
+    // item 35: não há exclusão. O processo é cancelado, com motivo, e o
+    // registro é preservado no histórico.
     async function deletarProcesso(id) {
-        if (confirm('Tem certeza que deseja deletar este processo?')) {
-            try {
-                const response = await fetch(`{% url 'deletar_processo' id=0 %}`.replace('0', id), {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': csrftoken,
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    location.reload();
-                } else {
-                    alert('Erro ao deletar processo: ' + result.message);
-                }
-            } catch (error) {
-                alert('Erro na comunicação com o servidor ao deletar processo: ' + error.message);
-                console.error('Erro de exclusão:', error);
+        const motivo = prompt('Motivo do cancelamento do processo (obrigatório):');
+        if (!motivo || !motivo.trim()) { return; }
+        try {
+            const response = await fetch(`{% url 'deletar_processo' id=0 %}`.replace('0', id), {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: new URLSearchParams({ motivo: motivo.trim() })
+            });
+            const result = await response.json();
+            if (result.success) {
+                location.reload();
+            } else {
+                alert('Não foi possível cancelar: ' + result.message);
             }
+        } catch (error) {
+            alert('Erro na comunicação com o servidor: ' + error.message);
         }
     }
 

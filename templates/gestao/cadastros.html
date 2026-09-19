@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block title %}Cadastros{% endblock %}
+{% block page_title %}{{ titulo }}{% endblock %}
+{% block page_subtitle %}{{ subtitulo }}{% endblock %}
+
+{% block content %}
+<div class="stack">
+
+    <section class="filters">
+        <div class="filters__bar">
+            {% for chave, nome in abas %}
+                <a href="{% url 'gestao_cadastros' slug=chave %}"
+                   class="btn btn--sm {% if chave == slug %}btn--primary{% else %}btn--outline{% endif %}">{{ nome }}</a>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="card__header">
+            <span class="card__title">Novo registro</span>
+            <span class="card__hint">{{ total_ativos }} ativo{{ total_ativos|pluralize:"s" }} de {{ total }}</span>
+        </div>
+        <form method="post" action="{% url 'gestao_cadastro_salvar' slug=slug %}" class="card__body">
+            {% csrf_token %}
+            <div class="form-grid form-grid--full">
+                {% for coluna in colunas %}
+                <div class="field">
+                    {% if coluna.tipo == 'bool' %}
+                        <label class="field__label">
+                            <input type="checkbox" name="{{ coluna.campo }}"> {{ coluna.rotulo }}
+                        </label>
+                    {% else %}
+                        <label class="field__label" for="novo_{{ coluna.campo }}">{{ coluna.rotulo }}</label>
+                        {% if coluna.tipo == 'escolha' %}
+                            <select id="novo_{{ coluna.campo }}" name="{{ coluna.campo }}" class="select">
+                                {% for valor, rotulo in coluna.opcoes %}
+                                    <option value="{{ valor }}">{{ rotulo }}</option>
+                                {% endfor %}
+                            </select>
+                        {% else %}
+                            <input type="{% if coluna.tipo == 'numero' %}number{% else %}text{% endif %}" min="0"
+                                   id="novo_{{ coluna.campo }}" name="{{ coluna.campo }}" class="input">
+                        {% endif %}
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn--primary">
+                    <span class="material-symbols-rounded">add</span>
+                    Adicionar
+                </button>
+            </div>
+        </form>
+    </section>
+
+    <section class="table-card">
+        <div class="table-card__header">
+            <span class="table-card__title">{{ titulo }}</span>
+            <span class="table-card__count">{{ total }} registro{{ total|pluralize:"s" }}</span>
+        </div>
+        <div class="table-scroll">
+            <table class="table">
+                <thead>
+                    <tr>
+                        {% for coluna in colunas %}<th>{{ coluna.rotulo }}</th>{% endfor %}
+                        <th>Situação</th>
+                        <th class="col-actions">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for linha in linhas %}
+                    <tr {% if not linha.obj.ativo %}class="is-inativo"{% endif %}>
+                        {% for celula in linha.celulas %}
+                        <td>
+                            {% if celula.tipo == 'bool' %}
+                                <input type="checkbox" form="f{{ linha.obj.id }}" name="{{ celula.campo }}"
+                                       aria-label="{{ celula.rotulo }}" {% if celula.valor %}checked{% endif %}>
+                            {% elif celula.tipo == 'escolha' %}
+                                <select form="f{{ linha.obj.id }}" name="{{ celula.campo }}" class="select"
+                                        aria-label="{{ celula.rotulo }}"
+                                        {% if linha.em_uso and celula.campo in travados %}disabled title="Cadastro já usado em processos"{% endif %}>
+                                    {% for valor, rotulo in celula.opcoes %}
+                                        <option value="{{ valor }}" {% if valor == celula.valor %}selected{% endif %}>{{ rotulo }}</option>
+                                    {% endfor %}
+                                </select>
+                                {% if linha.em_uso and celula.campo in travados %}
+                                    <input type="hidden" form="f{{ linha.obj.id }}" name="{{ celula.campo }}" value="{{ celula.valor }}">
+                                {% endif %}
+                            {% else %}
+                                <input type="{% if celula.tipo == 'numero' %}number{% else %}text{% endif %}" min="0"
+                                       class="input" form="f{{ linha.obj.id }}" name="{{ celula.campo }}"
+                                       aria-label="{{ celula.rotulo }}" value="{{ celula.valor|default_if_none:'' }}"
+                                       {% if linha.em_uso and celula.campo in travados %}readonly title="Cadastro já usado em processos"{% endif %}>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                        <td>
+                            <span class="badge {% if linha.obj.ativo %}badge--success{% endif %}">{% if linha.obj.ativo %}Ativo{% else %}Inativo{% endif %}</span>
+                            {% if linha.em_uso %}<div class="cell-muted">em uso</div>{% endif %}
+                        </td>
+                        <td class="col-actions">
+                            <div class="actions">
+                                <form method="post" action="{% url 'gestao_cadastro_salvar' slug=slug %}" id="f{{ linha.obj.id }}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="id" value="{{ linha.obj.id }}">
+                                    <button type="submit" class="btn btn--sm btn--outline">
+                                        <span class="material-symbols-rounded">save</span>
+                                        Salvar
+                                    </button>
+                                </form>
+                                <form method="post" action="{% url 'gestao_cadastro_alternar' slug=slug registro_id=linha.obj.id %}">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn--sm btn--ghost">
+                                        {% if linha.obj.ativo %}Inativar{% else %}Reativar{% endif %}
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="{{ colunas|length|add:2 }}">
+                        <div class="empty empty--compact"><div class="empty__title">Nenhum registro</div></div>
+                    </td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% include "includes/paginacao.html" with pagina=pagina %}
+    </section>
+
+    <p class="cell-muted">
+        Cadastro usado em processos não é excluído — é inativado. O registro inativo
+        sai das listas de seleção, mas continua vinculado aos processos antigos.
+    </p>
+</div>
+{% endblock %}

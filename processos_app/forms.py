@@ -3,13 +3,15 @@ from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth.models import User
 from .models import Processo, Profile # Import Profile
+from .services.permissions import PAPEL_PARA_NIVEL
 
 class CustomUserCreationForm(UserCreationForm):
-    # Add a field for the user level
+    # O campo continua se chamando `level` no POST, mas grava o papel novo
+    # e mantém o nível legado em sincronia.
     level = forms.ChoiceField(
-        choices=Profile.USER_LEVEL_CHOICES,
-        label="Nível do Usuário",
-        initial='3'
+        choices=Profile.PAPEL_CHOICES,
+        label="Papel do Usuário",
+        initial='GESTAO'
     )
 
     class Meta(UserCreationForm.Meta):
@@ -23,17 +25,28 @@ class CustomUserCreationForm(UserCreationForm):
             user.save()
             # Create or update profile
             profile, created = Profile.objects.get_or_create(user=user)
-            profile.level = self.cleaned_data['level']
+            profile.papel = self.cleaned_data['level']
+            profile.level = PAPEL_PARA_NIVEL.get(profile.papel, '3')
             profile.save()
         return user
 
 # ... (rest of your forms like ProcessoForm, AuthenticationForm remain the same)
 class ProcessoForm(forms.ModelForm):
+    """item 18: lista EXPLÍCITA de campos — só dados de protocolo (item 17).
+
+    A criação de processo não passa mais por este form: a regra única está
+    em services/processos.criar_processo. O form continua disponível para
+    quem precisar renderizar os campos de protocolo.
+    """
     volume = forms.CharField(required=True, max_length=255, label='Volume')
 
     class Meta:
         model = Processo
-        exclude = ['destino']
+        fields = [
+            'numero_processo', 'volume', 'secretaria', 'data_entrada',
+            'hora_entrada', 'genero', 'especie', 'objeto', 'contratada',
+            'recorrente',
+        ]
 
 
 # If you have an existing AuthenticationForm, ensure it's here

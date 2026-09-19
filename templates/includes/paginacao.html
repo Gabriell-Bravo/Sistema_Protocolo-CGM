@@ -1,0 +1,23 @@
+{# item 56: paginação que preserva os filtros da URL. Espera `pagina` (Page) e, opcionalmente, `querystring` já terminada em & #}
+{% if pagina.paginator.num_pages > 1 %}
+<nav class="paginacao" aria-label="Paginação">
+    <span class="cell-muted">
+        Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}
+        · {{ pagina.paginator.count }} registro{{ pagina.paginator.count|pluralize:"s" }}
+    </span>
+    <div class="actions">
+        {% if pagina.has_previous %}
+            <a class="btn btn--sm btn--outline" href="?{{ querystring|default:'' }}page=1">Primeira</a>
+            <a class="btn btn--sm btn--outline" href="?{{ querystring|default:'' }}page={{ pagina.previous_page_number }}">
+                <span class="material-symbols-rounded">chevron_left</span> Anterior
+            </a>
+        {% endif %}
+        {% if pagina.has_next %}
+            <a class="btn btn--sm btn--outline" href="?{{ querystring|default:'' }}page={{ pagina.next_page_number }}">
+                Próxima <span class="material-symbols-rounded">chevron_right</span>
+            </a>
+            <a class="btn btn--sm btn--outline" href="?{{ querystring|default:'' }}page={{ pagina.paginator.num_pages }}">Última</a>
+        {% endif %}
+    </div>
+</nav>
+{% endif %}

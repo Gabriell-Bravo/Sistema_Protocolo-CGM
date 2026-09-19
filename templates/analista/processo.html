@@ -6,7 +6,7 @@
 {% block content_class %}content--analysis{% endblock %}
 
 {% block topbar_actions %}
-    <a href="{% if user.profile.level == '3' or user.is_superuser %}{% url 'gestao_processos' %}{% else %}{% url 'area_analista' %}{% endif %}" class="btn btn--outline">
+    <a href="{% if is_gestao %}{% url 'gestao_processos' %}{% else %}{% url 'area_analista' %}{% endif %}" class="btn btn--outline">
         <span class="material-symbols-rounded">arrow_back</span>
         Voltar à fila
     </a>
@@ -54,19 +54,25 @@
                 {{ processo.prazo_formatado }}
             </span>
         </div>
-        {% if processo.genero == 'LICITACOES_E_CONTRATOS' %}
+        {# item 40: exibido nos dois grupos, com rótulo geral #}
         <div class="meta-item">
-            <span class="meta-item__label">Empresa / Contratada</span>
+            <span class="meta-item__label">Contratada / Favorecido / Interessado</span>
             <span class="meta-item__value">{{ processo.contratada|default:'—' }}</span>
         </div>
-        {% endif %}
         <div class="meta-item meta-item--wide">
             <span class="meta-item__label">Objeto</span>
             <span class="meta-item__value">{{ processo.objeto }}</span>
         </div>
     </section>
 
-    {% if processo.pode_assumir %}
+    {% if somente_leitura %}
+        <div class="alert alert--info">
+            <span class="material-symbols-rounded">visibility</span>
+            <span>Consulta da Gestão. A análise, o direcionamento e a liberação são atos do analista.</span>
+        </div>
+    {% endif %}
+
+    {% if processo.pode_assumir and not somente_leitura %}
         <div class="alert alert--info">
             <span class="material-symbols-rounded">info</span>
             <span>Este processo está disponível. Ao assumir, você passa a ser o responsável e os demais analistas veem “Em análise por você”.</span>
@@ -125,32 +131,103 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="field">
-                    <label class="field__label" for="tem_pendencia">Tem pendência?</label>
-                    <select id="tem_pendencia" name="tem_pendencia" class="select" {% if not pode_editar %}disabled{% endif %}>
-                        <option value="NAO" {% if processo.tem_pendencia != 'SIM' %}selected{% endif %}>Não</option>
-                        <option value="SIM" {% if processo.tem_pendencia == 'SIM' %}selected{% endif %}>Sim</option>
-                    </select>
-                    <span class="field__hint">Se sim, descreva cada pendência na lista abaixo.</span>
-                </div>
                 <div class="field field--wide">
                     <label class="field__label" for="observacao">Observação</label>
                     <textarea id="observacao" name="observacao" class="textarea" rows="4" {% if not pode_editar %}readonly{% endif %}>{{ processo.observacao|default:'' }}</textarea>
                 </div>
             </div>
         </div>
-        {% if pode_editar %}
+        {% if pode_editar or pode_direcionar or pode_liberar %}
         <div class="form-section">
+
+            {# item 10: o direcionamento anterior nao e apagado #}
+            {% if ja_direcionado %}
+                <div class="alert alert--info">
+                    <span class="material-symbols-rounded">forward_to_inbox</span>
+                    <span>
+                        Assinatura direcionada para
+                        <strong>{{ processo.nome_assinatura_direcionada }}</strong>
+                        em {{ processo.assinatura_direcionada_em|date:"d/m/Y H:i" }}.
+                        A análise continua registrada em nome de
+                        {{ processo.nome_analista }}.
+                    </span>
+                </div>
+            {% endif %}
+
+            {% if assinatura_para_mim %}
+                <div class="alert alert--info">
+                    <span class="material-symbols-rounded">draw</span>
+                    <span>
+                        A assinatura deste processo foi direcionada a você.
+                        Ao liberar, fica registrado que
+                        {{ processo.nome_analista }} fez a análise e você
+                        assinou.
+                    </span>
+                </div>
+            {% endif %}
+
+            {# so libera com a analise preenchida #}
+            {% if campos_faltantes %}
+                <div class="alert alert--warning">
+                    <span class="material-symbols-rounded">edit_note</span>
+                    <span>
+                        Preencha a análise para liberar ou direcionar a
+                        assinatura. Faltando:
+                        <strong>{{ campos_faltantes|join:", " }}</strong>.
+                    </span>
+                </div>
+            {% endif %}
+
             <div class="form-actions">
+                {% if pode_editar %}
                 <button type="submit" name="acao" value="salvar" class="btn btn--outline">
                     <span class="material-symbols-rounded">save</span>
                     Salvar análise
                 </button>
-                <button type="submit" name="acao" value="concluir" class="btn btn--primary" onclick="return confirm('Concluir a análise e enviar o processo para assinatura?');">
+                {% endif %}
+
+                {% if pode_liberar %}
+                <button type="submit" name="acao" value="concluir"
+                        class="btn btn--primary"
+                        {% if campos_faltantes %}disabled title="Preencha a análise primeiro."{% endif %}
+                        onclick="return confirm('Liberar este processo para assinatura?');">
                     <span class="material-symbols-rounded">task_alt</span>
-                    Concluir análise
+                    Liberar para assinatura
+                </button>
+                {% endif %}
+            </div>
+
+            {# itens 8 e 10: so o analista responsavel direciona #}
+            {% if pode_direcionar %}
+            <div class="form-grid form-grid--full" style="margin-top:1rem">
+                <div class="field">
+                    <label class="field__label" for="destinatario">
+                        {% if ja_direcionado %}Redirecionar assinatura para{% else %}Direcionar assinatura para outro analista{% endif %}
+                    </label>
+                    <select id="destinatario" name="destinatario" class="select">
+                        <option value="">Selecione um analista…</option>
+                        {% for a in analistas %}
+                            <option value="{{ a.id }}"
+                                {% if processo.assinatura_direcionada_para_id == a.id %}selected{% endif %}>
+                                {{ a.nome }}{% if a.disponibilidade %} — {{ a.disponibilidade }}{% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <span class="field__hint">
+                        A indisponibilidade do colega é informação, não
+                        impedimento. Quem analisou continua sendo você.
+                    </span>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" name="acao" value="direcionar"
+                        class="btn btn--outline"
+                        {% if campos_faltantes %}disabled title="Preencha a análise primeiro."{% endif %}>
+                    <span class="material-symbols-rounded">forward_to_inbox</span>
+                    {% if ja_direcionado %}Redirecionar{% else %}Direcionar para outro analista{% endif %}
                 </button>
             </div>
+            {% endif %}
         </div>
         {% endif %}
     </form>
@@ -168,15 +245,50 @@
                         <div>
                             <div class="pendencia-item__text">{{ pendencia.descricao }}</div>
                             <div class="pendencia-item__meta">
-                                {{ pendencia.criada_em_formatted }}
-                                {% if pendencia.criada_por %} · {{ pendencia.criada_por }}{% endif %}
+                                <span class="badge {% if pendencia.status == 'AGUARDANDO_ATENDIMENTO' %}badge--warning{% elif pendencia.status == 'ATENDIMENTO_INDICADO' %}badge--primary{% elif pendencia.status == 'RESOLVIDA' %}badge--success{% endif %}">{{ pendencia.get_status_display }}</span>
+                                · {{ pendencia.criada_em_formatted }}
+                                {% if pendencia.responsavel_tecnico %} · responsável: {{ pendencia.responsavel_tecnico.get_full_name|default:pendencia.responsavel_tecnico.username }}{% endif %}
+                                {% if pendencia.status == 'ATENDIMENTO_INDICADO' and pendencia.atendimento_indicado_em %}
+                                    · atendimento indicado em {{ pendencia.atendimento_indicado_em|date:"d/m/Y H:i" }}
+                                {% endif %}
+                                {% if pendencia.status == 'CANCELADA' %}
+                                    · motivo: {{ pendencia.motivo_cancelamento }}
+                                {% endif %}
                             </div>
+
+                            {# item 30: só o responsável técnico avalia o atendimento indicado #}
+                            {% if pendencia.status == 'ATENDIMENTO_INDICADO' and pendencia.responsavel_tecnico_id == request.user.id and not somente_leitura %}
+                            <div class="pendencia-item__acoes">
+                                <form action="{% url 'pend_confirmar_resolucao' pendencia.id %}" method="post">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="next" value="{{ request.path }}">
+                                    <button type="submit" class="btn btn--primary btn--sm">
+                                        <span class="material-symbols-rounded">check_circle</span>
+                                        Confirmar resolução
+                                    </button>
+                                </form>
+                                <form action="{% url 'pend_atendimento_insuficiente' pendencia.id %}" method="post" class="pendencia-add__row">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="next" value="{{ request.path }}">
+                                    <textarea name="o_que_falta" class="textarea" rows="2"
+                                              placeholder="O que ainda precisa ser atendido?" required></textarea>
+                                    <button type="submit" class="btn btn--outline btn--sm">
+                                        <span class="material-symbols-rounded">undo</span>
+                                        Atendimento insuficiente
+                                    </button>
+                                </form>
+                            </div>
+                            {% endif %}
                         </div>
-                        {% if pode_editar %}
-                        <form action="{% url 'remover_pendencia' pendencia.id %}" method="post">
+
+                        {# item 32: cancelar exige motivo; a pendência não é apagada #}
+                        {% if pode_editar and pendencia.esta_aberta %}
+                        <form action="{% url 'remover_pendencia' pendencia.id %}" method="post"
+                              onsubmit="return pedirMotivoCancelamento(this);">
                             {% csrf_token %}
-                            <button type="submit" class="icon-btn icon-btn--danger" title="Remover pendência" onclick="return confirm('Remover esta pendência?');">
-                                <span class="material-symbols-rounded">delete</span>
+                            <input type="hidden" name="motivo" value="">
+                            <button type="submit" class="icon-btn icon-btn--danger" title="Cancelar pendência (cadastrada indevidamente)">
+                                <span class="material-symbols-rounded">cancel</span>
                             </button>
                         </form>
                         {% endif %}
@@ -186,8 +298,8 @@
         {% else %}
             <div class="empty empty--compact">
                 <span class="material-symbols-rounded">playlist_add</span>
-                <div class="empty__title">Nenhuma pendência ainda</div>
-                <div>Marque “Sim” e descreva cada item. Pode adicionar quantas quiser.</div>
+                <div class="empty__title">Nenhuma pendência registrada</div>
+                <div>Descreva cada item que precisa ser atendido pela Secretaria. A existência de pendência é calculada a partir desta lista.</div>
             </div>
         {% endif %}
 
@@ -205,6 +317,31 @@
         </form>
         {% endif %}
     </section>
+
+    {# item 34: pendências abertas de passagens anteriores, somente leitura #}
+    {% if pendencias_anteriores %}
+    <section class="card">
+        <div class="card__header">
+            <span class="card__title">Pendências abertas de passagens anteriores — {{ pendencias_anteriores|length }}</span>
+            <span class="card__hint">Somente leitura</span>
+        </div>
+        <ul class="pendencia-list">
+            {% for pendencia in pendencias_anteriores %}
+                <li class="pendencia-item">
+                    <div>
+                        <div class="pendencia-item__text">{{ pendencia.descricao }}</div>
+                        <div class="pendencia-item__meta">
+                            <span class="badge badge--warning">{{ pendencia.get_status_display }}</span>
+                            · passagem com entrada em {{ pendencia.processo.data_entrada|date:"d/m/Y" }}
+                            {% if pendencia.responsavel_tecnico %} · {{ pendencia.responsavel_tecnico.get_full_name|default:pendencia.responsavel_tecnico.username }}{% endif %}
+                            · há {{ pendencia.dias_decorridos }} dia{{ pendencia.dias_decorridos|pluralize:"s" }}
+                        </div>
+                    </div>
+                </li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
 
     {% if passagens %}
     <section class="table-card">
@@ -249,15 +386,12 @@
 
 {% block extra_js %}
 <script>
-    const selPendencia = document.getElementById('tem_pendencia');
-    const formPendencia = document.getElementById('formPendencia');
-
-    function atualizarBlocoPendencia() {
-        if (!selPendencia || !formPendencia) return;
-        formPendencia.style.display = selPendencia.value === 'SIM' ? '' : 'none';
+    // item 32: cancelar pendência exige motivo.
+    function pedirMotivoCancelamento(form) {
+        const motivo = prompt('Motivo do cancelamento desta pendência:');
+        if (!motivo || !motivo.trim()) { return false; }
+        form.querySelector('input[name="motivo"]').value = motivo.trim();
+        return true;
     }
-
-    selPendencia?.addEventListener('change', atualizarBlocoPendencia);
-    atualizarBlocoPendencia();
 </script>
 {% endblock %}

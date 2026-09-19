@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   db:
     image: postgres:16-alpine
@@ -10,11 +8,14 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-protocolo_db}
       POSTGRES_USER: ${POSTGRES_USER:-protocolo_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this-password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       TZ: America/Sao_Paulo
       PGTZ: GMT-3
+    # item 62: o banco só é publicado no próprio servidor (127.0.0.1). O
+    # serviço web alcança o banco pela rede interna do compose. Para acesso
+    # remoto (pgAdmin, DBeaver), use túnel SSH até o servidor.
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-protocolo_user} -d ${POSTGRES_DB:-protocolo_db}"]
       interval: 10s
@@ -31,10 +32,10 @@ services:
     restart: unless-stopped
     command: >
       bash -c "
+        set -e;
         echo 'Aguardando banco de dados...';
         sleep 5;
-        python manage.py makemigrations;
-        python manage.py migrate;
+        python manage.py migrate --noinput;
         python manage.py createsuperuser --noinput || true;
         python manage.py collectstatic --noinput;
         echo 'Iniciando aplicação...';
@@ -47,14 +48,17 @@ services:
       - "${WEB_PORT:-8800}:8800"
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
-      DJANGO_DEBUG: ${DJANGO_DEBUG:-True}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-controladoria.saquarema.rj.gov.br,localhost,127.0.0.1}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-https://controladoria.saquarema.rj.gov.br,http://localhost:8800,http://127.0.0.1:8800}
+      DJANGO_HTTPS: ${DJANGO_HTTPS:-False}
       DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME:-admin}
       DJANGO_SUPERUSER_EMAIL: ${DJANGO_SUPERUSER_EMAIL:-admin@saquarema.rj.gov.br}
-      DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD:-admin123}
+      DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD}
       TZ: America/Sao_Paulo
       POSTGRES_DB: ${POSTGRES_DB:-protocolo_db}
       POSTGRES_USER: ${POSTGRES_USER:-protocolo_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this-password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_HOST: ${POSTGRES_HOST:-db}
       POSTGRES_PORT: 5432
     depends_on:

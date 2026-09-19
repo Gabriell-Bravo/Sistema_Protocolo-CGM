@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Diligências{% endblock %}
+{% block page_title %}Diligências{% endblock %}
+{% block page_subtitle %}Pendências levantadas pelos analistas, aguardando atendimento da Secretaria.{% endblock %}
+
+{% block content %}
+<div class="stack">
+
+    <section class="stats">
+        <a class="stat" href="?status=AGUARDANDO_ATENDIMENTO">
+            <div class="stat__value">{{ total_aguardando }}</div>
+            <div class="stat__label">Aguardando atendimento</div>
+        </a>
+        <a class="stat" href="?status=ATENDIMENTO_INDICADO">
+            <div class="stat__value">{{ total_indicados }}</div>
+            <div class="stat__label">Atendimento indicado</div>
+        </a>
+    </section>
+
+    <section class="table-card">
+        <div class="table-card__header">
+            <span class="table-card__title">
+                {% for valor, rotulo in status_choices %}
+                    {% if valor == status_atual %}{{ rotulo }}{% endif %}
+                {% endfor %}
+                {% if status_atual == 'ABERTAS' %}Todas as abertas{% endif %}
+            </span>
+            <span class="table-card__count">{{ total }} pendência{{ total|pluralize:"s" }}</span>
+        </div>
+
+        <div class="table-scroll">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Processo</th>
+                        <th>Secretaria</th>
+                        <th>Pendência</th>
+                        <th>Analista responsável</th>
+                        <th>Tempo decorrido</th>
+                        <th class="col-actions">Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pendencia in pendencias %}
+                    <tr>
+                        <td><strong>{{ pendencia.processo.numero_processo }}</strong></td>
+                        <td>{{ pendencia.processo.secretaria }}</td>
+                        <td class="cell-wrap">{{ pendencia.descricao }}</td>
+                        <td>{{ pendencia.responsavel_tecnico|default:'—' }}</td>
+                        <td>
+                            {{ pendencia.dias_decorridos }} dia{{ pendencia.dias_decorridos|pluralize:"s" }}
+                            <div class="cell-muted">desde {{ pendencia.criada_em|date:"d/m/Y" }}</div>
+                        </td>
+                        <td class="col-actions">
+                            {% if pendencia.status == 'AGUARDANDO_ATENDIMENTO' %}
+                            <form method="post" action="{% url 'pend_indicar_atendimento' pendencia.id %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn--primary btn--sm"
+                                        onclick="return confirm('Indicar que houve atendimento suficiente para nova análise técnica?');">
+                                    <span class="material-symbols-rounded">assignment_turned_in</span>
+                                    Indicar atendimento
+                                </button>
+                            </form>
+                            {% elif pendencia.status == 'ATENDIMENTO_INDICADO' %}
+                            <span class="badge">
+                                Com {{ pendencia.responsavel_tecnico|default:'o analista' }}
+                                desde {{ pendencia.atendimento_indicado_em|date:"d/m/Y" }}
+                            </span>
+                            {% else %}
+                            <span class="badge">{{ pendencia.get_status_display }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6">
+                            <div class="empty empty--compact">
+                                <span class="material-symbols-rounded">inbox</span>
+                                <div class="empty__title">Nenhuma pendência nesta situação</div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <p class="cell-muted">
+        Telefonemas, e-mails e cobranças intermediárias não são registrados
+        aqui. Quando a Secretaria atender o suficiente para nova análise,
+        use “Indicar atendimento” — quem conclui tecnicamente é o analista.
+    </p>
+</div>
+{% endblock %}

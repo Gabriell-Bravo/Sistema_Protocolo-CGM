@@ -37,9 +37,22 @@
         </div>
     </section>
 
+    {# item 37: filtros da fila, com contagem #}
+    <section class="filters">
+        <div class="filters__chips">
+            {% for chave, rotulo, quantidade in filtros_fila %}
+                <a href="?filtro={{ chave }}{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}"
+                   class="chip {% if filtro_atual == chave %}chip--ativo{% endif %}">
+                    {{ rotulo }} <span class="chip__label">{{ quantidade }}</span>
+                </a>
+            {% endfor %}
+        </div>
+    </section>
+
     <section class="filters">
         <div class="filters__bar">
             <form method="get" class="search">
+                <input type="hidden" name="filtro" value="{{ filtro_atual }}">
                 <div class="search__field">
                     <span class="material-symbols-rounded search__icon">search</span>
                     <input type="text" name="pesquisa" class="input"
@@ -59,6 +72,6 @@
 
     {% include "analista/_fila_grupo.html" with titulo="Licitações e Contratos" grupo_css="licitacoes" icone="gavel" processos=licitacoes mostrar_contratada=True modo_gestao=True pode_assumir=False %}
 
-    {% include "analista/_fila_grupo.html" with titulo="Liquidações" grupo_css="liquidacoes" icone="payments" processos=liquidacoes mostrar_contratada=False modo_gestao=True pode_assumir=False %}
+    {% include "analista/_fila_grupo.html" with titulo="Liquidações" grupo_css="liquidacoes" icone="payments" processos=liquidacoes mostrar_contratada=True modo_gestao=True pode_assumir=False %}
 </div>
 {% endblock %}

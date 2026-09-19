@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Atendimentos indicados{% endblock %}
+{% block page_title %}Atendimentos indicados — {{ total }}{% endblock %}
+{% block page_subtitle %}Pendências suas que a Gestão sinalizou como atendidas.{% endblock %}
+
+{% block content %}
+<div class="stack">
+    {% for pendencia in pendencias %}
+    <section class="card">
+        <div class="card__header">
+            <span class="card__title">{{ pendencia.processo.numero_processo }}</span>
+            <span class="card__hint">
+                {{ pendencia.processo.secretaria }} ·
+                indicado por {{ pendencia.atendimento_indicado_por|default:'Gestão' }}
+                em {{ pendencia.atendimento_indicado_em|date:"d/m/Y H:i" }}
+            </span>
+        </div>
+
+        <p class="pendencia-item__text">{{ pendencia.descricao }}</p>
+
+        <div class="form-actions">
+            <form method="post" action="{% url 'pend_confirmar_resolucao' pendencia.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{% url 'meus_atendimentos' %}">
+                <button type="submit" class="btn btn--primary">
+                    <span class="material-symbols-rounded">check_circle</span>
+                    Confirmar resolução
+                </button>
+            </form>
+            <a href="{% url 'analista_processo' pendencia.processo_id %}" class="btn btn--outline">
+                <span class="material-symbols-rounded">open_in_new</span>
+                Abrir processo
+            </a>
+        </div>
+
+        <form method="post" action="{% url 'pend_atendimento_insuficiente' pendencia.id %}"
+              class="pendencia-add">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{% url 'meus_atendimentos' %}">
+            <label class="field__label" for="falta_{{ pendencia.id }}">
+                O que ainda precisa ser atendido?
+            </label>
+            <div class="pendencia-add__row">
+                <textarea id="falta_{{ pendencia.id }}" name="o_que_falta"
+                          class="textarea" rows="2" required
+                          placeholder="Descreva o que falta…"></textarea>
+                <button type="submit" class="btn btn--outline">
+                    <span class="material-symbols-rounded">undo</span>
+                    Atendimento insuficiente
+                </button>
+            </div>
+            <span class="field__hint">
+                A pendência volta sozinha para a fila de Diligências da Gestão.
+            </span>
+        </form>
+    </section>
+    {% empty %}
+    <div class="empty">
+        <span class="material-symbols-rounded">task_alt</span>
+        <div class="empty__title">Nenhum atendimento indicado</div>
+        <div>Quando a Gestão sinalizar atendimento em alguma pendência sua, ela aparece aqui.</div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

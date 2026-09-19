@@ -13,7 +13,7 @@
                     <th class="col-sticky">Processo</th>
                     <th>Secretaria</th>
                     {% if mostrar_contratada %}
-                        <th>Empresa / Contratada</th>
+                        <th>Contratada / Favorecido / Interessado</th>
                     {% endif %}
                     <th>Objeto</th>
                     <th>Entrada</th>
@@ -65,6 +65,15 @@
                                     <button type="submit" class="btn btn--primary btn--sm">
                                         <span class="material-symbols-rounded">handshake</span>
                                         Assumir processo
+                                    </button>
+                                </form>
+                            {% elif processo.pode_liberar %}
+                                <form method="post" action="{% url 'tram_liberar_assinatura' processo.id %}">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn--primary btn--sm"
+                                            onclick="return confirm('Liberar este processo para assinatura?');">
+                                        <span class="material-symbols-rounded">draw</span>
+                                        Liberar assinatura
                                     </button>
                                 </form>
                             {% elif processo.eh_meu %}

@@ -29,10 +29,11 @@
                         <div class="user-row__name">
                             {{ u.username }}
                             {% if u.is_superuser %}<span class="badge badge--violet">Super Admin</span>{% endif %}
+                            {% if not u.is_active %}<span class="badge">Desativado</span>{% endif %}
                         </div>
                         <div class="user-row__meta">
                             {{ u.email|default:"sem e-mail" }}
-                            {% if u.profile %} · {{ u.profile.get_level_display }}{% endif %}
+                            {% if u.profile %} · {{ u.profile.get_papel_display }}{% endif %}
                         </div>
                     </div>
 
@@ -43,7 +44,7 @@
                                 <select name="level" id="level_{{ u.id }}" class="select"
                                         onchange="this.nextElementSibling.classList.remove('is-hidden')">
                                     {% for level_value, level_label in user_levels %}
-                                        <option value="{{ level_value }}" {% if u.profile.level == level_value %}selected{% endif %}>
+                                        <option value="{{ level_value }}" {% if u.profile.papel == level_value %}selected{% endif %}>
                                             {{ level_label }}
                                         </option>
                                     {% endfor %}
@@ -52,11 +53,13 @@
                             </form>
 
                             {% if u.id != request.user.id %}
+                                {# item 36: desativar preserva o histórico; não há exclusão #}
                                 <form action="{% url 'delete_user' u.id %}" method="post"
-                                      onsubmit="return confirm('Tem certeza que deseja deletar este usuário?');">
+                                      onsubmit="return confirm('{% if u.is_active %}Desativar{% else %}Reativar{% endif %} este usuário? O histórico dele é preservado.');">
                                     {% csrf_token %}
-                                    <button type="submit" class="icon-btn icon-btn--danger" title="Excluir usuário">
-                                        <span class="material-symbols-rounded">delete</span>
+                                    <button type="submit" class="icon-btn {% if u.is_active %}icon-btn--danger{% else %}icon-btn--success{% endif %}"
+                                            title="{% if u.is_active %}Desativar usuário{% else %}Reativar usuário{% endif %}">
+                                        <span class="material-symbols-rounded">{% if u.is_active %}person_off{% else %}person_check{% endif %}</span>
                                     </button>
                                 </form>
                             {% endif %}

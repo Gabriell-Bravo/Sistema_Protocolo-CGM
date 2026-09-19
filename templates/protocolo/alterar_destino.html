@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Alterar Destino{% endblock %}
+{% block page_title %}Alteração excepcional de destino{% endblock %}
+{% block page_subtitle %}Processo {{ processo.numero_processo }}{% endblock %}
+
+{% block content %}
+<div class="stack">
+    <section class="card">
+        {% if bloqueado %}
+        <p class="empty">
+            Este processo já teve a saída concluída. A alteração de destino
+            não é permitida pelo fluxo normal.
+        </p>
+        {% else %}
+        <form method="post" action="{% url 'tram_alterar_destino' processo.id %}">
+            {% csrf_token %}
+
+            <div class="field">
+                <label>Destino atual</label>
+                <input type="text" value="{{ processo.destino|default:'—' }}" readonly>
+            </div>
+
+            <div class="field">
+                <label for="novo_destino">Novo destino <span class="req">*</span></label>
+                <input type="text" id="novo_destino" name="novo_destino" required>
+            </div>
+
+            <div class="field">
+                <label for="autorizado_por">Autorizado por <span class="req">*</span></label>
+                <input type="text" id="autorizado_por" name="autorizado_por" required>
+            </div>
+
+            <div class="field">
+                <label for="observacao">Observação</label>
+                <textarea id="observacao" name="observacao" rows="3"></textarea>
+            </div>
+
+            <p class="hint">
+                Usuário, data e hora são registrados automaticamente.
+            </p>
+
+            <div class="card__footer">
+                <a class="btn btn--ghost" href="{% url 'processos_para_retirada' %}">Cancelar</a>
+                <button type="submit" class="btn btn--primary">Alterar destino</button>
+            </div>
+        </form>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

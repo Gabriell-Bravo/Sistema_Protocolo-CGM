@@ -91,9 +91,18 @@
                     <label class="field__label" for="filtroPrioridade">Prioridade</label>
                     <select id="filtroPrioridade" class="select">
                         <option value="todas" {% if prioridade_filtro == 'todas' %}selected{% endif %}>Todas</option>
-                        <option value="NORMAL" {% if prioridade_filtro == 'NORMAL' %}selected{% endif %}>Normal</option>
-                        <option value="PRIORITARIO" {% if prioridade_filtro == 'PRIORITARIO' %}selected{% endif %}>Prioritário</option>
-                        <option value="URGENTE" {% if prioridade_filtro == 'URGENTE' %}selected{% endif %}>Urgente</option>
+                        {% for codigo, nome in prioridades %}
+                            <option value="{{ codigo }}" {% if prioridade_filtro == codigo %}selected{% endif %}>{{ nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="filtroSituacao">Situação</label>
+                    <select id="filtroSituacao" class="select">
+                        <option value="todas">Todas</option>
+                        {% for valor, rotulo in situacoes %}
+                            <option value="{{ valor }}" {% if situacao_filtro == valor %}selected{% endif %}>{{ rotulo }}</option>
+                        {% endfor %}
                     </select>
                 </div>
                 <div class="field">
@@ -117,7 +126,7 @@
             </div>
         </div>
 
-        {% if termo_pesquisa or prioridade_filtro != 'todas' or genero_filtro != 'todas' or especie_filtro != 'todas' %}
+        {% if termo_pesquisa or prioridade_filtro != 'todas' or genero_filtro != 'todas' or especie_filtro != 'todas' or situacao_filtro != 'todas' %}
             <div class="filters__chips">
                 {% if termo_pesquisa %}
                     <span class="chip" data-filter-chip><span class="chip__label">Busca:</span> {{ termo_pesquisa }}</span>
@@ -152,15 +161,16 @@
                         <th>Hora Entrada</th>
                         <th>Data Saída</th>
                         <th>Hora Saída</th>
+                        <th>Situação</th>
                         <th>Prazo</th>
                         <th>Destino</th>
                         <th>Gênero</th>
                         <th>Espécie</th>
                         <th>Objeto</th>
-                        <th>Contratada</th>
+                        <th>Contratada / Favorecido / Interessado</th>
                         <th>Recorrente</th>
                         <th>Prioridade</th>
-                        <th>Técnico</th>
+                        <th>Analista</th>
                         <th>N° Despacho</th>
                         <th>Observação</th>
                         <th>Valor</th>
@@ -178,8 +188,9 @@
                         <td class="editable" data-field="secretaria">{{ processo.secretaria }}</td>
                         <td class="editable" data-field="data_entrada">{{ processo.data_entrada|date:"Y-m-d" }}</td>
                         <td class="editable" data-field="hora_entrada">{{ processo.hora_entrada|time:"H:i" }}</td>
-                        <td class="editable" data-field="data_saida" id="data_saida_{{ processo.id }}">{{ processo.data_saida|default:''|date:"Y-m-d" }}</td>
-                        <td class="editable" data-field="hora_saida" id="hora_saida_{{ processo.id }}">{{ processo.hora_saida|default:''|time:"H:i" }}</td>
+                        <td class="" data-field="data_saida" id="data_saida_{{ processo.id }}">{{ processo.data_saida|default:''|date:"Y-m-d" }}</td>
+                        <td class="" data-field="hora_saida" id="hora_saida_{{ processo.id }}">{{ processo.hora_saida|default:''|time:"H:i" }}</td>
+                        <td><span class="badge">{{ processo.get_situacao_tramite_display }}</span></td>
                         <td>
                             <span class="badge badge--dot {% if processo.prazo_status == 'atrasado' %}badge--danger{% elif processo.prazo_status == 'hoje' or processo.prazo_status == 'atencao' %}badge--warning{% elif processo.prazo_status == 'ok' %}badge--success{% endif %}">
                                 {{ processo.prazo_formatado }}
@@ -196,25 +207,25 @@
                         </td>
                         <td class="editable" data-field="contratada">{{ processo.contratada|default:'' }}</td>
                         <td class="editable" data-field="recorrente">{{ processo.recorrente|default:'NAO' }}</td>
-                        <td class="editable" data-field="prioridade" data-prioridade-raw="{{ processo.prioridade }}">
+                        <td class="" data-field="prioridade" data-prioridade-raw="{{ processo.prioridade }}">
                             {% include "includes/badge_prioridade.html" with processo=processo %}
                         </td>
-                        <td class="editable" data-field="tecnico">{{ processo.tecnico|default:'' }}</td>
-                        <td class="editable" data-field="numero_despacho">{{ processo.numero_despacho|default:'' }}</td>
-                        <td class="editable cell-wrap" data-field="observacao" data-full-text="{{ processo.observacao|default:'' }}">
+                        <td class="" data-field="tecnico">{{ processo.nome_analista|default:'' }}</td>
+                        <td class="" data-field="numero_despacho">{{ processo.numero_despacho|default:'' }}</td>
+                        <td class="cell-wrap" data-field="observacao" data-full-text="{{ processo.observacao|default:'' }}">
                             <span class="cell-preview">{{ processo.observacao|default:''|truncatechars:70 }}</span>
                             {% if processo.observacao and processo.observacao|length > 70 %}
                                 <button type="button" class="link-more" onclick="visualizarObservacao('{{ processo.observacao|escapejs }}', 'Observação')">Ver tudo</button>
                             {% endif %}
                         </td>
-                        <td class="editable" data-field="valor">{{ processo.valor|default:'' }}</td>
-                        <td class="editable" data-field="periodo">{{ processo.periodo|default:'' }}</td>
-                        <td class="editable" data-field="status_analise" data-status-analise-raw="{{ processo.status_analise }}">
+                        <td class="" data-field="valor">{{ processo.valor|default:'' }}</td>
+                        <td class="" data-field="periodo">{{ processo.periodo|default:'' }}</td>
+                        <td class="" data-field="status_analise" data-status-analise-raw="{{ processo.status_analise }}">
                             <span class="badge {% if processo.status_analise == 'PROSSEGUIMENTO_SEM_RESSALVA' %}badge--success{% elif processo.status_analise == 'PROSSEGUIMENTO_COM_RESSALVA' %}badge--warning{% elif processo.status_analise == 'NAO_PROSSEGUIMENTO' or processo.status_analise == 'DEVOLUCAO_PARA_SANEAMENTO' %}badge--danger{% endif %}">{{ processo.get_status_analise_display }}</span>
                         </td>
                         <td>
-                            {% if processo.tem_pendencia == 'SIM' %}
-                                <span class="badge badge--danger">Sim</span>
+                            {% if processo.pendencias_abertas %}
+                                <span class="badge badge--danger">{{ processo.pendencias_abertas }} aberta{{ processo.pendencias_abertas|pluralize:"s" }}</span>
                             {% else %}
                                 <span class="badge">Não</span>
                             {% endif %}
@@ -226,8 +237,10 @@
                                         <span class="material-symbols-rounded">edit</span>
                                     </button>
                                 {% endif %}
-                                {% if not processo.data_saida and can_mark_saida %}
-                                    <button type="button" class="icon-btn icon-btn--warning" title="Marcar saída" onclick="marcarSaida('{{ processo.id }}')">
+                                {% if processo.pode_registrar_saida %}
+                                    <button type="button" class="icon-btn icon-btn--warning"
+                                            title="{% if processo.saida_legado %}Registrar saída (processo anterior à nova tramitação){% else %}Registrar saída{% endif %}"
+                                            onclick="marcarSaida('{{ processo.id }}')">
                                         <span class="material-symbols-rounded">logout</span>
                                     </button>
                                 {% endif %}
@@ -236,8 +249,8 @@
                                     <span class="icon-btn__count">{{ processo.total_passagens|default:1 }}</span>
                                 </a>
                                 {% if can_delete %}
-                                    <button type="button" class="icon-btn icon-btn--danger" title="Excluir" onclick="deletarProcesso('{{ processo.id }}')">
-                                        <span class="material-symbols-rounded">delete</span>
+                                    <button type="button" class="icon-btn icon-btn--danger" title="Cancelar processo (o registro é preservado)" onclick="deletarProcesso('{{ processo.id }}')">
+                                        <span class="material-symbols-rounded">block</span>
                                     </button>
                                 {% endif %}
                             </div>
@@ -255,7 +268,9 @@
                 </div>
             {% endif %}
         </div>
+        {% include "includes/paginacao.html" with pagina=pagina %}
     </section>
+    {{ dados_formulario|json_script:"dados-formulario" }}
 </div>
 
 <div class="modal" id="observacaoModal">
@@ -280,20 +295,12 @@
 
     const csrftoken = getCookie('csrftoken');
 
-    const especiesPorGeneroManual = {
-        'LIQUIDACOES': [
-            'Pagamento Geral', 'Concessão Aux. Bolsa Atleta', 'P.C. Bolsa Atleta',
-            'Concessão Aux. Aluguel Social', 'Concessão Adiantamento', 'P.C. Adiantamento',
-            'Subvenção Social - Concessão', 'Subvenção Social - Pagamento',
-            'Subvenção Social - Prestação de Contas', 'Subvenção Social - P.C. Anual',
-            'Subvenção Social - Renovação', 'Subvenção Bloco Carnaval', 'P.C. Subvenção Bloco Carnaval',
-            'Concessão Diária', 'P.C. Patrocínio'
-        ],
-        'LICITACOES_E_CONTRATOS': [
-            'Análise Fase Inicial', 'Análise Fase Externa', 'Dispensa - Análise Fase Externa',
-            'Inexigibilidade', 'Adesão de Ata', 'Concessão Patrocínio', 'Análise Aditivo'
-        ]
-    };
+    // itens 19 a 21: listas vêm dos cadastros, não mais fixas no JavaScript.
+    const DADOS_FORMULARIO = JSON.parse(document.getElementById('dados-formulario').textContent);
+    const especiesPorGeneroManual = DADOS_FORMULARIO.especies.reduce(function (acc, e) {
+        (acc[e.grupo] = acc[e.grupo] || []).push(e.nome);
+        return acc;
+    }, {});
 
     function editarProcesso(btn) {
         if (editingRow) {
@@ -334,15 +341,9 @@
             } else if (field === 'secretaria') {
                 inputElement = document.createElement('select');
                 inputElement.className = 'edit-field';
-                const options = [
-                    "Administração, Receita e Tributação", "Agricultura, Abastecimento e Pesca", "Comunicação Social",
-                    "Procuradoria Geral do Município", "Desenvolvimento Social", "Direitos dos Animais",
-                    "Educação, Cultura, Inclusão, Ciência e Tecnologia",
-                    "Esporte, Lazer e Turismo", "Finanças", "Gabinete", "Gestão, Inovação e Tecnologia",
-                    "Governança e Sustentabilidade", "Municipal de Infraestrutura", "Meio Ambiente", "Mulher",
-                    "Transporte e Serviços Públicos", "Obras Públicas", "Planejamento", "Relações Institucionais",
-                    "Saúde", "Segurança e Ordem Pública", "Transparência e Integridade", "Urbanismo"
-                ];
+                // item 20: Secretarias vêm do cadastro de Unidades Administrativas.
+                const options = DADOS_FORMULARIO.unidades.slice();
+                if (value && !options.includes(value)) { options.unshift(value); }
                 options.forEach(optionText => {
                     const option = document.createElement('option');
                     option.value = optionText;
@@ -561,6 +562,8 @@
             const result = await response.json();
 
             if (result.success) {
+                // item 51: campos fora da whitelist do papel são recusados pelo backend.
+                if (result.aviso) { alert(result.aviso); }
                 location.reload();
             } else {
                 alert('Erro ao salvar: ' + result.message);
@@ -618,33 +621,33 @@
         }
     }
 
+    // item 35: não há exclusão. O processo é cancelado, com motivo, e o
+    // registro é preservado no histórico.
     async function deletarProcesso(id) {
-        if (confirm('Tem certeza que deseja deletar este processo?')) {
-            try {
-                const response = await fetch(`{% url 'deletar_processo' id=0 %}`.replace('0', id), {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': csrftoken,
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    location.reload();
-                } else {
-                    alert('Erro ao deletar processo: ' + result.message);
-                }
-            } catch (error) {
-                alert('Erro na comunicação com o servidor ao deletar processo: ' + error.message);
-                console.error('Erro de exclusão:', error);
+        const motivo = prompt('Motivo do cancelamento do processo (obrigatório):');
+        if (!motivo || !motivo.trim()) { return; }
+        try {
+            const response = await fetch(`{% url 'deletar_processo' id=0 %}`.replace('0', id), {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: new URLSearchParams({ motivo: motivo.trim() })
+            });
+            const result = await response.json();
+            if (result.success) {
+                location.reload();
+            } else {
+                alert('Não foi possível cancelar: ' + result.message);
             }
+        } catch (error) {
+            alert('Erro na comunicação com o servidor: ' + error.message);
         }
     }
 
     async function marcarSaida(processId) {
-        if (confirm('Tem certeza que deseja marcar a saída deste processo com a data e hora atuais?')) {
+        if (confirm('Confirmar a saída física deste processo? Data, hora e usuário são registrados automaticamente.')) {
             try {
                 const response = await fetch(`{% url 'marcar_saida_processo' process_id=0 %}`.replace('0', processId), {
                     method: 'POST',
@@ -681,12 +684,14 @@
         applyFilters();
     });
     document.getElementById('filtroEspecie').addEventListener('change', applyFilters);
+    document.getElementById('filtroSituacao').addEventListener('change', applyFilters);
 
     function applyFilters() {
         const prioridade = document.getElementById('filtroPrioridade').value;
         const termo = document.getElementById('inputPesquisa').value.trim();
         const genero = document.getElementById('filtroGenero').value;
         const especie = document.getElementById('filtroEspecie').value;
+        const situacao = document.getElementById('filtroSituacao').value;
 
         let url = '{% url "listar_processos" %}';
         const params = new URLSearchParams();
@@ -701,6 +706,9 @@
         }
         if (especie !== 'todas') {
             params.append('especie', especie);
+        }
+        if (situacao !== 'todas') {
+            params.append('situacao', situacao);
         }
         if (params.toString()) {
             url += '?' + params.toString();

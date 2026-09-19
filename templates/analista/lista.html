@@ -35,11 +35,32 @@
                 <div class="stat__label">Prazo vencido</div>
             </div>
         </div>
+        {# item 37: indicador de atendimentos indicados pela Gestão #}
+        <a class="stat stat--warning stat--link" href="{% url 'meus_atendimentos' %}">
+            <span class="stat__icon"><span class="material-symbols-rounded">assignment_turned_in</span></span>
+            <div>
+                <div class="stat__value">{{ total_atendimentos }}</div>
+                <div class="stat__label">Atendimentos indicados</div>
+            </div>
+        </a>
+    </section>
+
+    {# item 37: filtros da fila, com contagem #}
+    <section class="filters">
+        <div class="filters__chips">
+            {% for chave, rotulo, quantidade in filtros_fila %}
+                <a href="?filtro={{ chave }}{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}"
+                   class="chip {% if filtro_atual == chave %}chip--ativo{% endif %}">
+                    {{ rotulo }} <span class="chip__label">{{ quantidade }}</span>
+                </a>
+            {% endfor %}
+        </div>
     </section>
 
     <section class="filters">
         <div class="filters__bar">
             <form method="get" class="search">
+                <input type="hidden" name="filtro" value="{{ filtro_atual }}">
                 <div class="search__field">
                     <span class="material-symbols-rounded search__icon">search</span>
                     <input type="text" name="pesquisa" class="input"
@@ -62,7 +83,7 @@
     {% endif %}
 
     {% if mostra_liquidacoes %}
-        {% include "analista/_fila_grupo.html" with titulo="Liquidações" grupo_css="liquidacoes" icone="payments" processos=liquidacoes mostrar_contratada=False modo_gestao=False pode_assumir=pode_assumir %}
+        {% include "analista/_fila_grupo.html" with titulo="Liquidações" grupo_css="liquidacoes" icone="payments" processos=liquidacoes mostrar_contratada=True modo_gestao=False pode_assumir=pode_assumir %}
     {% endif %}
 
     {% if not mostra_licitacoes and not mostra_liquidacoes %}

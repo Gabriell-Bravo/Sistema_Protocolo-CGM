@@ -31,9 +31,12 @@
         <div class="sidebar__brand">
             <span class="sidebar__logo">CGM</span>
             <span class="sidebar__brand-text">
-                {% if user.profile.level == '1' or user.profile.level == '2' %}
+                {% if is_analista %}
                     <span class="sidebar__title">Análise</span>
-                    <span class="sidebar__subtitle">{{ user.profile.get_level_display }}</span>
+                    <span class="sidebar__subtitle">{{ user.profile.get_papel_display|default:user.profile.get_level_display }}</span>
+                {% elif is_gestao %}
+                    <span class="sidebar__title">Gestão</span>
+                    <span class="sidebar__subtitle">Controladoria Geral</span>
                 {% else %}
                     <span class="sidebar__title">Protocolo</span>
                     <span class="sidebar__subtitle">Controladoria Geral</span>
@@ -42,10 +45,10 @@
         </div>
 
         <nav class="sidebar__nav">
-            {% if user.is_superuser or user.profile.level == '0' or user.profile.level == '3' %}
+            {% if is_protocolo or is_gestao %}
                 <div class="sidebar__group-label">Protocolo</div>
 
-                {% if user.is_superuser or user.profile.level == '0' or user.profile.level == '3' %}
+                {% if is_protocolo %}
                     <a href="{% url 'cadastrar_processo' %}"
                        class="nav-item {% if nav == 'cadastrar_processo' %}is-active{% endif %}" title="Novo Processo">
                         <span class="material-symbols-rounded">note_add</span>
@@ -60,6 +63,15 @@
                     <span class="nav-item__label">Processos Ativos</span>
                 </a>
 
+                {% if is_protocolo %}
+                    <a href="{% url 'processos_para_retirada' %}"
+                       class="nav-item {% if nav == 'processos_para_retirada' or nav == 'tram_form_alterar_destino' %}is-active{% endif %}"
+                       title="Retirada">
+                        <span class="material-symbols-rounded">assignment_return</span>
+                        <span class="nav-item__label">Retirada</span>
+                    </a>
+                {% endif %}
+
                 <a href="{% url 'listar_finalizados' %}"
                    class="nav-item {% if nav == 'listar_finalizados' %}is-active{% endif %}" title="Finalizados">
                     <span class="material-symbols-rounded">task_alt</span>
@@ -67,7 +79,7 @@
                 </a>
             {% endif %}
 
-            {% if user.is_superuser or user.profile.level == '1' or user.profile.level == '2' or user.profile.level == '3' %}
+            {% if is_analista %}
                 <div class="sidebar__group-label">Análise</div>
                 <a href="{% url 'area_analista' %}"
                    class="nav-item {% if nav == 'area_analista' or nav == 'analista_processo' %}is-active{% endif %}"
@@ -75,15 +87,51 @@
                     <span class="material-symbols-rounded">fact_check</span>
                     <span class="nav-item__label">Fila de análise</span>
                 </a>
+                <a href="{% url 'meus_atendimentos' %}"
+                   class="nav-item {% if nav == 'meus_atendimentos' %}is-active{% endif %}"
+                   title="Atendimentos indicados">
+                    <span class="material-symbols-rounded">assignment_turned_in</span>
+                    <span class="nav-item__label">Atendimentos indicados</span>
+                </a>
             {% endif %}
 
-            {% if user.is_superuser or user.profile.level == '3' %}
+            {% if is_gestao %}
                 <div class="sidebar__group-label">Gestão</div>
+                <a href="{% url 'gestao_dashboard' %}"
+                   class="nav-item {% if nav == 'gestao_dashboard' %}is-active{% endif %}"
+                   title="Dashboard">
+                    <span class="material-symbols-rounded">dashboard</span>
+                    <span class="nav-item__label">Dashboard</span>
+                </a>
                 <a href="{% url 'gestao_processos' %}"
                    class="nav-item {% if nav == 'gestao_processos' %}is-active{% endif %}"
                    title="Gestão de Processos">
                     <span class="material-symbols-rounded">account_tree</span>
                     <span class="nav-item__label">Gestão de Processos</span>
+                </a>
+                <a href="{% url 'gestao_liberados_assinatura' %}"
+                   class="nav-item {% if nav == 'gestao_liberados_assinatura' %}is-active{% endif %}"
+                   title="Liberados para assinatura">
+                    <span class="material-symbols-rounded">draw</span>
+                    <span class="nav-item__label">Para assinar</span>
+                </a>
+                <a href="{% url 'gestao_diligencias' %}"
+                   class="nav-item {% if nav == 'gestao_diligencias' %}is-active{% endif %}"
+                   title="Diligências">
+                    <span class="material-symbols-rounded">campaign</span>
+                    <span class="nav-item__label">Diligências</span>
+                </a>
+                <a href="{% url 'gestao_pessoas' %}"
+                   class="nav-item {% if nav == 'gestao_pessoas' %}is-active{% endif %}"
+                   title="Gestão de Pessoas CGM">
+                    <span class="material-symbols-rounded">badge</span>
+                    <span class="nav-item__label">Gestão de Pessoas CGM</span>
+                </a>
+                <a href="{% url 'gestao_cadastros' slug='unidades' %}"
+                   class="nav-item {% if nav == 'gestao_cadastros' or nav == 'gestao_cadastros_inicio' %}is-active{% endif %}"
+                   title="Cadastros">
+                    <span class="material-symbols-rounded">tune</span>
+                    <span class="nav-item__label">Cadastros</span>
                 </a>
             {% endif %}
 
@@ -119,7 +167,7 @@
                     <span class="user-card__info">
                         <span class="user-card__name">{{ user.username }}</span>
                         <span class="user-card__role">
-                            {% if user.is_superuser %}Super Administrador{% else %}{{ user.profile.get_level_display|default:"Usuário" }}{% endif %}
+                            {% if user.is_superuser %}Super Administrador{% else %}{{ user.profile.get_papel_display|default:user.profile.get_level_display|default:"Usuário" }}{% endif %}
                         </span>
                     </span>
                 </div>

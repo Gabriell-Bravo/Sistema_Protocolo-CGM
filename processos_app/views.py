@@ -1,15 +1,17 @@
 # processos/views.py
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.paginator import Paginator
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponse
-from django.views.decorators.csrf import csrf_exempt
 from .models import (
     Processo, ProcessHistory, MonitoramentoRecord, Profile, Pendencia,
-    SequenciaRelatorio,
+    SequenciaRelatorio, EventoProcesso,
 )
 import json
 from datetime import datetime, date, timedelta, time
 from django.db import transaction
-from django.db.models import Q, Count, Case, When, IntegerField, Value
+from django.db.models import Q, Count, Case, When, IntegerField, Value, Exists, OuterRef
+from django.db.models.functions import Coalesce
 from django.contrib import messages
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -20,10 +22,71 @@ import openpyxl
 from openpyxl.styles import Font, Alignment, Border, Side
 from django.utils import timezone, dateformat
 from django.contrib.auth.forms import AuthenticationForm
+from django.views.decorators.http import require_POST
+import logging
+
+logger = logging.getLogger(__name__)
 
 
-# Helper function to check user permissions based on level
+from . import views_tramitacao
+from .services import cadastros as svc_cadastros
+from .services import indicadores
+from .services import monitoramento as svc_monitoramento
+from .services import pendencias as svc_pendencias
+from .services import processos as svc_processos
+from .services import permissions as perm
+from .services import prazos as prazos_service
+from .services import tramitacao
+from .services.eventos import registrar_evento
+
+
+# ---------------------------------------------------------------------
+# Permissões: delegadas para services/permissions.py (item 4).
+# As funções abaixo permanecem apenas como fachada, para não quebrar as
+# chamadas existentes. Não acrescente regra de acesso aqui.
+# ---------------------------------------------------------------------
+
 def can_access_genero(user, genero):
+    return perm.pode_ver_grupo(user, genero)
+
+
+def filter_processes_by_user_level(user, queryset):
+    return perm.filtrar_por_grupo(user, queryset)
+
+
+def is_analista(user):
+    return perm.is_analista(user)
+
+
+def pode_usar_area_analista(user):
+    """item 2: a Gestão NÃO é analista. Não acessa a área operacional."""
+    return perm.is_analista(user)
+
+
+def pode_usar_gestao(user):
+    return perm.is_gestao(user)
+
+
+def pode_assumir_processos(user):
+    """item 2: somente analista assume processo."""
+    return perm.is_analista(user)
+
+
+def nome_usuario(user):
+    return perm.nome_usuario(user)
+
+
+def dias_prazo_por_prioridade(prioridade):
+    return prazos_service.dias_por_prioridade(prioridade)
+
+
+def normalizar_prioridade(valor):
+    return prazos_service.normalizar_prioridade(valor)
+
+
+def _can_access_genero_legado(user, genero):
+    # MANTIDO APENAS COMO REFERÊNCIA DO COMPORTAMENTO ANTERIOR.
+    # Nada no sistema chama esta função.
     if user.is_superuser:  # Superusers can access all
         return True
 
@@ -45,7 +108,8 @@ def can_access_genero(user, genero):
 # Helper function to filter querysets by user level
 
 
-def filter_processes_by_user_level(user, queryset):
+def _filter_processes_by_user_level_legado(user, queryset):
+    # MANTIDO APENAS COMO REFERÊNCIA. Nada no sistema chama esta função.
     if user.is_superuser:
         return queryset  # Superusers see all
 
@@ -65,50 +129,33 @@ def filter_processes_by_user_level(user, queryset):
     return queryset.none()  # Default to no access if level is not recognized
 
 
-def is_analista(user):
-    return (not user.is_superuser
-            and hasattr(user, 'profile')
-            and user.profile.level in ['1', '2'])
+def querystring_sem_page(request):
+    """item 56: a paginação não pode perder os filtros aplicados."""
+    parametros = request.GET.copy()
+    parametros.pop('page', None)
+    consulta = parametros.urlencode()
+    return f'{consulta}&' if consulta else ''
 
 
-def pode_usar_area_analista(user):
-    return (user.is_superuser
-            or (hasattr(user, 'profile') and user.profile.level in ['1', '2', '3']))
+def _data_ou_none(texto):
+    try:
+        return datetime.strptime(texto, '%Y-%m-%d').date() if texto else None
+    except ValueError:
+        return None
 
 
-def pode_usar_gestao(user):
-    return (user.is_superuser
-            or (hasattr(user, 'profile') and user.profile.level == '3'))
-
-
-def pode_assumir_processos(user):
-    return (user.is_superuser
-            or (hasattr(user, 'profile') and user.profile.level in ['1', '2', '3']))
-
-
-def nome_usuario(user):
-    if not user:
-        return ''
-    return user.get_full_name() or user.username
-
-
-def dias_prazo_por_prioridade(prioridade):
-    prioridade = normalizar_prioridade(prioridade)
-    if prioridade == 'URGENTE':
-        return 1
-    if prioridade == 'PRIORITARIO':
-        return 2
-    return 7
-
-
-def normalizar_prioridade(valor):
-    if valor == 'SIM':
-        return 'PRIORITARIO'
-    if valor == 'NAO':
-        return 'NORMAL'
-    if valor in dict(Processo.PRIORIDADE_CHOICES):
-        return valor
-    return 'NORMAL'
+def _erro_json(exc, status=400):
+    """Resposta JSON de erro sem expor exceção interna (item 53)."""
+    if isinstance(exc, ValidationError):
+        mensagem = '; '.join(exc.messages)
+    elif isinstance(exc, PermissionDenied):
+        mensagem = str(exc) or 'Você não tem permissão para esta ação.'
+        status = 403
+    else:
+        logger.exception('Erro inesperado')
+        mensagem = 'Não foi possível concluir a operação. Tente novamente ou acione o suporte.'
+        status = 500
+    return JsonResponse({"success": False, "message": mensagem}, status=status)
 
 
 def prioridade_eh_destaque(prioridade):
@@ -116,12 +163,24 @@ def prioridade_eh_destaque(prioridade):
 
 
 def ordem_fila(queryset):
+    """Urgente → Prioritário → Normal → entrada mais antiga.
+
+    item 22: a ordem vem do cadastro de Prioridades (campo `ordem`), então
+    um código novo criado pela Gestão entra na posição certa. Registros sem
+    vínculo com o cadastro usam a ordem equivalente fixa.
+    """
     return queryset.annotate(
-        _ordem_prioridade=Case(
-            When(prioridade='URGENTE', then=Value(0)),
-            When(prioridade__in=['PRIORITARIO', 'SIM'], then=Value(1)),
-            When(prioridade__in=['NORMAL', 'NAO'], then=Value(2)),
-            default=Value(3),
+        _ordem_prioridade=Coalesce(
+            'prioridade_fk__ordem',
+            Case(
+                When(prioridade='URGENTE', then=Value(10)),
+                When(prioridade__in=['PRIORITARIO', 'SIM'], then=Value(20)),
+                When(prioridade__in=['NORMAL', 'NAO'], then=Value(30)),
+                default=Value(999),
+                output_field=IntegerField(),
+            ),
+            # Tipos mistos (PositiveIntegerField x IntegerField) exigem
+            # output_field explícito, senão o Django levanta FieldError.
             output_field=IntegerField(),
         )
     ).order_by('_ordem_prioridade', 'data_entrada', 'hora_entrada')
@@ -129,12 +188,29 @@ def ordem_fila(queryset):
 
 def anotar_situacao_fila(processos, user):
     for processo in processos:
-        if processo.situacao_tramite == 'AGUARDANDO_ASSINATURA':
+        if processo.situacao_tramite == 'ASSINATURA_DIRECIONADA':
+            if processo.assinatura_direcionada_para_id == user.id:
+                # Destaque próprio: está esperando a SUA assinatura.
+                processo.situacao_fila = 'direcionado_voce'
+                processo.situacao_label = 'Assinatura direcionada a você'
+                processo.situacao_class = 'badge--mine'
+                processo.pode_liberar = True
+            else:
+                processo.situacao_fila = 'direcionado_outro'
+                processo.situacao_label = (
+                    f'Assinatura com {processo.nome_assinatura_direcionada}')
+                processo.situacao_class = 'badge--other'
+                processo.pode_liberar = False
+            processo.pode_assumir = False
+            processo.eh_meu = processo.analista_responsavel_id == user.id
+        elif processo.situacao_tramite in ('AGUARDANDO_ASSINATURA',
+                                          'DISPONIVEL_RETIRADA'):
             processo.situacao_fila = 'assinatura'
-            processo.situacao_label = 'Aguardando assinatura'
+            processo.situacao_label = processo.get_situacao_tramite_display()
             processo.situacao_class = 'badge--primary'
             processo.pode_assumir = False
             processo.eh_meu = False
+            processo.pode_liberar = False
         elif (processo.situacao_tramite == 'EM_ANALISE'
               and processo.analista_responsavel_id):
             if processo.analista_responsavel_id == user.id:
@@ -143,6 +219,7 @@ def anotar_situacao_fila(processos, user):
                 processo.situacao_class = 'badge--mine'
                 processo.pode_assumir = False
                 processo.eh_meu = True
+                processo.pode_liberar = False
             else:
                 processo.situacao_fila = 'outro'
                 processo.situacao_label = (
@@ -151,12 +228,14 @@ def anotar_situacao_fila(processos, user):
                 processo.situacao_class = 'badge--other'
                 processo.pode_assumir = False
                 processo.eh_meu = False
+                processo.pode_liberar = False
         else:
             processo.situacao_fila = 'disponivel'
             processo.situacao_label = 'Disponível para análise'
             processo.situacao_class = 'badge--available'
             processo.pode_assumir = True
             processo.eh_meu = False
+            processo.pode_liberar = False
 
 
 def proximo_numero_relatorio():
@@ -202,31 +281,27 @@ def anotar_total_passagens(processos):
 
 @login_required
 def cadastrar_processo(request):
-    # Only Protocolo (0) and Usuário Geral (3) can create new processes
-    if not (request.user.is_superuser or (hasattr(request.user, 'profile') and request.user.profile.level in ['0', '3'])):
+    """Tela de entrada do Protocolo (item 17).
+
+    GET mostra o formulário, alimentado pelos cadastros (itens 19 a 21).
+    POST de formulário tradicional usa a MESMA regra do salvar_processo
+    (item 18): services/processos.criar_processo.
+    """
+    if not perm.pode_cadastrar_processo(request.user):
         return HttpResponse("Você não tem permissão para cadastrar novos processos.", status=403)
 
     if request.method == 'POST':
-        form = ProcessoForm(request.POST)
-        if form.is_valid():
-            processo = form.save(commit=False)
+        try:
+            svc_processos.criar_processo(request.POST.dict(), request.user)
+        except (PermissionDenied, ValidationError) as exc:
+            messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
+            return redirect('cadastrar_processo')
+        messages.success(request, 'Processo cadastrado.')
+        return redirect('listar_processos')
 
-            # Ensure the user has permission to create this type of process
-            if not can_access_genero(request.user, processo.genero):
-                return HttpResponse("Você não tem permissão para cadastrar processos deste gênero.", status=403)
-
-            if processo.prioridade == 'URGENTE':
-                processo.prazo_dias = 1
-            elif prioridade_eh_destaque(processo.prioridade):
-                processo.prazo_dias = 2
-            else:
-                processo.prazo_dias = 7
-
-            processo.save()
-            return redirect('listar_processos')
-    else:
-        form = ProcessoForm()
-    return render(request, 'Formulario.html', {'form': form})
+    return render(request, 'Formulario.html', {
+        'dados_formulario': svc_cadastros.dados_para_formulario(),
+    })
 
 
 def calcular_prazo(data_entrada, prioridade_value):
@@ -250,21 +325,10 @@ def formatar_prazo(dias_restantes):
 
 
 def calcular_proxima_data_monitoramento(data_base, prazo_monitoramento_tipo):
-    """
-    Calcula a próxima data de monitoramento com base na data base e no tipo de prazo.
-    """
-    if not data_base or not prazo_monitoramento_tipo:
-        return None
-
-    if prazo_monitoramento_tipo == 'SEMESTRAL':
-        return data_base + timedelta(days=6*30)  # Aproximadamente 6 meses
-    elif prazo_monitoramento_tipo == 'QUADRIMESTRAL':
-        return data_base + timedelta(days=4*30)  # Aproximadamente 4 meses
-    elif prazo_monitoramento_tipo == 'ANUAL':
-        return data_base + timedelta(days=12*30)  # Aproximadamente 12 meses
-    elif prazo_monitoramento_tipo == 'TRIMESTRAL':
-        return data_base + timedelta(days=3*30)  # Aproximadamente 3 meses
-    return None
+    """Mantida por compatibilidade. item 41: meses reais de calendário
+    (relativedelta), não múltiplos de 30 dias. Regra em
+    services/monitoramento.py."""
+    return svc_monitoramento.somar_periodo(data_base, prazo_monitoramento_tipo)
 
 
 @login_required
@@ -272,161 +336,30 @@ def index(request):
     return render(request, 'Formulario.html')
 
 
-@csrf_exempt
 @login_required
+@require_POST
 def salvar_processo(request):
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
+    """Cadastro pelo formulário de entrada (JSON).
 
-            data_entrada_obj = datetime.strptime(
-                data['data_entrada'], '%Y-%m-%d').date()
-            hora_entrada_obj = datetime.strptime(
-                data['hora_entrada'], '%H:%M').time()
-            data_saida_obj = datetime.strptime(
-                data['data_saida'], '%Y-%m-%d').date() if data.get('data_saida') else None
-            hora_saida_obj = datetime.strptime(
-                data['hora_saida'], '%H:%M').time() if data.get('hora_saida') else None
-
-            # Permission check: Only Protocolo (0) and Usuário Geral (3) can save new processes
-            if not (request.user.is_superuser or (hasattr(request.user, 'profile') and request.user.profile.level in ['0', '3'])):
-                return JsonResponse({"success": False, "message": "Você não tem permissão para salvar novos processos."}, status=403)
-
-            if not can_access_genero(request.user, data['genero']):
-                return JsonResponse({"success": False, "message": "Você não tem permissão para salvar processos deste gênero."}, status=403)
-
-            prazo_dias_value = dias_prazo_por_prioridade(data.get('prioridade'))
-            prioridade_value = normalizar_prioridade(data.get('prioridade'))
-
-            # Lógica de definição do prazo de monitoramento
-            prazo_monitoramento_value = 'NAO_APLICAVEL'
-            proxima_data_monitoramento_value = None
-            status_monitoramento_value = 'NAO_APLICAVEL'
-
-            especie_processo = data.get('especie')
-            genero_processo = data.get('genero')
-
-            # Determina a data base para o cálculo do monitoramento.
-            # Para tipos de monitoramento que iniciam após uma "finalização" (como P.C. ou Concessão),
-            # a data_saida é o ponto de partida lógico. Caso contrário, data_entrada.
-            data_base_monitoramento = data_saida_obj if data_saida_obj else data_entrada_obj
-
-            # Apply monitoring logic based on genre and species
-            if genero_processo == 'LIQUIDACOES':
-                if especie_processo == 'P.C. Bolsa Atleta':
-                    prazo_monitoramento_value = 'SEMESTRAL'
-                    status_monitoramento_value = 'PENDENTE'
-                elif especie_processo == 'P.C. Adiantamento':
-                    prazo_monitoramento_value = 'TRIMESTRAL'
-                    status_monitoramento_value = 'PENDENTE'
-                elif especie_processo == 'Subvenção Social - Prestação de Contas':
-                    prazo_monitoramento_value = 'QUADRIMESTRAL'
-                    status_monitoramento_value = 'PENDENTE'
-                elif especie_processo == 'Subvenção Social - P.C. Anual':
-                    prazo_monitoramento_value = 'ANUAL'
-                    status_monitoramento_value = 'PENDENTE'
-                elif especie_processo == 'P.C. Subvenção Bloco Carnaval':
-                    prazo_monitoramento_value = 'TRIMESTRAL'
-                    status_monitoramento_value = 'PENDENTE'
-                elif especie_processo == 'P.C. Patrocínio':
-                    prazo_monitoramento_value = 'TRIMESTRAL'
-                    status_monitoramento_value = 'PENDENTE'
-                elif especie_processo in ['Concessão Aux. Bolsa Atleta', 'Concessão Aux. Aluguel Social',
-                                          'Concessão Adiantamento', 'Subvenção Social - Concessão', 'Concessão Diária']:
-                    prazo_monitoramento_value = 'TRIMESTRAL'
-                    status_monitoramento_value = 'PENDENTE'
-            elif genero_processo == 'LICITACOES_E_CONTRATOS':
-                # Only 'Concessão Patrocínio' needs monitoring in this genre
-                if especie_processo == 'Concessão Patrocínio':
-                    prazo_monitoramento_value = 'TRIMESTRAL'
-                    status_monitoramento_value = 'PENDENTE'
-                else:
-                    # Other species in LICITACOES_E_CONTRATOS do not need monitoring
-                    prazo_monitoramento_value = 'NAO_APLICAVEL'
-                    status_monitoramento_value = 'NAO_APLICAVEL'
-            else:  # For 'OUTROS_GENERO' or any other unlisted genre
-                prazo_monitoramento_value = 'NAO_APLICAVEL'
-                status_monitoramento_value = 'NAO_APLICAVEL'
-
-            if prazo_monitoramento_value != 'NAO_APLICAVEL' and data_base_monitoramento:
-                proxima_data_monitoramento_value = calcular_proxima_data_monitoramento(
-                    data_base_monitoramento, prazo_monitoramento_value)
-
-            # Server-side validation: 'volume' is required
-            if not data.get('volume') or not str(data.get('volume')).strip():
-                return JsonResponse({"success": False, "message": "Campo 'volume' é obrigatório."}, status=400)
-
-            processo = Processo.objects.create(
-                numero_processo=data['numero_processo'],
-                volume=data['volume'],
-                secretaria=data['secretaria'],
-                data_entrada=data_entrada_obj,
-                hora_entrada=hora_entrada_obj,
-                data_saida=data_saida_obj,
-                hora_saida=hora_saida_obj,
-                destino=None,
-                situacao_tramite='DISPONIVEL',
-                genero=genero_processo,  # Use the determined genre
-                especie=especie_processo,  # Use the determined species
-                objeto=data['objeto'],
-                contratada=data.get('contratada') or None,
-                recorrente=data.get('recorrente', 'NAO'),
-                prioridade=prioridade_value,
-                prazo_dias=prazo_dias_value,
-                tecnico=data.get('tecnico') or None,
-                numero_despacho=data.get('numero_despacho') or None,
-                observacao=data.get('observacao') or None,
-                prazo_monitoramento=prazo_monitoramento_value,
-                proxima_data_monitoramento=proxima_data_monitoramento_value,
-                status_monitoramento=status_monitoramento_value,
-                # NEW FIELDS
-                valor=data.get('valor') or None,
-                periodo=data.get('periodo') or None,
-                status_analise=data.get('status_analise', 'NAO_APLICAVEL')
-            )
-
-            # Lógica para concluir monitoramento de processos anteriores com o mesmo número
-            # e que são da espécie 'Concessão' (ou similar) que indicam uma nova PC sendo enviada
-            especies_para_finalizar_automaticamente = [
-                'P.C. Bolsa Atleta', 'Subvenção Social - Prestação de Contas',
-                'Subvenção Social - P.C. Anual', 'Concessão Patrocínio',
-                'P.C. Adiantamento', 'P.C. Patrocínio', 'P.C. Subvenção Bloco Carnaval',
-                'Concessão Aux. Bolsa Atleta', 'Concessão Aux. Aluguel Social',
-                'Concessão Adiantamento', 'Subvenção Social - Concessão', 'Concessão Diária'
-            ]
-
-            # Só dispara se o NOVO processo for um que indica que uma PC está sendo submetida
-            if especie_processo in especies_para_finalizar_automaticamente:
-                processos_anteriores = Processo.objects.filter(
-                    numero_processo=data['numero_processo'],
-                    # Busca por processos anteriores desses tipos específicos
-                    especie__in=especies_para_finalizar_automaticamente
-                ).exclude(id=processo.id)  # Exclui o processo que acabou de ser criado
-
-                for p_antigo in processos_anteriores:
-                    if p_antigo.status_monitoramento in ['PENDENTE', 'ATRASADO']:
-                        p_antigo.status_monitoramento = 'CONCLUIDO'
-                        # Adiciona um registro de monitoramento
-                        MonitoramentoRecord.objects.create(
-                            processo=p_antigo,
-                            data_registro=date.today(),
-                            observacao=f"Monitoramento concluído automaticamente pela entrada de um novo processo com o mesmo número ({processo.numero_processo}) e espécie relacionada: {especie_processo}.",
-                            registrado_por=request.user
-                        )
-                        # Remove a próxima data de monitoramento e o tipo de prazo para "desativar" monitoramento para o ciclo anterior.
-                        p_antigo.proxima_data_monitoramento = None
-                        p_antigo.prazo_monitoramento = 'NAO_APLICAVEL'
-                        p_antigo.save()
-
-            return JsonResponse({"success": True, "message": "Processo salvo!", "id": processo.id})
-        except Exception as e:
-            print(f"Erro em salvar_processo: {e}")
-            return JsonResponse({"success": False, "message": str(e)}, status=400)
-    return JsonResponse({"success": False, "message": "Método não permitido"}, status=405)
+    Regra única em services/processos.criar_processo (item 18). Aqui não há
+    mais: cálculo de monitoramento por nome de espécie (item 42), prazo por
+    prioridade (item 17) nem aceite de técnico, despacho, observação e
+    saída na entrada (item 17).
+    """
+    try:
+        data = json.loads(request.body or b'{}')
+    except ValueError:
+        return JsonResponse({"success": False, "message": "Requisição inválida."}, status=400)
+    try:
+        processo = svc_processos.criar_processo(data, request.user)
+    except Exception as exc:
+        return _erro_json(exc)
+    return JsonResponse({"success": True, "message": "Processo salvo!", "id": processo.id})
 
 
 @login_required
 def listar_processos(request):
+    """Processos ativos (item 58): não saíram e não foram cancelados."""
     if is_analista(request.user):
         return redirect('area_analista')
 
@@ -434,9 +367,11 @@ def listar_processos(request):
     prioridade_filtro = request.GET.get('prioridade', 'todas')
     genero_filtro = request.GET.get('genero', 'todas')
     especie_filtro = request.GET.get('especie', 'todas')
+    situacao_filtro = request.GET.get('situacao', 'todas')
 
-    base_query = Processo.objects.filter(data_saida__isnull=True)
-    processos_query = filter_processes_by_user_level(request.user, base_query)
+    processos_query = filter_processes_by_user_level(
+        request.user, tramitacao.ativos()).select_related(
+            'analista_responsavel', 'prioridade_fk')
 
     if termo_pesquisa:
         processos_query = processos_query.filter(
@@ -448,91 +383,63 @@ def listar_processos(request):
             Q(valor__icontains=termo_pesquisa) |
             Q(periodo__icontains=termo_pesquisa)
         )
-
     if prioridade_filtro != 'todas':
         processos_query = processos_query.filter(prioridade=prioridade_filtro)
-
     if genero_filtro != 'todas':
-        if request.user.is_superuser or (hasattr(request.user, 'profile') and request.user.profile.level == '3'):
+        if perm.pode_ver_grupo(request.user, genero_filtro):
             processos_query = processos_query.filter(genero=genero_filtro)
-        elif (hasattr(request.user, 'profile') and request.user.profile.level == '1' and genero_filtro == 'LICITACOES_E_CONTRATOS'):
-            processos_query = processos_query.filter(
-                genero='LICITACOES_E_CONTRATOS')
-        elif (hasattr(request.user, 'profile') and request.user.profile.level == '2' and genero_filtro == 'LIQUIDACOES'):
-            processos_query = processos_query.filter(genero='LIQUIDACOES')
         else:
             processos_query = processos_query.none()
-
     if especie_filtro != 'todas':
         processos_query = processos_query.filter(especie=especie_filtro)
+    if situacao_filtro in dict(Processo.SITUACAO_TRAMITE_CHOICES):
+        processos_query = processos_query.filter(situacao_tramite=situacao_filtro)
 
-    processos_query = processos_query.order_by('data_entrada', 'prioridade')
+    # Pendência calculada dos registros reais (item 31), numa consulta só.
+    processos_query = processos_query.annotate(
+        pendencias_abertas=Count('pendencias', filter=Q(
+            pendencias__status__in=Pendencia.STATUS_ABERTOS), distinct=True),
+        tem_evento_cadastro=Exists(EventoProcesso.objects.filter(
+            processo=OuterRef('pk'), tipo='PROCESSO_CADASTRADO')),
+    ).order_by('data_entrada', 'hora_entrada', 'id')
 
-    total_atrasados = 0
-    total_vence_hoje = 0
-    total_prioritarios = 0
-
-    for processo in processos_query:
-        prazo_obj = calcular_prazo(processo.data_entrada, processo.prioridade)
-        if prazo_obj:
-            dias_restantes = (prazo_obj - date.today()).days
-            processo.prazo_formatado = formatar_prazo(dias_restantes)
-            processo.dias_restantes = dias_restantes
-            processo.prazo_status = (
-                'atrasado' if dias_restantes < 0
-                else 'hoje' if dias_restantes == 0
-                else 'atencao' if dias_restantes <= 2
-                else 'ok'
-            )
-            if dias_restantes < 0:
-                total_atrasados += 1
-            elif dias_restantes == 0:
-                total_vence_hoje += 1
-        else:
-            processo.prazo_formatado = "-"
-            processo.dias_restantes = None
-            processo.prazo_status = 'indefinido'
-
+    # Totais sobre o conjunto filtrado (antes da paginação).
+    hoje = timezone.localdate()
+    total_atrasados = total_vence_hoje = total_prioritarios = 0
+    for processo in processos_query.only('id', 'data_entrada', 'prioridade'):
+        dias = prazos_service.dias_restantes(processo, hoje)
+        if dias is not None and dias < 0:
+            total_atrasados += 1
+        elif dias == 0:
+            total_vence_hoje += 1
         if prioridade_eh_destaque(processo.prioridade):
             total_prioritarios += 1
+    total_processos = processos_query.count()
 
-    processos_query = list(processos_query)
-    anotar_total_passagens(processos_query)
-    total_processos = len(processos_query)
+    pagina = Paginator(processos_query, 50).get_page(request.GET.get('page'))
+    processos = list(pagina)
+    anotar_total_passagens(processos)
+    pode_saida = perm.pode_registrar_saida(request.user)
+    for processo in processos:
+        prazos_service.anotar(processo, hoje)
+        # Saída: fluxo normal só a partir de "Disponível para retirada"
+        # (item 15); acervo anterior à nova tramitação tem via de transição.
+        processo.pode_registrar_saida = pode_saida and (
+            processo.situacao_tramite == 'DISPONIVEL_RETIRADA'
+            or tramitacao.eh_legado(processo))
+        processo.saida_legado = processo.situacao_tramite != 'DISPONIVEL_RETIRADA'
 
-    all_generos = Processo.objects.values_list(
-        'genero', flat=True).distinct().order_by('genero')
-    all_generos = [
-        g for g in all_generos if can_access_genero(request.user, g)]
-
-    all_especies = []
-    if genero_filtro != 'todas':
-        if can_access_genero(request.user, genero_filtro):
-            all_especies = Processo.objects.filter(genero=genero_filtro).values_list(
-                'especie', flat=True).distinct().order_by('especie')
-    else:
-        allowed_generos_for_all_species = [g for g in Processo.objects.values_list(
-            'genero', flat=True).distinct() if can_access_genero(request.user, g)]
-        all_especies = Processo.objects.filter(genero__in=allowed_generos_for_all_species).values_list(
-            'especie', flat=True).distinct().order_by('especie')
-
-    # Pre-calculate flags for template logic
-    can_edit = request.user.is_superuser or \
-        (hasattr(request.user, 'profile')
-         and request.user.profile.level in ['0', '3'])
-
-    can_delete = request.user.is_superuser
-
-    can_mark_saida = request.user.is_superuser or \
-        (hasattr(request.user, 'profile')
-         and request.user.profile.level in ['0', '3'])
-
-    can_create_process = request.user.is_superuser or \
-        (hasattr(request.user, 'profile')
-         and request.user.profile.level in ['0', '3'])
+    all_generos = [g for g in Processo.objects.values_list('genero', flat=True)
+                   .distinct().order_by('genero') if can_access_genero(request.user, g)]
+    especies_base = Processo.objects.filter(genero__in=all_generos)
+    if genero_filtro != 'todas' and can_access_genero(request.user, genero_filtro):
+        especies_base = Processo.objects.filter(genero=genero_filtro)
+    all_especies = especies_base.values_list('especie', flat=True).distinct().order_by('especie')
 
     return render(request, 'lista_processos.html', {
-        'processos': processos_query,
+        'processos': processos,
+        'pagina': pagina,
+        'querystring': querystring_sem_page(request),
         'total_processos': total_processos,
         'total_atrasados': total_atrasados,
         'total_vence_hoje': total_vence_hoje,
@@ -541,205 +448,78 @@ def listar_processos(request):
         'termo_pesquisa': termo_pesquisa,
         'genero_filtro': genero_filtro,
         'especie_filtro': especie_filtro,
+        'situacao_filtro': situacao_filtro,
+        'situacoes': [c for c in Processo.SITUACAO_TRAMITE_CHOICES if c[0] in Processo.SITUACOES_ATIVAS],
+        'prioridades': svc_cadastros.opcoes_prioridade(),
         'all_generos': all_generos,
         'all_especies': all_especies,
-        'user_level': request.user.profile.level if hasattr(request.user, 'profile') else None,
-        'can_edit': can_edit,
-        'can_delete': can_delete,
-        'can_mark_saida': can_mark_saida,
-        'can_create_process': can_create_process,
+        # item 51: só o Protocolo corrige dados de protocolo nesta tela
+        'can_edit': perm.is_protocolo(request.user),
+        'can_delete': perm.pode_cancelar_processo(request.user),
+        'can_mark_saida': pode_saida,
+        'can_create_process': perm.pode_cadastrar_processo(request.user),
+        'dados_formulario': svc_cadastros.dados_para_formulario(),
     })
 
 
-@csrf_exempt
 @login_required
+@require_POST
 def atualizar_processo(request, id):
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            processo = get_object_or_404(Processo, id=id)
+    """Edição em linha das listas (item 51: whitelist por papel).
 
-            # Permission check for updating a process
-            if not (request.user.is_superuser or (hasattr(request.user, 'profile') and request.user.profile.level in ['1', '2', '3', '0'])):
-                return JsonResponse({"success": False, "message": "Você não tem permissão para editar processos."}, status=403)
+    A regra está em services/processos.aplicar_edicao. Campos fora da
+    whitelist do papel são recusados e informados na resposta.
+    """
+    try:
+        data = json.loads(request.body or b'{}')
+    except ValueError:
+        return JsonResponse({"success": False, "message": "Requisição inválida."}, status=400)
+    processo = get_object_or_404(Processo, id=id)
+    if not can_access_genero(request.user, processo.genero):
+        return JsonResponse({"success": False, "message": "Você não tem permissão para editar este processo."}, status=403)
+    if not svc_processos.campos_editaveis(request.user, processo):
+        return JsonResponse({"success": False, "message": "Seu papel não edita dados deste processo por esta tela."}, status=403)
+    try:
+        alteracoes, recusados = svc_processos.aplicar_edicao(processo, data, request.user)
+    except Exception as exc:
+        return _erro_json(exc)
 
-            if not can_access_genero(request.user, processo.genero):
-                return JsonResponse({"success": False, "message": "Você não tem permissão para editar este processo."}, status=403)
-
-            if 'genero' in data and data['genero'] != processo.genero:
-                if not can_access_genero(request.user, data['genero']):
-                    return JsonResponse({"success": False, "message": "Você não tem permissão para alterar o gênero para este valor."}, status=403)
-
-            changed_fields = {}
-            original_values = {field.name: getattr(
-                processo, field.name) for field in Processo._meta.fields}
-
-            for field_name, new_value in data.items():
-                if field_name in {
-                    'destino', 'situacao_tramite', 'analista_responsavel',
-                    'analista_responsavel_id', 'data_hora_assumido',
-                    'numero_relatorio',
-                }:
-                    continue
-
-                if not hasattr(processo, field_name):
-                    continue
-
-                current_value = getattr(processo, field_name)
-
-                converted_value = None
-                if field_name.startswith('data_') and new_value:
-                    converted_value = datetime.strptime(
-                        new_value, '%Y-%m-%d').date()
-                elif field_name.startswith('hora_') and new_value:
-                    converted_value = datetime.strptime(
-                        new_value, '%H:%M').time()
-                elif new_value == '':
-                    converted_value = None
-                else:
-                    converted_value = new_value
-
-                if field_name == 'prioridade':
-                    converted_value = normalizar_prioridade(converted_value)
-
-                # Special handling for 'status_analise' to use default if not provided
-                if field_name == 'status_analise' and (new_value == '' or new_value is None):
-                    converted_value = 'NAO_APLICAVEL'
-
-                if str(current_value) != str(converted_value):
-                    setattr(processo, field_name, converted_value)
-
-                    old_val_str = ''
-                    if original_values[field_name] is not None:
-                        if isinstance(original_values[field_name], date):
-                            old_val_str = original_values[field_name].strftime(
-                                '%Y-%m-%d')
-                        elif isinstance(original_values[field_name], time):
-                            old_val_str = original_values[field_name].strftime(
-                                '%H:%M')
-                        elif field_name == 'status_analise':
-                            # Get display value for old status_analise
-                            old_val_str = dict(Processo.STATUS_ANALISE_CHOICES).get(
-                                original_values[field_name], original_values[field_name])
-                        else:
-                            old_val_str = str(original_values[field_name])
-
-                    new_val_str = ''
-                    if converted_value is not None:
-                        if isinstance(converted_value, date):
-                            new_val_str = converted_value.strftime('%Y-%m-%d')
-                        elif isinstance(converted_value, time):
-                            new_val_str = converted_value.strftime('%H:%M')
-                        elif field_name == 'status_analise':
-                            # Get display value for new status_analise
-                            new_val_str = dict(Processo.STATUS_ANALISE_CHOICES).get(
-                                converted_value, converted_value)
-                        else:
-                            new_val_str = str(converted_value)
-
-                    changed_fields[field_name] = {
-                        'old': old_val_str, 'new': new_val_str}
-
-            if 'prioridade' in data:
-                processo.prazo_dias = dias_prazo_por_prioridade(data['prioridade'])
-
-            data_entrada_actual = processo.data_entrada
-            data_saida_actual = processo.data_saida
-            especie_actual = processo.especie
-            genero_actual = processo.genero
-
-            data_base_monitoramento_recalc = data_saida_actual if data_saida_actual else data_entrada_actual
-
-            novo_prazo_monitoramento_value = 'NAO_APLICAVEL'
-            novo_status_monitoramento_value = 'NAO_APLICAVEL'
-
-            # Re-evaluate monitoring based on updated genre and species
-            if genero_actual == 'LIQUIDACOES':
-                if especie_actual == 'P.C. Bolsa Atleta':
-                    novo_prazo_monitoramento_value = 'SEMESTRAL'
-                    novo_status_monitoramento_value = 'PENDENTE'
-                elif especie_actual == 'P.C. Adiantamento':
-                    novo_prazo_monitoramento_value = 'TRIMESTRAL'
-                    novo_status_monitoramento_value = 'PENDENTE'
-                elif especie_actual == 'Subvenção Social - Prestação de Contas':
-                    novo_prazo_monitoramento_value = 'QUADRIMESTRAL'
-                    novo_status_monitoramento_value = 'PENDENTE'
-                elif especie_actual == 'Subvenção Social - P.C. Anual':
-                    novo_prazo_monitoramento_value = 'ANUAL'
-                    novo_status_monitoramento_value = 'PENDENTE'
-                elif especie_actual == 'Concessão Patrocínio':
-                    novo_prazo_monitoramento_value = 'TRIMESTRAL'
-                    novo_status_monitoramento_value = 'PENDENTE'
-                elif especie_actual == 'P.C. Subvenção Bloco Carnaval':
-                    novo_prazo_monitoramento_value = 'TRIMESTRAL'
-                    novo_status_monitoramento_value = 'PENDENTE'
-                elif especie_actual == 'P.C. Patrocínio':
-                    novo_prazo_monitoramento_value = 'TRIMESTRAL'
-                    novo_status_monitoramento_value = 'PENDENTE'
-                elif especie_actual in ['Concessão Aux. Bolsa Atleta', 'Concessão Aux. Aluguel Social',
-                                        'Concessão Adiantamento', 'Subvenção Social - Concessão', 'Concessão Diária']:
-                    novo_prazo_monitoramento_value = 'TRIMESTRAL'
-                    novo_status_monitoramento_value = 'PENDENTE'
-            elif genero_actual == 'LICITACOES_E_CONTRATOS':
-
-                if especie_actual == 'Concessão Patrocínio':
-                    novo_prazo_monitoramento_value = 'TRIMESTRAL'
-                    novo_status_monitoramento_value = 'PENDENTE'
-                else:
-                    # Other species in LICITACOES_E_CONTRATOS do not need monitoring
-                    novo_prazo_monitoramento_value = 'NAO_APLICAVEL'
-                    novo_status_monitoramento_value = 'NAO_APLICAVEL'
-            else:
-                # For 'OUTROS_GENERO' or any other unlisted genre
-                novo_prazo_monitoramento_value = 'NAO_APLICAVEL'
-                novo_status_monitoramento_value = 'NAO_APLICAVEL'
-
-            if (processo.prazo_monitoramento != novo_prazo_monitoramento_value) or \
-               (processo.status_monitoramento == 'NAO_APLICAVEL' and novo_status_monitoramento_value == 'PENDENTE') or \
-               ('data_saida' in changed_fields and data_saida_actual is not None and novo_prazo_monitoramento_value != 'NAO_APLICAVEL') or \
-               ('data_entrada' in changed_fields and data_saida_actual is None and novo_prazo_monitoramento_value != 'NAO_APLICAVEL'):
-
-                processo.prazo_monitoramento = novo_prazo_monitoramento_value
-                processo.status_monitoramento = novo_status_monitoramento_value
-
-                if processo.prazo_monitoramento != 'NAO_APLICAVEL' and data_base_monitoramento_recalc:
-                    processo.proxima_data_monitoramento = calcular_proxima_data_monitoramento(
-                        data_base_monitoramento_recalc, processo.prazo_monitoramento)
-                else:
-                    processo.proxima_data_monitoramento = None
-            processo.save()
-
-            for field_name, values in changed_fields.items():
-                ProcessHistory.objects.create(
-                    process=processo,
-                    field_name=field_name,
-                    old_value=values['old'],
-                    new_value=values['new'],
-                    changed_by=request.user
-                )
-            return JsonResponse({"success": True, "message": "Processo atualizado!"})
-        except Processo.DoesNotExist:
-            return JsonResponse({"success": False, "message": "Processo não encontrado."}, status=404)
-        except Exception as e:
-            print(f"Erro em atualizar_processo: {e}")
-            return JsonResponse({"success": False, "message": str(e)}, status=400)
-    return JsonResponse({"success": False, "message": "Método não permitido"}, status=405)
+    aviso = ''
+    # Campos que a tela manda sempre e que não mudaram não geram aviso.
+    recusados_relevantes = [c for c in recusados
+                            if str(data.get(c) or '') != str(getattr(processo, c, '') or '')]
+    if recusados_relevantes:
+        aviso = ('Não foram gravados (fora do que o seu papel pode editar): '
+                 + ', '.join(recusados_relevantes) + '.')
+    return JsonResponse({
+        "success": True,
+        "message": f"Processo atualizado. {len(alteracoes)} campo(s) alterado(s).",
+        "alterados": sorted(alteracoes),
+        "recusados": recusados,
+        "aviso": aviso,
+    })
 
 
-@csrf_exempt
 @login_required
-@user_passes_test(lambda u: u.is_superuser)  # Only superusers can delete
+@require_POST
 def deletar_processo(request, id):
-    if request.method == 'POST':
+    """item 35: não excluir. A rota antiga cancela logicamente, com motivo,
+    autor e horário — o registro é preservado.
+
+    CORREÇÃO: a versão anterior exigia superusuário na view e Gestão no
+    service; nenhum dos dois conseguia cancelar.
+    """
+    motivo = request.POST.get('motivo')
+    if not motivo and request.body and request.content_type == 'application/json':
         try:
-            processo = get_object_or_404(Processo, id=id)
-            processo.delete()
-            return JsonResponse({'success': True, 'message': 'Processo deletado com sucesso!'})
-        except Processo.DoesNotExist:
-            return JsonResponse({'success': False, 'message': 'Processo não encontrado.'}, status=404)
-        except Exception as e:
-            return JsonResponse({'success': False, 'message': str(e)}, status=500)
-    return JsonResponse({'success': False, 'message': 'Método não permitido.'}, status=405)
+            motivo = json.loads(request.body).get('motivo')
+        except ValueError:
+            motivo = None
+    try:
+        tramitacao.cancelar_processo(id, request.user, motivo)
+    except Exception as exc:
+        return _erro_json(exc)
+    return JsonResponse({'success': True, 'message': 'Processo cancelado. O registro foi preservado no histórico.'})
 
 
 def montar_passagens(processo):
@@ -825,74 +605,47 @@ def ver_historico_processo(request, process_id):
         'process_number': processo.numero_processo,
         'passagens': passagens,
         'total_passagens': len(passagens),
-        'pendencias': processo.pendencias.select_related('criada_por').all(),
-        'tem_pendencia': processo.tem_pendencia,
+        'pendencias': processo.pendencias.select_related(
+            'criada_por', 'responsavel_tecnico').all(),
+        # item 31: calculado dos registros reais, não do campo legado
+        'tem_pendencia_aberta': processo.tem_pendencia_aberta,
+        'eventos': processo.eventos.select_related('usuario').all(),
+        # item 50: tempos do fluxo deste processo, calculados dos carimbos
+        'tempos': indicadores.tempos_do_processo(processo),
     })
 
 
-@csrf_exempt
 @login_required
+@require_POST
 def concluir_monitoramento(request, process_id):
-    processo = get_object_or_404(Processo, id=process_id)
+    """item 44: concluir monitoramento NÃO registra saída física.
 
-    # Permission check for concluding monitoring
-    if not (request.user.is_superuser or (hasattr(request.user, 'profile') and request.user.profile.level in ['1', '2', '3'])):
-        return JsonResponse({"success": False, "message": "Você não tem permissão para concluir o monitoramento deste processo."}, status=403)
-
-    if not can_access_genero(request.user, processo.genero):
-        return JsonResponse({"success": False, "message": "Você não tem permissão para concluir o monitoramento deste processo."}, status=403)
-
-    # REMOVIDO: A verificação se o status é 'PENDENTE' ou 'ATRASADO'.
-    # Agora, o botão pode ser clicado independente do status atual do monitoramento.
-
-    # Obter a data e hora atuais no fuso horário local configurado no settings.py
-    now_local = timezone.localtime(timezone.now())
-
-    # Se o processo não tiver data de saída, preenchemos para "finalizá-lo"
-    if not processo.data_saida:
-        processo.data_saida = now_local.date()
-        processo.hora_saida = now_local.time()
-        # Registrar no histórico que a data/hora de saída foi marcada
-        ProcessHistory.objects.create(
-            process=processo,
-            field_name='data_saida',
-            old_value=None,
-            new_value=processo.data_saida.strftime('%Y-%m-%d'),
-            changed_by=request.user
-        )
-        ProcessHistory.objects.create(
-            process=processo,
-            field_name='hora_saida',
-            old_value=None,
-            new_value=processo.hora_saida.strftime('%H:%M:%S'),
-            changed_by=request.user
-        )
-
-    # Sempre atualiza o status do monitoramento para CONCLUIDO e zera a próxima data
-    processo.status_monitoramento = 'CONCLUIDO'
-    # Zera para evitar futuros monitoramentos
-    processo.proxima_data_monitoramento = None
-    # Desativa o tipo de prazo de monitoramento
-    processo.prazo_monitoramento = 'NAO_APLICAVEL'
-
-    # Adiciona um registro no histórico de monitoramento
-    MonitoramentoRecord.objects.create(
-        processo=processo,
-        data_registro=date.today(),
-        observacao=f"Monitoramento concluído manualmente por {request.user.username}.",
-        registrado_por=request.user
-    )
-
-    processo.save()
-
+    CORREÇÃO: a versão anterior preenchia data_saida/hora_saida quando o
+    processo não tinha saída — ou seja, "finalizava" o processo pelo botão
+    de monitoramento. Também aceitava GET (item 43). As duas coisas saíram.
+    """
+    try:
+        svc_monitoramento.concluir(process_id, request.user)
+    except PermissionDenied as exc:
+        return JsonResponse({"success": False, "message": str(exc)}, status=403)
+    except ValidationError as exc:
+        return JsonResponse({"success": False, "message": '; '.join(exc.messages)}, status=400)
     return JsonResponse({
         'success': True,
-        'message': 'Monitoramento concluído com sucesso e desativado para este processo.'
+        'message': 'Monitoramento concluído. A situação física do processo não foi alterada.'
     })
 
 
 @login_required
 def listar_finalizados(request):
+    """Processos que saíram fisicamente (item 58).
+
+    CORREÇÃO (item 43): a versão anterior GRAVAVA o status de monitoramento
+    ao abrir esta página (PENDENTE vencido virava ATRASADO; CONCLUIDO com
+    nova data voltava a PENDENTE). Agora o status é calculado na exibição e
+    no filtro; nada é gravado. Para persistir, usar o comando agendado
+    `python manage.py atualizar_status_monitoramento`.
+    """
     if is_analista(request.user):
         return redirect('area_analista')
 
@@ -900,14 +653,14 @@ def listar_finalizados(request):
     data_final_filtro = request.GET.get('data_final', '').strip()
     prioridade_filtro = request.GET.get('prioridade', 'todas')
     termo_pesquisa = request.GET.get('termo', '').strip()
-    status_monitoramento_filtro = request.GET.get(
-        'status_monitoramento', 'todas')
+    status_monitoramento_filtro = request.GET.get('status_monitoramento', 'todas')
     especie_filtro = request.GET.get('especie', 'todas')
     genero_filtro = request.GET.get('genero', 'todas')
     status_analise_filtro = request.GET.get('status_analise', 'todas')
 
-    base_query = Processo.objects.exclude(data_saida__isnull=True)
-    processos_query = filter_processes_by_user_level(request.user, base_query)
+    hoje = timezone.localdate()
+    processos_query = filter_processes_by_user_level(
+        request.user, tramitacao.finalizados())
 
     if termo_pesquisa:
         processos_query = processos_query.filter(
@@ -923,53 +676,20 @@ def listar_finalizados(request):
     if prioridade_filtro != 'todas':
         processos_query = processos_query.filter(prioridade=prioridade_filtro)
 
-    if data_inicial_filtro and data_final_filtro:
-        try:
-            start_date = datetime.strptime(
-                data_inicial_filtro, '%Y-%m-%d').date()
-            end_date = datetime.strptime(data_final_filtro, '%Y-%m-%d').date()
-            processos_query = processos_query.filter(
-                data_saida__range=[start_date, end_date])
-        except ValueError:
-            pass
-    elif data_inicial_filtro:
-        try:
-            start_date = datetime.strptime(
-                data_inicial_filtro, '%Y-%m-%d').date()
-            processos_query = processos_query.filter(
-                data_saida__gte=start_date)
-        except ValueError:
-            pass
-    elif data_final_filtro:
-        try:
-            end_date = datetime.strptime(data_final_filtro, '%Y-%m-%d').date()
-            processos_query = processos_query.filter(data_saida__lte=end_date)
-        except ValueError:
-            pass
-
-    if termo_pesquisa:
-        processos_query = processos_query.filter(
-            Q(numero_processo__icontains=termo_pesquisa) |
-            Q(secretaria__icontains=termo_pesquisa) |
-            Q(objeto__icontains=termo_pesquisa) |
-            Q(contratada__icontains=termo_pesquisa) |
-            Q(tecnico__icontains=termo_pesquisa) |
-            Q(valor__icontains=termo_pesquisa) |
-            Q(periodo__icontains=termo_pesquisa)
-        )
+    data_inicial = _data_ou_none(data_inicial_filtro)
+    data_final = _data_ou_none(data_final_filtro)
+    if data_inicial:
+        processos_query = processos_query.filter(data_saida__gte=data_inicial)
+    if data_final:
+        processos_query = processos_query.filter(data_saida__lte=data_final)
 
     if status_monitoramento_filtro != 'todas':
         processos_query = processos_query.filter(
-            status_monitoramento=status_monitoramento_filtro)
+            svc_monitoramento.filtro_status(status_monitoramento_filtro, hoje))
 
     if genero_filtro != 'todas':
-        if request.user.is_superuser or (hasattr(request.user, 'profile') and request.user.profile.level == '3'):
+        if perm.pode_ver_grupo(request.user, genero_filtro):
             processos_query = processos_query.filter(genero=genero_filtro)
-        elif (hasattr(request.user, 'profile') and request.user.profile.level == '1' and genero_filtro == 'LICITACOES_E_CONTRATOS'):
-            processos_query = processos_query.filter(
-                genero='LICITACOES_E_CONTRATOS')
-        elif (hasattr(request.user, 'profile') and request.user.profile.level == '2' and genero_filtro == 'LIQUIDACOES'):
-            processos_query = processos_query.filter(genero='LIQUIDACOES')
         else:
             processos_query = processos_query.none()
 
@@ -977,43 +697,25 @@ def listar_finalizados(request):
         processos_query = processos_query.filter(especie=especie_filtro)
 
     if status_analise_filtro != 'todas':
-        processos_query = processos_query.filter(
-            status_analise=status_analise_filtro)
+        processos_query = processos_query.filter(status_analise=status_analise_filtro)
 
-    today = date.today()
+    # Totais de monitoramento sobre o conjunto filtrado, antes da paginação.
+    total_monitoramento_pendente = processos_query.filter(
+        svc_monitoramento.filtro_status('PENDENTE', hoje)).count()
+    total_monitoramento_atrasado = processos_query.filter(
+        svc_monitoramento.filtro_status('ATRASADO', hoje)).count()
+    total_monitoramento_concluido = processos_query.filter(
+        svc_monitoramento.filtro_status('CONCLUIDO', hoje)).count()
+    total_processos = processos_query.count()
 
-    processos_pendentes_atrasados = processos_query.filter(
-        status_monitoramento='PENDENTE',
-        proxima_data_monitoramento__lt=today
-    )
-    for processo in processos_pendentes_atrasados:
-        processo.status_monitoramento = 'ATRASADO'
-        processo.save()
-
-    processos_concluidos_a_reabrir = processos_query.filter(
-        status_monitoramento='CONCLUIDO',
-        proxima_data_monitoramento__isnull=False,
-        proxima_data_monitoramento__lte=today
-    )
-    for processo in processos_concluidos_a_reabrir:
-        processo.status_monitoramento = 'PENDENTE'
-        processo.save()
-
-    processos_query = processos_query.order_by('-data_saida')
+    processos_query = processos_query.order_by('-data_saida', '-hora_saida', '-id')
+    pagina = Paginator(processos_query, 50).get_page(request.GET.get('page'))
 
     processos_data = []
-    total_monitoramento_pendente = 0
-    total_monitoramento_atrasado = 0
-    total_monitoramento_concluido = 0
-    for processo in processos_query:
-        prazo_obj = calcular_prazo(processo.data_entrada, processo.prioridade)
-        if prazo_obj:
-            dias_restantes = (prazo_obj - date.today()).days
-            processo.prazo_formatado = formatar_prazo(dias_restantes)
-        else:
-            processo.prazo_formatado = "-"
-
-        p_dict = {
+    for processo in pagina:
+        prazos_service.anotar(processo, hoje)
+        status_mon = svc_monitoramento.status_efetivo(processo, hoje)
+        processos_data.append({
             'id': processo.id,
             'numero_processo': processo.numero_processo,
             'volume': processo.volume or '',
@@ -1029,74 +731,47 @@ def listar_finalizados(request):
             'contratada': processo.contratada or '',
             'recorrente': processo.recorrente,
             'prioridade': processo.prioridade,
-            'prioridade_display': processo.get_prioridade_display(),
+            'prioridade_display': processo.prioridade_display,
             'prioridade_badge_class': processo.prioridade_badge_class,
-            'tecnico': processo.tecnico or '',
+            'tecnico': processo.nome_analista,
             'numero_despacho': processo.numero_despacho or '',
             'observacao': processo.observacao or '',
+            'prazo_formatado': processo.prazo_formatado,
             'prazo_monitoramento_display': processo.get_prazo_monitoramento_display(),
             'proxima_data_monitoramento_formatada': processo.proxima_data_monitoramento.strftime('%d/%m/%Y') if processo.proxima_data_monitoramento else '',
-            'status_monitoramento_display': processo.get_status_monitoramento_display(),
-            'status_monitoramento_raw': processo.status_monitoramento,
-            # NEW FIELDS
+            'status_monitoramento_display': svc_monitoramento.ROTULOS_STATUS.get(status_mon, status_mon),
+            'status_monitoramento_raw': status_mon,
             'valor': processo.valor or '',
             'periodo': processo.periodo or '',
-            'status_analise': processo.status_analise,  # Pass the raw value
-            # Pass the display value
+            'status_analise': processo.status_analise,
             'status_analise_display': processo.get_status_analise_display(),
-            'tem_pendencia': processo.tem_pendencia,
-        }
-        processos_data.append(p_dict)
-
-        if processo.status_monitoramento == 'PENDENTE':
-            total_monitoramento_pendente += 1
-        elif processo.status_monitoramento == 'ATRASADO':
-            total_monitoramento_atrasado += 1
-        elif processo.status_monitoramento == 'CONCLUIDO':
-            total_monitoramento_concluido += 1
+            # item 31: calculado dos registros reais
+            'tem_pendencia_aberta': processo.tem_pendencia_aberta,
+        })
 
     anotar_total_passagens(processos_data)
 
-    all_generos = Processo.objects.values_list(
-        'genero', flat=True).distinct().order_by('genero')
-    all_generos = [
-        g for g in all_generos if can_access_genero(request.user, g)]
+    all_generos = [g for g in Processo.objects.values_list('genero', flat=True)
+                   .distinct().order_by('genero') if can_access_genero(request.user, g)]
+    especies_base = Processo.objects.filter(genero__in=all_generos)
+    if genero_filtro != 'todas' and can_access_genero(request.user, genero_filtro):
+        especies_base = Processo.objects.filter(genero=genero_filtro)
+    all_especies = especies_base.values_list('especie', flat=True).distinct().order_by('especie')
 
-    all_especies = []
-    if genero_filtro != 'todas':
-        if can_access_genero(request.user, genero_filtro):
-            all_especies = Processo.objects.filter(genero=genero_filtro).values_list(
-                'especie', flat=True).distinct().order_by('especie')
-    else:
-        allowed_generos_for_all_species = [g for g in Processo.objects.values_list(
-            'genero', flat=True).distinct() if can_access_genero(request.user, g)]
-        all_especies = Processo.objects.filter(genero__in=allowed_generos_for_all_species).values_list(
-            'especie', flat=True).distinct().order_by('especie')
-
-    # Get all possible status_analise choices for the filter
     all_status_analise = [
         {'value': choice[0], 'label': choice[1]}
         for choice in Processo.STATUS_ANALISE_CHOICES
     ]
 
-    # Pre-calculate flags for template logic
-    can_edit = request.user.is_superuser or \
-        (hasattr(request.user, 'profile')
-         and request.user.profile.level in ['1', '2', '3'])
-
-    can_delete = request.user.is_superuser
-
-    can_mark_saida = request.user.is_superuser or \
-        (hasattr(request.user, 'profile')
-         and request.user.profile.level in ['0', '3'])
-
     return render(request, 'finalizados.html', {
         'processos': processos_data,
-        'total_processos': len(processos_data),
+        'pagina': pagina,
+        'querystring': querystring_sem_page(request),
+        'total_processos': total_processos,
         'total_monitoramento_pendente': total_monitoramento_pendente,
         'total_monitoramento_atrasado': total_monitoramento_atrasado,
         'total_monitoramento_concluido': total_monitoramento_concluido,
-        'can_export': request.user.is_superuser or (hasattr(request.user, 'profile') and request.user.profile.level in ['0', '3']),
+        'can_export': perm.is_protocolo(request.user) or perm.is_gestao(request.user),
         'prioridade_filtro': prioridade_filtro,
         'termo_pesquisa': termo_pesquisa,
         'data_inicial_filtro': data_inicial_filtro,
@@ -1109,15 +784,17 @@ def listar_finalizados(request):
         'all_especies': all_especies,
         'all_status_analise': all_status_analise,
         'is_admin': request.user.is_superuser,
-        'user_level': request.user.profile.level if hasattr(request.user, 'profile') else None,
-        'can_edit': can_edit,
-        'can_delete': can_delete,
-        'can_mark_saida': can_mark_saida,
+        # item 51: só o Protocolo corrige dados de protocolo
+        'can_edit': perm.is_protocolo(request.user),
+        'campos_editaveis': sorted(svc_processos.campos_editaveis(request.user)),
+        'can_delete': perm.pode_cancelar_processo(request.user),
+        'can_concluir_monitoramento': perm.is_analista(request.user) or perm.is_gestao(request.user),
+        'dados_formulario': svc_cadastros.dados_para_formulario(),
     })
 
 
 @login_required
-@user_passes_test(lambda u: u.is_superuser or (hasattr(u, 'profile') and u.profile.level in ['0', '3']))
+@user_passes_test(lambda u: u.is_superuser or perm.is_protocolo(u) or perm.is_gestao(u))
 def exportar_finalizados_excel(request):
     data_inicial_str = request.GET.get('data_inicial')
     data_final_str = request.GET.get('data_final')
@@ -1139,7 +816,8 @@ def exportar_finalizados_excel(request):
         return HttpResponse('{"success": false, "message": "Formato de data inválido. Use AAAA-MM-DD."}',
                             content_type='application/json', status=400)
 
-    processes = Processo.objects.filter(
+    # Cancelados ficam fora (item 35): o registro existe, mas não é saída.
+    processes = tramitacao.finalizados().filter(
         data_saida__range=[data_inicial, data_final]
     ).order_by('data_saida')
 
@@ -1163,7 +841,8 @@ def exportar_finalizados_excel(request):
         )
 
     if status_monitoramento != 'todas':
-        processes = processes.filter(status_monitoramento=status_monitoramento)
+        processes = processes.filter(
+            svc_monitoramento.filtro_status(status_monitoramento))
 
     if genero and genero != 'todas':
         if can_access_genero(request.user, genero):
@@ -1311,54 +990,32 @@ def get_process_by_number(request, numero_processo):
         return JsonResponse({'message': 'Erro interno do servidor'}, status=500)
 
 
-@csrf_exempt
 @login_required
+@require_POST
 def marcar_saida_processo(request, process_id):
-    if request.method == 'POST':
-        try:
-            processo = get_object_or_404(Processo, id=process_id)
+    """Botão de saída da lista de ativos.
 
-            if not (request.user.is_superuser or (hasattr(request.user, 'profile') and request.user.profile.level in ['0', '3'])):
-                return JsonResponse({"success": False, "message": "Você não tem permissão para marcar a saída deste processo."}, status=403)
-
-            if processo.data_saida:
-                return JsonResponse({"success": False, "message": "A data de saída já está preenchida para este processo."}, status=400)
-
-            now_local = timezone.localtime(timezone.now())
-
-            processo.data_saida = now_local.date()
-            processo.hora_saida = now_local.time()
-
-            ProcessHistory.objects.create(
-                process=processo,
-                field_name='data_saida',
-                old_value=None,
-                new_value=now_local.date().strftime('%Y-%m-%d'),
-                changed_by=request.user
-            )
-            ProcessHistory.objects.create(
-                process=processo,
-                field_name='hora_saida',
-                old_value=None,
-                new_value=now_local.time().strftime('%H:%M:%S'),
-                changed_by=request.user
-            )
-
-            processo.save()
-
-            return JsonResponse({
-                "success": True,
-                "message": "Data e hora de saída marcadas com sucesso!",
-                "data_saida": now_local.strftime('%Y-%m-%d'),
-                "hora_saida": now_local.strftime('%H:%M')
-            })
-
-        except Processo.DoesNotExist:
-            return JsonResponse({"success": False, "message": "Processo não encontrado."}, status=404)
-        except Exception as e:
-            print(f"Erro ao marcar saída do processo: {e}")
-            return JsonResponse({"success": False, "message": str(e)}, status=500)
-    return JsonResponse({"success": False, "message": "Método não permitido."}, status=405)
+    CORREÇÃO (item 15): a versão anterior gravava SAIDA_CONCLUIDA a partir
+    de QUALQUER situação, pulando análise, assinatura e retirada. Agora:
+      - fluxo normal: só "Disponível para retirada" (services.tramitacao);
+      - acervo anterior à nova tramitação: via de transição própria,
+        registrada como tal no histórico (tramitacao.registrar_saida_legado).
+    """
+    processo = get_object_or_404(Processo, id=process_id)
+    try:
+        if processo.situacao_tramite == 'DISPONIVEL_RETIRADA':
+            tramitacao.registrar_saida([processo.id], request.user)
+        else:
+            tramitacao.registrar_saida_legado(processo.id, request.user)
+    except Exception as exc:
+        return _erro_json(exc)
+    processo.refresh_from_db()
+    return JsonResponse({
+        "success": True,
+        "message": "Saída registrada.",
+        "data_saida": processo.data_saida.strftime('%Y-%m-%d') if processo.data_saida else '',
+        "hora_saida": processo.hora_saida.strftime('%H:%M') if processo.hora_saida else '',
+    })
 
 
 def user_login(request):
@@ -1399,7 +1056,8 @@ def manage_users(request):
     users = User.objects.all().order_by('username')
     users = users.select_related('profile')
 
-    user_levels = Profile.USER_LEVEL_CHOICES
+    # item 3: o que governa o acesso é o papel, não o nível legado.
+    user_levels = Profile.PAPEL_CHOICES
 
     return render(request, 'admin/manage_users.html', {'users': users, 'user_levels': user_levels})
 
@@ -1412,12 +1070,21 @@ def update_user_level(request, user_id):
         if user_to_update.id == request.user.id or user_to_update.is_superuser:
             return redirect('manage_users')
 
-        new_level = request.POST.get('level')
-        if new_level and new_level in [choice[0] for choice in Profile.USER_LEVEL_CHOICES]:
-            profile, created = Profile.objects.get_or_create(
-                user=user_to_update)
-            profile.level = new_level
-            profile.save()
+        novo_papel = request.POST.get('level')
+        validos = [c[0] for c in Profile.PAPEL_CHOICES]
+        if novo_papel in validos:
+            profile, _ = Profile.objects.get_or_create(user=user_to_update)
+            anterior = profile.papel
+            profile.papel = novo_papel
+            profile.level = perm.PAPEL_PARA_NIVEL.get(novo_papel, profile.level)
+            profile.save(update_fields=['papel', 'level'])
+            if anterior != novo_papel:
+                messages.success(
+                    request,
+                    f'{user_to_update.username}: papel alterado para '
+                    f'{profile.get_papel_display()}.')
+        else:
+            messages.error(request, 'Papel inválido.')
         return redirect('manage_users')
     return redirect('manage_users')
 
@@ -1425,12 +1092,23 @@ def update_user_level(request, user_id):
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
 def delete_user(request, user_id):
+    """item 36: não excluir usuário com histórico — desativar.
+
+    A rota mantém o nome antigo. A ação alterna entre desativar e reativar:
+    o usuário desativado não entra mais no sistema, mas continua como autor
+    de análises, eventos e pendências.
+    """
     if request.method == 'POST':
-        user_to_delete = get_object_or_404(User, id=user_id)
-        if user_to_delete.id == request.user.id:
+        alvo = get_object_or_404(User, id=user_id)
+        if alvo.id == request.user.id:
+            messages.error(request, 'Você não pode desativar o próprio usuário.')
             return redirect('manage_users')
-        user_to_delete.delete()
-        return redirect('manage_users')
+        alvo.is_active = not alvo.is_active
+        alvo.save(update_fields=['is_active'])
+        messages.success(
+            request,
+            f'{alvo.username} foi {"reativado" if alvo.is_active else "desativado"}. '
+            'O histórico dele foi preservado.')
     return redirect('manage_users')
 
 
@@ -1457,6 +1135,8 @@ def get_all_especies(request):
 # Area do analista
 # ---------------------------------------------------------------------------
 
+# item 31: 'tem_pendencia' saiu. A existência de pendência é calculada dos
+# registros reais (Processo.tem_pendencia_aberta), não declarada.
 CAMPOS_ANALISE = [
     'valor',
     'destino',
@@ -1464,17 +1144,71 @@ CAMPOS_ANALISE = [
     'data_analise',
     'numero_despacho',
     'status_analise',
-    'tem_pendencia',
     'observacao',
 ]
 
 
-def consultar_fila_grupos(request):
-    termo_pesquisa = request.GET.get('pesquisa', '')
-    base_query = Processo.objects.filter(
-        data_saida__isnull=True,
+# item 37: filtros da Minha Fila. Os da Gestão atendem aos cards do Dashboard.
+FILTROS_ANALISTA = [
+    ('todos', 'Todos'),
+    ('disponiveis', 'Disponíveis'),
+    ('comigo', 'Comigo'),
+    ('direcionados', 'Direcionados para mim'),
+    ('outros', 'Com outros'),
+    ('liberados', 'Liberados para assinatura'),
+    ('vencidos', 'Vencidos'),
+]
+FILTROS_GESTAO = [
+    ('todos', 'Todos'),
+    ('disponiveis', 'Disponíveis'),
+    ('em_analise', 'Em análise'),
+    ('direcionados_gestao', 'Assinatura direcionada'),
+    ('liberados', 'Liberados para assinatura'),
+    ('vencidos', 'Vencidos'),
+    ('vence_hoje', 'Vencendo hoje'),
+    ('urgentes', 'Urgentes'),
+]
+
+
+def filtrar_fila(processos, filtro, usuario):
+    """Aplica um filtro da fila sobre processos já anotados (prazo e situação)."""
+    uid = usuario.id
+    regras = {
+        'disponiveis': lambda p: p.situacao_tramite == 'DISPONIVEL',
+        'comigo': lambda p: p.situacao_tramite == 'EM_ANALISE' and p.analista_responsavel_id == uid,
+        'direcionados': lambda p: (p.situacao_tramite == 'ASSINATURA_DIRECIONADA'
+                                   and p.assinatura_direcionada_para_id == uid),
+        'outros': lambda p: (p.analista_responsavel_id is not None
+                             and p.analista_responsavel_id != uid
+                             and p.situacao_tramite in ('EM_ANALISE', 'ASSINATURA_DIRECIONADA')),
+        'em_analise': lambda p: p.situacao_tramite in ('EM_ANALISE', 'ASSINATURA_DIRECIONADA'),
+        'direcionados_gestao': lambda p: p.situacao_tramite == 'ASSINATURA_DIRECIONADA',
+        'liberados': lambda p: p.situacao_tramite == 'AGUARDANDO_ASSINATURA',
+        'vencidos': lambda p: p.prazo_status == 'atrasado',
+        'vence_hoje': lambda p: p.prazo_status == 'hoje',
+        'urgentes': lambda p: p.prioridade == 'URGENTE',
+    }
+    regra = regras.get(filtro)
+    return [p for p in processos if regra(p)] if regra else list(processos)
+
+
+def consultar_fila_grupos(request, opcoes_filtro=FILTROS_ANALISTA):
+    """Fila dos dois grupos de análise, com busca e filtro (item 37).
+
+    Devolve (todos, licitacoes, liquidacoes, termo, filtro, contagens).
+    `todos` é o conjunto sem filtro — base dos totais do topo da tela.
+    """
+    termo_pesquisa = request.GET.get('pesquisa', '').strip()
+    filtro = request.GET.get('filtro', 'todos')
+    if filtro not in dict(opcoes_filtro):
+        filtro = 'todos'
+
+    base_query = tramitacao.ativos().filter(
         genero__in=['LICITACOES_E_CONTRATOS', 'LIQUIDACOES'],
-    ).select_related('analista_responsavel')
+    ).exclude(
+        situacao_tramite='DISPONIVEL_RETIRADA'
+    ).select_related('analista_responsavel', 'assinatura_direcionada_para',
+                     'prioridade_fk')
     processos_query = filter_processes_by_user_level(request.user, base_query)
 
     if termo_pesquisa:
@@ -1488,29 +1222,26 @@ def consultar_fila_grupos(request):
     processos = list(ordem_fila(processos_query))
     anotar_total_passagens(processos)
     anotar_situacao_fila(processos, request.user)
-
+    hoje = timezone.localdate()
     for processo in processos:
-        prazo_obj = calcular_prazo(processo.data_entrada, processo.prioridade)
-        if prazo_obj:
-            dias_restantes = (prazo_obj - date.today()).days
-            processo.prazo_formatado = formatar_prazo(dias_restantes)
-            processo.prazo_status = (
-                'atrasado' if dias_restantes < 0
-                else 'hoje' if dias_restantes == 0
-                else 'atencao' if dias_restantes <= 2
-                else 'ok'
-            )
-        else:
-            processo.prazo_formatado = "-"
-            processo.prazo_status = 'indefinido'
+        prazos_service.anotar(processo, hoje)
 
-    licitacoes = [p for p in processos if p.genero == 'LICITACOES_E_CONTRATOS']
-    liquidacoes = [p for p in processos if p.genero == 'LIQUIDACOES']
-    return processos, licitacoes, liquidacoes, termo_pesquisa
+    contagens = [(chave, rotulo, len(filtrar_fila(processos, chave, request.user)))
+                 for chave, rotulo in opcoes_filtro]
+    filtrados = filtrar_fila(processos, filtro, request.user)
+    licitacoes = [p for p in filtrados if p.genero == 'LICITACOES_E_CONTRATOS']
+    liquidacoes = [p for p in filtrados if p.genero == 'LIQUIDACOES']
+    return processos, licitacoes, liquidacoes, termo_pesquisa, filtro, contagens
 
 
 @login_required
 def inicio(request):
+    # item 5: cada papel cai direto na sua área de trabalho.
+    return redirect(perm.rota_inicial(request.user))
+
+
+@login_required
+def _inicio_legado(request):
     """Envia cada usuario para a area correspondente ao seu nivel de acesso."""
     if is_analista(request.user):
         return redirect('area_analista')
@@ -1524,13 +1255,18 @@ def inicio(request):
 @login_required
 @user_passes_test(pode_usar_area_analista)
 def area_analista(request):
-    processos, licitacoes, liquidacoes, termo_pesquisa = consultar_fila_grupos(request)
+    processos, licitacoes, liquidacoes, termo_pesquisa, filtro, contagens = (
+        consultar_fila_grupos(request, FILTROS_ANALISTA))
 
     total_disponiveis = sum(1 for p in processos if p.situacao_fila == 'disponivel')
     total_comigo = sum(1 for p in processos if p.situacao_fila == 'voce')
     total_atrasados = sum(1 for p in processos if p.prazo_status == 'atrasado')
+    total_atendimentos = svc_pendencias.total_atendimentos_indicados(request.user)
 
     return render(request, 'analista/lista.html', {
+        'total_atendimentos': total_atendimentos,
+        'filtro_atual': filtro,
+        'filtros_fila': contagens,
         'licitacoes': licitacoes,
         'liquidacoes': liquidacoes,
         'mostra_licitacoes': bool(licitacoes) or can_access_genero(
@@ -1550,10 +1286,12 @@ def area_analista(request):
 @login_required
 @user_passes_test(pode_usar_gestao)
 def gestao_processos(request):
-    processos, licitacoes, liquidacoes, termo_pesquisa = consultar_fila_grupos(request)
+    processos, licitacoes, liquidacoes, termo_pesquisa, filtro, contagens = (
+        consultar_fila_grupos(request, FILTROS_GESTAO))
 
     total_disponiveis = sum(1 for p in processos if p.situacao_fila == 'disponivel')
-    total_em_analise = sum(1 for p in processos if p.situacao_fila in ('voce', 'outro'))
+    total_em_analise = sum(1 for p in processos
+                           if p.situacao_tramite in ('EM_ANALISE', 'ASSINATURA_DIRECIONADA'))
     total_urgentes = sum(1 for p in processos if p.prioridade == 'URGENTE')
 
     return render(request, 'gestao/processos.html', {
@@ -1568,7 +1306,9 @@ def gestao_processos(request):
         'termo_pesquisa': termo_pesquisa,
         'modo_gestao': True,
         'pode_assumir': False,
-        'prioridades': Processo.PRIORIDADE_CHOICES,
+        'prioridades': svc_cadastros.opcoes_prioridade(),
+        'filtro_atual': filtro,
+        'filtros_fila': contagens,
     })
 
 
@@ -1578,77 +1318,35 @@ def gestao_alterar_prioridade(request, process_id):
     if request.method != 'POST':
         return redirect('gestao_processos')
 
-    prioridade = request.POST.get('prioridade')
-    if prioridade not in dict(Processo.PRIORIDADE_CHOICES):
-        messages.error(request, "Prioridade inválida.")
+    # Delegado para services/tramitacao.py (itens 17 e 52).
+    try:
+        processo = tramitacao.alterar_prioridade(
+            process_id, request.user, request.POST.get('prioridade'))
+    except (PermissionDenied, ValidationError) as exc:
+        mensagens = getattr(exc, 'messages', [str(exc)])
+        messages.error(request, '; '.join(mensagens))
         return redirect('gestao_processos')
 
-    processo = get_object_or_404(Processo, id=process_id)
-    anterior = processo.prioridade
-    if anterior != prioridade:
-        processo.prioridade = prioridade
-        processo.prazo_dias = dias_prazo_por_prioridade(prioridade)
-        processo.save(update_fields=['prioridade', 'prazo_dias'])
-        ProcessHistory.objects.create(
-            process=processo,
-            field_name='prioridade',
-            old_value=texto_para_historico('prioridade', anterior),
-            new_value=texto_para_historico('prioridade', prioridade),
-            changed_by=request.user,
-        )
-        messages.success(
-            request,
-            f"Prioridade de {processo.numero_processo} atualizada para "
-            f"{processo.get_prioridade_display()}."
-        )
+    messages.success(
+        request,
+        f"Prioridade de {processo.numero_processo} atualizada para "
+        f"{processo.get_prioridade_display()}."
+    )
     return redirect('gestao_processos')
 
 
 @login_required
 @user_passes_test(pode_usar_area_analista)
 def assumir_processo(request, process_id):
+    # Delegado para services/tramitacao.py (itens 39 e 52).
     if request.method != 'POST':
         return redirect('area_analista')
-
-    with transaction.atomic():
-        processo = get_object_or_404(
-            Processo.objects.select_for_update(), id=process_id)
-
-        if not can_access_genero(request.user, processo.genero):
-            return HttpResponse(
-                "Você não tem permissão para assumir este processo.", status=403)
-
-        if processo.situacao_tramite == 'AGUARDANDO_ASSINATURA':
-            messages.error(request, "Esta análise já foi concluída.")
-            return redirect('area_analista')
-
-        if (processo.analista_responsavel_id
-                and processo.analista_responsavel_id != request.user.id):
-            messages.error(
-                request,
-                f"Este processo já está em análise por {processo.nome_analista}."
-            )
-            return redirect('area_analista')
-
-        if processo.analista_responsavel_id == request.user.id:
-            return redirect('analista_processo', process_id=processo.id)
-
-        processo.analista_responsavel = request.user
-        processo.data_hora_assumido = timezone.now()
-        processo.situacao_tramite = 'EM_ANALISE'
-        processo.tecnico = nome_usuario(request.user)
-        if not processo.data_analise:
-            processo.data_analise = timezone.localdate()
-        if processo.genero == 'LIQUIDACOES' and not processo.numero_relatorio:
-            processo.numero_relatorio = proximo_numero_relatorio()
-        processo.save()
-        ProcessHistory.objects.create(
-            process=processo,
-            field_name='situacao_tramite',
-            old_value='Disponível para análise',
-            new_value=f'Em análise por {processo.tecnico}',
-            changed_by=request.user,
-        )
+    try:
+        processo = tramitacao.assumir(process_id, request.user)
+    except (PermissionDenied, ValidationError) as exc:
+        mensagens = getattr(exc, 'messages', [str(exc)])
+        messages.error(request, '; '.join(mensagens))
+        return redirect('area_analista')
 
     messages.success(
         request, "Processo assumido. A análise ficou registrada em seu nome.")
@@ -1656,42 +1354,84 @@ def assumir_processo(request, process_id):
 
 
 @login_required
-@user_passes_test(pode_usar_area_analista)
+@user_passes_test(lambda u: perm.is_analista(u) or perm.is_gestao(u))
 def analista_processo(request, process_id):
+    """Tela do processo. Analista trabalha aqui; Gestão só consulta
+    (item 2: visão global sem ato técnico). Todo POST exige analista."""
     processo = get_object_or_404(
-        Processo.objects.select_related('analista_responsavel'), id=process_id)
+        Processo.objects.select_related(
+            'analista_responsavel', 'assinatura_direcionada_para',
+            'liberado_assinatura_por'),
+        id=process_id)
 
     if not can_access_genero(request.user, processo.genero):
         return HttpResponse(
             "Você não tem permissão para analisar este processo.", status=403)
 
+    if request.method == 'POST' and not perm.is_analista(request.user):
+        raise PermissionDenied('A Gestão consulta o processo, mas não pratica atos de análise.')
+
     anotar_situacao_fila([processo], request.user)
+    eh_responsavel = processo.analista_responsavel_id == request.user.id
     pode_editar = (
-        processo.situacao_tramite == 'EM_ANALISE'
-        and processo.analista_responsavel_id == request.user.id
+        processo.situacao_tramite == 'EM_ANALISE' and eh_responsavel
+    )
+    # itens 8, 10 e 11
+    pode_direcionar = perm.pode_direcionar_assinatura(request.user, processo) and (
+        processo.situacao_tramite in ('EM_ANALISE', 'ASSINATURA_DIRECIONADA'))
+    assinatura_para_mim = (
+        processo.situacao_tramite == 'ASSINATURA_DIRECIONADA'
+        and processo.assinatura_direcionada_para_id == request.user.id
+    )
+    pode_liberar = (
+        (processo.situacao_tramite == 'EM_ANALISE' and eh_responsavel)
+        or assinatura_para_mim
     )
 
     if request.method == 'POST':
-        if not pode_editar:
+        acao = request.POST.get('acao', 'salvar')
+
+        # Cada ação tem sua própria autorização (item 52). Quem recebeu a
+        # assinatura direcionada libera, mas não edita a análise.
+        permitido = {
+            'salvar': pode_editar,
+            'concluir': pode_liberar,
+            'direcionar': pode_direcionar,
+        }.get(acao, False)
+        if not permitido:
             messages.error(
-                request, "Só o analista responsável pode alterar esta análise.")
+                request, "Você não tem permissão para esta ação neste processo.")
             return redirect('analista_processo', process_id=processo.id)
 
-        acao = request.POST.get('acao', 'salvar')
-        alteracoes = registrar_analise(request, processo)
+        try:
+            alteracoes = registrar_analise(request, processo) if pode_editar else 0
+        except ValidationError as exc:
+            messages.error(request, '; '.join(exc.messages))
+            return redirect('analista_processo', process_id=processo.id)
+
         if acao == 'concluir':
-            processo.situacao_tramite = 'AGUARDANDO_ASSINATURA'
-            processo.save(update_fields=['situacao_tramite'])
-            ProcessHistory.objects.create(
-                process=processo,
-                field_name='situacao_tramite',
-                old_value='Em análise',
-                new_value='Aguardando assinatura',
-                changed_by=request.user,
-            )
+            # Liberação passa pelo service: valida completude da análise,
+            # grava liberado_assinatura_por/em e registra o evento.
+            try:
+                tramitacao.liberar_assinatura(processo.id, request.user)
+            except (PermissionDenied, ValidationError) as exc:
+                messages.error(
+                    request, '; '.join(getattr(exc, 'messages', [str(exc)])))
+                return redirect('analista_processo', process_id=processo.id)
             messages.success(
-                request, "Análise concluída. O processo segue para assinatura.")
+                request, "Análise liberada. O processo segue para assinatura.")
             return redirect('area_analista')
+
+        if acao == 'direcionar':
+            try:
+                tramitacao.direcionar_assinatura(
+                    processo.id, request.user, request.POST.get('destinatario'))
+            except (PermissionDenied, ValidationError) as exc:
+                messages.error(
+                    request, '; '.join(getattr(exc, 'messages', [str(exc)])))
+                return redirect('analista_processo', process_id=processo.id)
+            messages.success(request, "Assinatura direcionada.")
+            return redirect('analista_processo', process_id=processo.id)
         if alteracoes:
             messages.success(
                 request, f"Análise salva. {alteracoes} campo(s) atualizado(s).")
@@ -1715,50 +1455,29 @@ def analista_processo(request, process_id):
 
     return render(request, 'analista/processo.html', {
         'processo': processo,
-        'pendencias': processo.pendencias.select_related('criada_por').all(),
+        'pendencias': processo.pendencias.select_related(
+            'criada_por', 'responsavel_tecnico', 'atendimento_indicado_por',
+            'cancelada_por').all(),
+        'pendencias_anteriores': svc_pendencias.abertas_de_passagens_anteriores(
+            processo),
+        'somente_leitura': not perm.is_analista(request.user),
         'all_status_analise': Processo.STATUS_ANALISE_CHOICES,
         'passagens': montar_passagens(processo),
         'pode_editar': pode_editar,
         'eh_liquidacao': processo.genero == 'LIQUIDACOES',
+        'pode_direcionar': pode_direcionar,
+        'pode_liberar': pode_liberar,
+        'assinatura_para_mim': assinatura_para_mim,
+        'ja_direcionado': processo.situacao_tramite == 'ASSINATURA_DIRECIONADA',
+        'campos_faltantes': tramitacao.campos_faltantes(processo),
+        'analistas': views_tramitacao.opcoes_de_analistas(request.user),
     })
 
 
 def registrar_analise(request, processo):
-    """Grava os campos de analise enviados e registra cada mudanca no historico."""
-    alteracoes = 0
-
-    for campo in CAMPOS_ANALISE:
-        if campo not in request.POST:
-            continue
-
-        valor_bruto = request.POST.get(campo, '').strip()
-
-        if campo == 'data_analise':
-            novo_valor = datetime.strptime(
-                valor_bruto, '%Y-%m-%d').date() if valor_bruto else None
-        elif campo in ['status_analise', 'tem_pendencia']:
-            novo_valor = valor_bruto
-        else:
-            novo_valor = valor_bruto or None
-
-        valor_atual = getattr(processo, campo)
-        if valor_atual == novo_valor:
-            continue
-
-        setattr(processo, campo, novo_valor)
-        ProcessHistory.objects.create(
-            process=processo,
-            field_name=campo,
-            old_value=texto_para_historico(campo, valor_atual),
-            new_value=texto_para_historico(campo, novo_valor),
-            changed_by=request.user,
-        )
-        alteracoes += 1
-
-    if alteracoes:
-        processo.save()
-
-    return alteracoes
+    """Grava os campos de análise (whitelist do analista, item 51).
+    Regra em services/processos.aplicar_analise."""
+    return svc_processos.aplicar_analise(processo, request.POST, request.user)
 
 
 def texto_para_historico(campo, valor):
@@ -1784,33 +1503,15 @@ def adicionar_pendencia(request, process_id):
     if request.method != 'POST':
         return redirect('analista_processo', process_id=processo.id)
 
-    if not (processo.analista_responsavel_id == request.user.id
-            and processo.situacao_tramite == 'EM_ANALISE'):
-        messages.error(
-            request, "Só o analista responsável pode incluir pendências.")
-        return redirect('analista_processo', process_id=processo.id)
-
-    descricao = request.POST.get('descricao', '').strip()
-    if not descricao:
-        messages.error(request, "Descreva a pendência antes de adicionar.")
-        return redirect('analista_processo', process_id=processo.id)
-
-    Pendencia.objects.create(
-        processo=processo,
-        descricao=descricao,
-        criada_por=request.user,
-    )
-    if processo.tem_pendencia != 'SIM':
-        processo.tem_pendencia = 'SIM'
-        processo.save(update_fields=['tem_pendencia'])
-    ProcessHistory.objects.create(
-        process=processo,
-        field_name='pendencia_adicionada',
-        old_value='',
-        new_value=descricao,
-        changed_by=request.user,
-    )
-    messages.success(request, "Pendência adicionada.")
+    # Regras em services/pendencias.py: nasce AGUARDANDO_ATENDIMENTO com o
+    # responsável técnico fixado (itens 25 e 27). O campo legado
+    # tem_pendencia deixa de ser alimentado à mão (item 31).
+    try:
+        svc_pendencias.criar(
+            processo.id, request.user, request.POST.get('descricao'))
+        messages.success(request, "Pendência adicionada.")
+    except (PermissionDenied, ValidationError) as exc:
+        messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
     return redirect('analista_processo', process_id=processo.id)
 
 
@@ -1826,23 +1527,13 @@ def remover_pendencia(request, pendencia_id):
     if request.method != 'POST':
         return redirect('analista_processo', process_id=processo.id)
 
-    if not (processo.analista_responsavel_id == request.user.id
-            and processo.situacao_tramite == 'EM_ANALISE'):
-        messages.error(
-            request, "Só o analista responsável pode remover pendências.")
-        return redirect('analista_processo', process_id=processo.id)
-
-    descricao = pendencia.descricao
-    pendencia.delete()
-    if not processo.pendencias.exists():
-        processo.tem_pendencia = 'NAO'
-        processo.save(update_fields=['tem_pendencia'])
-    ProcessHistory.objects.create(
-        process=processo,
-        field_name='pendencia_removida',
-        old_value=descricao,
-        new_value='',
-        changed_by=request.user,
-    )
-    messages.success(request, "Pendência removida.")
+    # item 32: pendência não é apagada. Cadastrada indevidamente, é
+    # cancelada — com motivo, autor e horário. A rota mantém o nome antigo
+    # para não quebrar links, mas a ação é cancelar.
+    try:
+        svc_pendencias.cancelar(
+            pendencia.id, request.user, request.POST.get('motivo'))
+        messages.success(request, "Pendência cancelada. O registro foi preservado.")
+    except (PermissionDenied, ValidationError) as exc:
+        messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
     return redirect('analista_processo', process_id=processo.id)

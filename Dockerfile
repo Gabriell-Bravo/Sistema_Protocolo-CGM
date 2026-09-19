@@ -4,12 +4,10 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Instalar dependências do sistema
-RUN apt-get update && apt-get install -y \
+# Dependências do sistema. GDAL/PROJ/binutils saíram: o projeto não usa
+# GeoDjango, e eles aumentavam a imagem em centenas de MB.
+RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
-    binutils \
-    libproj-dev \
-    gdal-bin \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -1,10 +1,20 @@
+# item 61: credenciais e bancos locais não são versionados
 .env
+.env.*
+!env.example
+*.db
+*.sqlite3
+processos_app/database/
+backups/
+*.sql
+*.dump
+
+# Python
+__pycache__/
+*.pyc
 .venv/
 venv/
 
-__pycache__/
-*.pyc
-
-# Preview local
-preview.sqlite3
-protocolo_project/settings_preview.py
+# Gerados
+staticfiles_build/
+mediafiles/

@@ -1,4 +1,6 @@
 import os
+import sys
+from django.core.exceptions import ImproperlyConfigured
 from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
@@ -8,40 +10,51 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-SECRET_KEY = os.environ.get(
-    'DJANGO_SECRET_KEY', 'django-insecure-test-key-for-development-only-change-in-production')
+def _env_bool(nome, padrao=False):
+    return os.environ.get(nome, str(padrao)).strip().lower() in ('1', 'true', 'sim', 'yes')
 
 
-DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
+def _env_lista(nome, padrao=''):
+    return [item.strip() for item in os.environ.get(nome, padrao).split(',') if item.strip()]
 
 
-if not DEBUG:
+EXECUTANDO_TESTES = len(sys.argv) > 1 and sys.argv[1] == 'test'
 
-    PROD_DOMAIN = os.environ.get(
-        'PROD_DOMAIN', '.vercel.app')
+# item 62: padrão SEGURO. Produção roda com DEBUG desligado mesmo que a
+# variável não seja definida. Para desenvolvimento local: DJANGO_DEBUG=True.
+DEBUG = _env_bool('DJANGO_DEBUG', False)
 
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
+if not SECRET_KEY:
+    if not (DEBUG or EXECUTANDO_TESTES):
+        raise ImproperlyConfigured(
+            'DJANGO_SECRET_KEY não definida. Defina a variável de ambiente '
+            'no Portainer ou no ambiente do container.')
+    SECRET_KEY = 'django-insecure-somente-para-desenvolvimento-local'
+
+# Hosts e origens por variável de ambiente (separados por vírgula).
+ALLOWED_HOSTS = _env_lista(
+    'DJANGO_ALLOWED_HOSTS',
+    '*' if DEBUG else 'controladoria.saquarema.rj.gov.br,localhost,127.0.0.1')
+CSRF_TRUSTED_ORIGINS = _env_lista(
+    'DJANGO_CSRF_TRUSTED_ORIGINS',
+    'https://controladoria.saquarema.rj.gov.br,http://localhost:8800,'
+    'http://127.0.0.1:8800,http://localhost:8000,http://127.0.0.1:8000')
+
+# Atrás de proxy reverso com HTTPS (Nginx/Traefik/Portainer): DJANGO_HTTPS=True
+if _env_bool('DJANGO_HTTPS', False):
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
     USE_X_FORWARDED_PORT = True
 
-    ALLOWED_HOSTS = [PROD_DOMAIN]
-
-    CSRF_TRUSTED_ORIGINS = [f'https://{PROD_DOMAIN}', f'http://{PROD_DOMAIN}']
-
-    # Outras configurações de segurança para produção, se aplicável
-    # SECURE_SSL_REDIRECT = True
-    # SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    # SESSION_COOKIE_SECURE = True
-    # CSRF_COOKIE_SECURE = True
-
-else:
-
-    ALLOWED_HOSTS = ['*']
-    CSRF_TRUSTED_ORIGINS = [
-        'https://controladoria.saquarema.rj.gov.br',
-        'http://localhost:8000',
-        'http://127.0.0.1:8000',
-
-
-    ]
+X_FRAME_OPTIONS = 'DENY'
+SECURE_CONTENT_TYPE_NOSNIFF = True
+# O JavaScript das telas lê o cookie csrftoken (getCookie): NÃO marcar
+# CSRF_COOKIE_HTTPONLY como True.
+SESSION_COOKIE_HTTPONLY = True
+# Sessão de um expediente (8 h). Ajustável por DJANGO_SESSAO_SEGUNDOS.
+SESSION_COOKIE_AGE = int(os.environ.get('DJANGO_SESSAO_SEGUNDOS', 8 * 60 * 60))
 
 
 INSTALLED_APPS = [
@@ -80,6 +93,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'processos_app.services.permissions.contexto_processor',
             ],
         },
     },
@@ -100,9 +114,11 @@ DATABASES = {
 
 # If Postgres variables are not provided, fall back to the bundled sqlite DB for local development
 if not (os.environ.get('POSTGRES_DB') and os.environ.get('POSTGRES_USER')):
+    _pasta_sqlite = os.path.join(BASE_DIR, 'processos_app', 'database')
+    os.makedirs(_pasta_sqlite, exist_ok=True)   # a pasta não é versionada (item 61)
     DATABASES['default'] = {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'processos_app', 'database', 'protocolos.db'),
+        'NAME': os.path.join(_pasta_sqlite, 'protocolos.db'),
     }
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -116,7 +132,7 @@ LANGUAGE_CODE = 'pt-br'
 TIME_ZONE = 'America/Sao_Paulo'
 USE_I18N = True
 USE_TZ = True
-USE_L10N = True
+# USE_L10N foi removido no Django 5.0 (localização é sempre ativa).
 
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static'), ]
@@ -138,12 +154,28 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'mediafiles')
 
 
-if DEBUG:
-    INSTALLED_APPS += [
-        'django.contrib.staticfiles.finders',
-    ]
-
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
+
+
+# ---------------------------------------------------------------------------
+# Logs no console do container (docker logs / Portainer). Erros inesperados
+# das views são registrados aqui em vez de exibidos ao usuário (item 53).
+# ---------------------------------------------------------------------------
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'padrao': {'format': '{asctime} {levelname} {name}: {message}', 'style': '{'},
+    },
+    'handlers': {
+        'console': {'class': 'logging.StreamHandler', 'formatter': 'padrao'},
+    },
+    'root': {'handlers': ['console'], 'level': os.environ.get('DJANGO_LOG_LEVEL', 'INFO')},
+    'loggers': {
+        'django': {'handlers': ['console'], 'level': 'WARNING', 'propagate': False},
+        'processos_app': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+    },
+}

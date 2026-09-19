@@ -2,7 +2,7 @@
 
 {% block title %}Novo Processo{% endblock %}
 {% block page_title %}Entrada de Processo{% endblock %}
-{% block page_subtitle %}Cadastro de um novo processo no protocolo da CGM{% endblock %}
+{% block page_subtitle %}Registro de protocolo. A análise, a prioridade e a saída acontecem depois, cada uma no seu momento.{% endblock %}
 {% block content_class %}content--narrow{% endblock %}
 
 {% block topbar_actions %}
@@ -18,8 +18,12 @@
         <span class="material-symbols-rounded">check_circle</span>
         <span>Processo cadastrado com sucesso!</span>
     </div>
+    <div id="erroMessage" class="alert alert--danger is-hidden">
+        <span class="material-symbols-rounded">error</span>
+        <span id="erroTexto"></span>
+    </div>
 
-    <form id="protocoloForm" class="card">
+    <form id="protocoloForm" class="card" novalidate>
         {% csrf_token %}
 
         <div class="form-section">
@@ -30,7 +34,8 @@
             <div class="form-grid form-grid--full">
                 <div class="field field--required">
                     <label class="field__label" for="numeroProcesso">Número do processo</label>
-                    <input type="text" id="numeroProcesso" name="numero_processo" class="input" required>
+                    <input type="text" id="numeroProcesso" name="numero_processo" class="input" required autocomplete="off">
+                    <span class="field__hint">Se o processo já passou pela CGM, os dados da última passagem são sugeridos.</span>
                     <div class="field__error" id="numeroProcessoError">Campo obrigatório</div>
                 </div>
                 <div class="field field--required">
@@ -40,31 +45,12 @@
                 </div>
                 <div class="field field--required field--wide">
                     <label class="field__label" for="secretaria">Secretaria</label>
+                    {# item 20: lista do cadastro de Unidades Administrativas #}
                     <select id="secretaria" name="secretaria" class="select" required>
                         <option value="">Selecione uma secretaria</option>
-                        <option value="Administração, Receita e Tributação">Administração, Receita e Tributação</option>
-                        <option value="Agricultura, Abastecimento e Pesca">Agricultura, Abastecimento e Pesca</option>
-                        <option value="Comunicação Social">Comunicação Social</option>
-                        <option value="Procuradoria Geral do Município">Procuradoria Geral do Município</option>
-                        <option value="Desenvolvimento Social">Desenvolvimento Social</option>
-                        <option value="Direitos dos Animais">Direitos dos Animais</option>
-                        <option value="Educação, Cultura, Inclusão, Ciência e Tecnologia">Educação, Cultura, Inclusão, Ciência e Tecnologia</option>
-                        <option value="Esporte, Lazer e Turismo">Esporte, Lazer e Turismo</option>
-                        <option value="Finanças">Finanças</option>
-                        <option value="Gabinete">Gabinete</option>
-                        <option value="Gestão, Inovação e Tecnologia">Gestão, Inovação e Tecnologia</option>
-                        <option value="Governança e Sustentabilidade">Governança e Sustentabilidade</option>
-                        <option value="Municipal de Infraestrutura">Infraestrutura</option>
-                        <option value="Meio Ambiente">Meio Ambiente</option>
-                        <option value="Mulher">Mulher</option>
-                        <option value="Transporte e Serviços Públicos">Transporte e Serviços Públicos</option>
-                        <option value="Obras Públicas">Obras Públicas</option>
-                        <option value="Planejamento">Planejamento</option>
-                        <option value="Relações Institucionais">Relações Institucionais</option>
-                        <option value="Saúde">Saúde</option>
-                        <option value="Segurança e Ordem Pública">Segurança e Ordem Pública</option>
-                        <option value="Transparência e Integridade">Transparência e Integridade</option>
-                        <option value="Urbanismo">Urbanismo</option>
+                        {% for unidade in dados_formulario.unidades %}
+                            <option value="{{ unidade }}">{{ unidade }}</option>
+                        {% endfor %}
                     </select>
                     <div class="field__error" id="secretariaError">Campo obrigatório</div>
                 </div>
@@ -74,7 +60,7 @@
         <div class="form-section">
             <div class="form-section__title">
                 <span class="material-symbols-rounded">schedule</span>
-                Entrada e saída
+                Entrada
             </div>
             <div class="form-grid form-grid--full">
                 <div class="field field--required">
@@ -87,15 +73,8 @@
                     <input type="time" id="horaEntrada" name="hora_entrada" class="input" required>
                     <div class="field__error" id="horaEntradaError">Campo obrigatório</div>
                 </div>
-                <div class="field">
-                    <label class="field__label" for="dataSaida">Data de saída</label>
-                    <input type="date" id="dataSaida" name="data_saida" class="input">
-                </div>
-                <div class="field">
-                    <label class="field__label" for="horaSaida">Hora de saída</label>
-                    <input type="time" id="horaSaida" name="hora_saida" class="input">
-                </div>
             </div>
+            <span class="field__hint">Preenchidas com o momento atual. Ajuste só se o registro for posterior à chegada física.</span>
         </div>
 
         <div class="form-section">
@@ -104,25 +83,37 @@
                 Classificação
             </div>
             <div class="form-grid form-grid--full">
-                <div class="field field--required">
-                    <label class="field__label" for="genero">Gênero</label>
-                    <select id="genero" name="genero_select" class="select" required>
-                        <option value="">Selecione um Gênero</option>
-                        <option value="LIQUIDACOES">LIQUIDAÇÕES</option>
-                        <option value="LICITACOES_E_CONTRATOS">LICITAÇÕES E CONTRATOS</option>
-                        <option value="OUTROS_GENERO">Outros</option>
-                    </select>
-                    <input type="text" id="generoOutrosInput" name="genero_outros_input" class="input outros-input" placeholder="Digite o Gênero">
-                    <div class="field__error" id="generoError">Campo obrigatório</div>
-                </div>
-                <div class="field field--required">
+                <div class="field field--required field--wide">
                     <label class="field__label" for="especie">Espécie</label>
-                    <select id="especie" name="especie_select" class="select" required>
-                        <option value="">Selecione uma Espécie</option>
+                    {# item 21: a espécie cadastrada define o grupo #}
+                    <select id="especie" class="select" required>
+                        <option value="">Selecione uma espécie</option>
                     </select>
-                    <input type="text" id="especieOutrosInput" name="especie_outros_input" class="input outros-input" placeholder="Digite a Espécie">
-                    <div class="field__error" id="especieError">Campo obrigatório</div>
+                    <div class="field__error" id="especieError">Selecione a espécie</div>
+                    <div id="grupoDerivado" class="field__hint is-hidden">
+                        Grupo: <span class="badge" id="grupoDerivadoTexto"></span>
+                        <span id="monitoramentoDerivado"></span>
+                    </div>
                 </div>
+
+                {# "Outros": espécie ainda não cadastrada #}
+                <div class="field field--required is-hidden" id="blocoEspecieOutros">
+                    <label class="field__label" for="especieOutros">Espécie (não cadastrada)</label>
+                    <input type="text" id="especieOutros" class="input" placeholder="Digite a espécie">
+                    <span class="field__hint">Peça à Gestão para cadastrar a espécie, se ela for recorrente.</span>
+                    <div class="field__error" id="especieOutrosError">Digite a espécie</div>
+                </div>
+                <div class="field field--required is-hidden" id="blocoGrupoOutros">
+                    <label class="field__label" for="grupoOutros">Grupo</label>
+                    <select id="grupoOutros" class="select">
+                        <option value="">Selecione o grupo</option>
+                        {% for grupo in dados_formulario.grupos %}
+                            <option value="{{ grupo.valor }}">{{ grupo.rotulo }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="field__error" id="grupoOutrosError">Selecione o grupo</div>
+                </div>
+
                 <div class="field field--required field--wide">
                     <label class="field__label" for="objeto">Objeto</label>
                     <textarea id="objeto" name="objeto" class="textarea" required></textarea>
@@ -133,45 +124,29 @@
 
         <div class="form-section">
             <div class="form-section__title">
-                <span class="material-symbols-rounded">fact_check</span>
-                Análise e acompanhamento
+                <span class="material-symbols-rounded">badge</span>
+                Complementos
             </div>
             <div class="form-grid form-grid--full">
-                <div class="field field--wide">
-                    <label class="field__label" for="contratada">Contratada / Interessada</label>
+                <div class="field field--wide" id="campoContratada">
+                    <label class="field__label" for="contratada">Contratada / Favorecido / Interessado</label>
                     <input type="text" id="contratada" name="contratada" class="input">
+                    <div class="field__error" id="contratadaError">Esta espécie exige contratada / favorecido / interessado</div>
                 </div>
                 <div class="field">
                     <label class="field__label" for="recorrente">É recorrente?</label>
                     <select id="recorrente" name="recorrente" class="select">
-                        <option value="NAO">NÃO</option>
-                        <option value="SIM">SIM</option>
+                        <option value="NAO">Não</option>
+                        <option value="SIM">Sim</option>
                     </select>
                 </div>
-                <div class="field field--required">
-                    <label class="field__label" for="prioridade">Grau de prioridade</label>
-                    <select id="prioridade" name="prioridade" class="select" required>
-                        <option value="NORMAL">Normal (Prazo: 7 dias)</option>
-                        <option value="PRIORITARIO">Prioritário (Prazo: 2 dias)</option>
-                        <option value="URGENTE">Urgente (Prazo: 1 dia)</option>
-                    </select>
-                    <div class="field__error" id="prioridadeError">Campo obrigatório</div>
-                    <div id="prazoExibicao">
-                        <span class="badge badge--primary">Prazo: <span id="prazoValor"></span></span>
-                    </div>
-                </div>
-                <div class="field">
-                    <label class="field__label" for="tecnico">Técnico responsável</label>
-                    <input type="text" id="tecnico" name="tecnico" class="input">
-                </div>
-                <div class="field">
-                    <label class="field__label" for="numeroDespacho">Controle do n° de despacho</label>
-                    <input type="text" id="numeroDespacho" name="numero_despacho" class="input">
-                </div>
-                <div class="field field--wide">
-                    <label class="field__label" for="observacao">Observação</label>
-                    <textarea id="observacao" name="observacao" class="textarea"></textarea>
-                </div>
+            </div>
+            <div class="alert alert--info">
+                <span class="material-symbols-rounded">info</span>
+                <span>
+                    O processo entra com prioridade Normal. A prioridade é definida pela Gestão;
+                    o analista responsável passa a existir quando alguém assumir o processo.
+                </span>
             </div>
         </div>
 
@@ -186,424 +161,221 @@
         </div>
     </form>
 </div>
+{{ dados_formulario|json_script:"dados-formulario" }}
 {% endblock %}
 
 {% block extra_js %}
 <script>
     const csrftoken = getCookie('csrftoken');
+    const DADOS = JSON.parse(document.getElementById('dados-formulario').textContent);
+    const OUTROS = '__OUTROS__';
+
+    const form = document.getElementById('protocoloForm');
+    const numeroProcessoInput = document.getElementById('numeroProcesso');
+    const secretariaSelect = document.getElementById('secretaria');
+    const especieSelect = document.getElementById('especie');
+    const especieOutros = document.getElementById('especieOutros');
+    const grupoOutros = document.getElementById('grupoOutros');
+    const blocoEspecieOutros = document.getElementById('blocoEspecieOutros');
+    const blocoGrupoOutros = document.getElementById('blocoGrupoOutros');
+    const grupoDerivado = document.getElementById('grupoDerivado');
+    const contratadaInput = document.getElementById('contratada');
+
+    // --- Espécies do cadastro, agrupadas (item 21) ---
+    function montarEspecies() {
+        especieSelect.innerHTML = '<option value="">Selecione uma espécie</option>';
+        const grupos = {};
+        DADOS.especies.forEach(function (e) {
+            (grupos[e.grupo_display] = grupos[e.grupo_display] || []).push(e);
+        });
+        Object.keys(grupos).forEach(function (rotulo) {
+            const og = document.createElement('optgroup');
+            og.label = rotulo;
+            grupos[rotulo].forEach(function (e) {
+                const op = document.createElement('option');
+                op.value = e.id;
+                op.textContent = e.nome;
+                og.appendChild(op);
+            });
+            especieSelect.appendChild(og);
+        });
+        const outros = document.createElement('option');
+        outros.value = OUTROS;
+        outros.textContent = 'Outros (espécie não cadastrada)';
+        especieSelect.appendChild(outros);
+    }
+
+    function especieSelecionada() {
+        return DADOS.especies.find(function (e) { return String(e.id) === especieSelect.value; });
+    }
+
+    function atualizarEspecie() {
+        const e = especieSelecionada();
+        const ehOutros = especieSelect.value === OUTROS;
+        blocoEspecieOutros.classList.toggle('is-hidden', !ehOutros);
+        blocoGrupoOutros.classList.toggle('is-hidden', !ehOutros);
+        if (e) {
+            grupoDerivado.classList.remove('is-hidden');
+            document.getElementById('grupoDerivadoTexto').textContent = e.grupo_display;
+            document.getElementById('monitoramentoDerivado').textContent =
+                e.monitoramento && e.monitoramento !== 'Não gera monitoramento' ? ' · monitoramento ' + e.monitoramento.toLowerCase() : '';
+        } else {
+            grupoDerivado.classList.add('is-hidden');
+        }
+    }
+
+    function selecionarEspeciePorNome(nome, grupo) {
+        const e = DADOS.especies.find(function (x) { return x.nome === nome && x.grupo === grupo; })
+               || DADOS.especies.find(function (x) { return x.nome === nome; });
+        if (e) {
+            especieSelect.value = String(e.id);
+        } else if (nome) {
+            especieSelect.value = OUTROS;
+            especieOutros.value = nome;
+            grupoOutros.value = grupo || '';
+        } else {
+            especieSelect.value = '';
+        }
+        atualizarEspecie();
+    }
 
     function setCurrentDateTime() {
         const now = new Date();
-        const year = String(now.getFullYear()).padStart(4, '0');
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const pad = function (n) { return String(n).padStart(2, '0'); };
+        document.getElementById('dataEntrada').value = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+        document.getElementById('horaEntrada').value = pad(now.getHours()) + ':' + pad(now.getMinutes());
+    }
 
-        document.getElementById('dataEntrada').value = `${year}-${month}-${day}`;
-        document.getElementById('horaEntrada').value = `${hours}:${minutes}`;
+    function limparErros() {
+        form.querySelectorAll('.is-invalid').forEach(function (el) { el.classList.remove('is-invalid'); });
+        form.querySelectorAll('.field__error').forEach(function (el) { el.style.display = 'none'; });
+        document.getElementById('erroMessage').classList.add('is-hidden');
     }
 
     function limparFormulario() {
-        document.getElementById('protocoloForm').reset();
-        const requiredFields = [
-            'numeroProcesso', 'volume', 'secretaria', 'dataEntrada', 'horaEntrada',
-            'genero', 'especie', 'objeto', 'prioridade'
-        ];
-
-        requiredFields.forEach(fieldId => {
-            const element = document.getElementById(fieldId);
-            const errorElement = document.getElementById(fieldId + 'Error');
-            if (element) {
-                element.classList.remove('is-invalid');
-            }
-            if (errorElement) {
-                errorElement.style.display = 'none';
-            }
-        });
-
-        generoOutrosInput.value = '';
-        generoOutrosInput.style.display = 'none';
-        especieOutrosInput.value = '';
-        especieOutrosInput.style.display = 'none';
-
-        resetSubmitButton();
-
-        updateEspecieOptions();
+        form.reset();
+        limparErros();
+        montarEspecies();
+        atualizarEspecie();
         setCurrentDateTime();
-        updatePrazoDisplay();
+        resetSubmitButton();
     }
 
     function resetSubmitButton() {
-        const submitButton = document.getElementById('submitButton');
-        if (!submitButton) return;
-        submitButton.disabled = false;
-        submitButton.classList.remove('is-loading');
+        const b = document.getElementById('submitButton');
+        b.disabled = false;
+        b.classList.remove('is-loading');
     }
 
-    // --- VARIÁVEIS DE ELEMENTOS DO DOM ---
-    const numeroProcessoInput = document.getElementById('numeroProcesso');
-    const secretariaSelect = document.getElementById('secretaria');
-    const generoSelect = document.getElementById('genero');
-    const generoOutrosInput = document.getElementById('generoOutrosInput');
-    const especieSelect = document.getElementById('especie');
-    const especieOutrosInput = document.getElementById('especieOutrosInput');
-    const prioridadeSelect = document.getElementById('prioridade');
-    const prazoExibicao = document.getElementById('prazoExibicao');
-    const prazoValor = document.getElementById('prazoValor');
-
-    // --- DADOS PARA GÊNERO/ESPÉCIE (COM INFORMAÇÃO DE MONITORAMENTO) ---
-    const especiesPorGenero = {
-        'LIQUIDACOES': [
-            { name: 'Pagamento Geral', monitoramento: null },
-            { name: 'Concessão Aux. Bolsa Atleta', monitoramento: null },
-            { name: 'P.C. Bolsa Atleta', monitoramento: 'SEMESTRAL' },
-            { name: 'Concessão Aux. Aluguel Social', monitoramento: null },
-            { name: 'Concessão Adiantamento', monitoramento: null },
-            { name: 'P.C. Adiantamento', monitoramento: 'TRIMESTRAL' },
-            { name: 'Subvenção Social - Concessão', monitoramento: null },
-            { name: 'Subvenção Social - Pagamento', monitoramento: null },
-            { name: 'Subvenção Social - Prestação de Contas', monitoramento: 'QUADRIMESTRAL' },
-            { name: 'Subvenção Social - P.C. Anual', monitoramento: 'ANUAL' },
-            { name: 'Subvenção Social - Renovação', monitoramento: null },
-            { name: 'Subvenção Bloco Carnaval', monitoramento: null },
-            { name: 'P.C. Subvenção Bloco Carnaval', monitoramento: 'TRIMESTRAL' },
-            { name: 'Concessão Diária', monitoramento: null },
-            { name: 'P.C. Patrocínio', monitoramento: 'TRIMESTRAL' },
-            { name: 'Reanálise', monitoramento: null }
-        ],
-        'LICITACOES_E_CONTRATOS': [
-            { name: 'Análise Fase Inicial', monitoramento: null },
-            { name: 'Análise Fase Externa', monitoramento: null },
-            { name: 'Dispensa - Análise Fase Externa', monitoramento: null },
-            { name: 'Inexigibilidade', monitoramento: null },
-            { name: 'Adesão de Ata', monitoramento: null },
-            { name: 'Concessão Patrocínio', monitoramento: 'TRIMESTRAL' },
-            { name: 'Análise Aditivo', monitoramento: null },
-            { name: 'Reanálise', monitoramento: null }
-        ]
-    };
-
-    // --- FUNÇÕES DE LÓGICA DE NEGÓCIO ---
-    function updateEspecieOptions() {
-        const selectedGenero = generoSelect.value;
-        especieSelect.innerHTML = '<option value="">Selecione uma Espécie</option>';
-
-        const outrosOption = document.createElement('option');
-        outrosOption.value = 'OUTROS_ESPECIE';
-        outrosOption.textContent = 'Outros';
-        especieSelect.appendChild(outrosOption);
-
-        if (selectedGenero === 'OUTROS_GENERO') {
-            generoOutrosInput.style.display = 'block';
-            generoOutrosInput.required = true;
-            especieSelect.value = 'OUTROS_ESPECIE';
-            handleEspecieOutros();
-        } else {
-            generoOutrosInput.style.display = 'none';
-            generoOutrosInput.required = false;
-
-            if (especiesPorGenero[selectedGenero]) {
-                especiesPorGenero[selectedGenero].forEach(especieData => {
-                    const option = document.createElement('option');
-                    option.value = especieData.name;
-                    option.textContent = especieData.name;
-                    if (especieData.monitoramento) {
-                        option.setAttribute('data-monitoramento-prazo', especieData.monitoramento);
-                    }
-                    especieSelect.appendChild(option);
-                });
-            }
-        }
+    function marcarInvalido(elemento, idErro) {
+        elemento.classList.add('is-invalid');
+        const erro = document.getElementById(idErro);
+        if (erro) { erro.style.display = 'block'; }
     }
 
-    function handleEspecieOutros() {
-        if (especieSelect.value === 'OUTROS_ESPECIE' || generoSelect.value === 'OUTROS_GENERO') {
-            especieOutrosInput.style.display = 'block';
-            especieOutrosInput.required = true;
-        } else {
-            especieOutrosInput.style.display = 'none';
-            especieOutrosInput.required = false;
-        }
-    }
-
-    function handleGeneroOutros() {
-        if (generoSelect.value === 'OUTROS_GENERO') {
-            generoOutrosInput.style.display = 'block';
-            generoOutrosInput.required = true;
-        } else {
-            generoOutrosInput.style.display = 'none';
-            generoOutrosInput.required = false;
-        }
-    }
-
-    function normalizarPrioridade(value) {
-        if (value === 'SIM') return 'PRIORITARIO';
-        if (value === 'NAO') return 'NORMAL';
-        return value || 'NORMAL';
-    }
-
-    function updatePrazoDisplay() {
-        const selectedPrioridade = prioridadeSelect.value;
-        if (selectedPrioridade === 'URGENTE') {
-            prazoValor.textContent = '1 dia';
-        } else if (selectedPrioridade === 'PRIORITARIO') {
-            prazoValor.textContent = '2 dias';
-        } else if (selectedPrioridade === 'NORMAL') {
-            prazoValor.textContent = '7 dias';
-        } else {
-            prazoValor.textContent = '';
-        }
-        prazoExibicao.style.display = ['NORMAL', 'PRIORITARIO', 'URGENTE'].includes(selectedPrioridade) ? 'block' : 'none';
-    }
-
-    // Preenchimento automático a partir do número do processo
-    let debounceTimeoutId;
-    numeroProcessoInput.addEventListener('input', function() {
-        clearTimeout(debounceTimeoutId);
-
-        const numeroProcesso = this.value.trim();
-        if (numeroProcesso.length > 0) {
-            debounceTimeoutId = setTimeout(async () => {
-                try {
-                    const response = await fetch(`{% url 'get_process_by_number' numero_processo='123' %}`.replace('123', encodeURIComponent(numeroProcesso)));
-
-                    if (response.ok) {
-                        const data = await response.json();
-
-                        document.getElementById('volume').value = data.volume || '';
-                        secretariaSelect.value = data.secretaria || '';
-
-                        const generoExistente = data.genero || '';
-                        const especieExistente = data.especie || '';
-
-                        const foundGeneroKey = Object.keys(especiesPorGenero).find(key => key === generoExistente);
-
-                        if (foundGeneroKey) {
-                            generoSelect.value = foundGeneroKey;
-                            handleGeneroOutros();
-                            updateEspecieOptions();
-                            const foundEspecie = especiesPorGenero[foundGeneroKey].find(e => e.name === especieExistente);
-                            if (foundEspecie) {
-                                especieSelect.value = especieExistente;
-                                especieOutrosInput.value = '';
-                                especieOutrosInput.style.display = 'none';
-                                especieOutrosInput.required = false;
-                                handleEspecieOutros();
-                            } else {
-                                especieSelect.value = 'OUTROS_ESPECIE';
-                                especieOutrosInput.value = especieExistente;
-                                especieOutrosInput.style.display = 'block';
-                                especieOutrosInput.required = true;
-                            }
-                        } else {
-                            generoSelect.value = 'OUTROS_GENERO';
-                            generoOutrosInput.value = generoExistente;
-                            generoOutrosInput.style.display = 'block';
-                            generoOutrosInput.required = true;
-                            especieSelect.value = 'OUTROS_ESPECIE';
-                            especieOutrosInput.value = especieExistente;
-                            especieOutrosInput.style.display = 'block';
-                            especieOutrosInput.required = true;
-                        }
-
-                        document.getElementById('objeto').value = data.objeto || '';
-                        document.getElementById('contratada').value = data.contratada || '';
-                        document.getElementById('recorrente').value = data.recorrente || 'NAO';
-                        prioridadeSelect.value = normalizarPrioridade(data.prioridade);
-                        document.getElementById('tecnico').value = data.tecnico || '';
-                        document.getElementById('numeroDespacho').value = data.numero_despacho || '';
-                        document.getElementById('observacao').value = data.observacao || '';
-
-                        updatePrazoDisplay();
-
-                    } else if (response.status === 404) {
-                        limparFormularioParcial();
-                    } else {
-                        throw new Error('Erro ao buscar processo: ' + response.statusText);
-                    }
-                } catch (error) {
-                    console.error('Erro na comunicação com o servidor ao buscar processo:', error);
-                    limparFormularioParcial();
+    // Sugestão a partir da última passagem do mesmo número (só dados de protocolo)
+    let debounce;
+    numeroProcessoInput.addEventListener('input', function () {
+        clearTimeout(debounce);
+        const numero = this.value.trim();
+        if (!numero) { return; }
+        debounce = setTimeout(async function () {
+            try {
+                const resposta = await fetch(`{% url 'get_process_by_number' numero_processo='123' %}`.replace('123', encodeURIComponent(numero)));
+                if (!resposta.ok) { return; }
+                const d = await resposta.json();
+                document.getElementById('volume').value = d.volume || '';
+                if (d.secretaria && !DADOS.unidades.includes(d.secretaria)) {
+                    const op = document.createElement('option');
+                    op.value = d.secretaria; op.textContent = d.secretaria + ' (inativa)';
+                    secretariaSelect.appendChild(op);
                 }
-            }, 500);
+                secretariaSelect.value = d.secretaria || '';
+                selecionarEspeciePorNome(d.especie || '', d.genero || '');
+                document.getElementById('objeto').value = d.objeto || '';
+                contratadaInput.value = d.contratada || '';
+                document.getElementById('recorrente').value = (d.recorrente === 'SIM') ? 'SIM' : 'NAO';
+            } catch (erro) {
+                console.error('Falha ao buscar passagem anterior:', erro);
+            }
+        }, 500);
+    });
+
+    especieSelect.addEventListener('change', atualizarEspecie);
+
+    form.addEventListener('submit', async function (evento) {
+        evento.preventDefault();
+        const botao = document.getElementById('submitButton');
+        if (botao.disabled) { return; }
+        limparErros();
+
+        let valido = true;
+        [['numeroProcesso', 'numeroProcessoError'], ['volume', 'volumeError'],
+         ['secretaria', 'secretariaError'], ['dataEntrada', 'dataEntradaError'],
+         ['horaEntrada', 'horaEntradaError'], ['objeto', 'objetoError']].forEach(function (par) {
+            const el = document.getElementById(par[0]);
+            if (!el.value.trim()) { marcarInvalido(el, par[1]); valido = false; }
+        });
+
+        const dados = {
+            numero_processo: numeroProcessoInput.value.trim(),
+            volume: document.getElementById('volume').value.trim(),
+            secretaria: secretariaSelect.value,
+            data_entrada: document.getElementById('dataEntrada').value,
+            hora_entrada: document.getElementById('horaEntrada').value,
+            objeto: document.getElementById('objeto').value.trim(),
+            contratada: contratadaInput.value.trim() || null,
+            recorrente: document.getElementById('recorrente').value
+        };
+
+        const e = especieSelecionada();
+        if (e) {
+            dados.especie_id = e.id;   // o backend deriva o grupo (item 21)
+            if (e.exige_contratada && !dados.contratada) {
+                marcarInvalido(contratadaInput, 'contratadaError'); valido = false;
+            }
+        } else if (especieSelect.value === OUTROS) {
+            if (!especieOutros.value.trim()) { marcarInvalido(especieOutros, 'especieOutrosError'); valido = false; }
+            if (!grupoOutros.value) { marcarInvalido(grupoOutros, 'grupoOutrosError'); valido = false; }
+            dados.especie = especieOutros.value.trim();
+            dados.genero = grupoOutros.value;
         } else {
-            limparFormularioParcial();
+            marcarInvalido(especieSelect, 'especieError'); valido = false;
+        }
+
+        if (!valido) { return; }
+
+        botao.disabled = true;
+        botao.classList.add('is-loading');
+        try {
+            const resposta = await fetch('{% url "salvar_processo" %}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+                body: JSON.stringify(dados)
+            });
+            const resultado = await resposta.json();
+            if (resultado.success) {
+                const ok = document.getElementById('successMessage');
+                ok.classList.remove('is-hidden');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                setTimeout(function () { ok.classList.add('is-hidden'); limparFormulario(); }, 2500);
+            } else {
+                document.getElementById('erroTexto').textContent = resultado.message;
+                document.getElementById('erroMessage').classList.remove('is-hidden');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                resetSubmitButton();
+            }
+        } catch (erro) {
+            document.getElementById('erroTexto').textContent = 'Erro na comunicação com o servidor: ' + erro.message;
+            document.getElementById('erroMessage').classList.remove('is-hidden');
+            resetSubmitButton();
         }
     });
 
-    function limparFormularioParcial() {
-        document.getElementById('volume').value = '';
-        document.getElementById('secretaria').value = '';
-        document.getElementById('dataSaida').value = '';
-        document.getElementById('horaSaida').value = '';
-
-        generoSelect.value = '';
-        generoOutrosInput.value = '';
-        generoOutrosInput.style.display = 'none';
-
-        especieSelect.innerHTML = '<option value="">Selecione uma Espécie</option>';
-        const outrosOption = document.createElement('option');
-        outrosOption.value = 'OUTROS_ESPECIE';
-        outrosOption.textContent = 'Outros';
-        especieSelect.appendChild(outrosOption);
-        especieSelect.value = '';
-        especieOutrosInput.value = '';
-        especieOutrosInput.style.display = 'none';
-
-        document.getElementById('objeto').value = '';
-        document.getElementById('contratada').value = '';
-        document.getElementById('recorrente').value = 'NAO';
-        prioridadeSelect.value = 'NORMAL';
-        updatePrazoDisplay();
-        document.getElementById('tecnico').value = '';
-        document.getElementById('numeroDespacho').value = '';
-        document.getElementById('observacao').value = '';
-
+    document.addEventListener('DOMContentLoaded', function () {
+        montarEspecies();
+        atualizarEspecie();
         setCurrentDateTime();
-    }
-
-    document.addEventListener('DOMContentLoaded', function() {
-        setCurrentDateTime();
-
-        generoSelect.addEventListener('change', function() {
-            handleGeneroOutros();
-            updateEspecieOptions();
-        });
-
-        especieSelect.addEventListener('change', handleEspecieOutros);
-        prioridadeSelect.addEventListener('change', updatePrazoDisplay);
-
-        updateEspecieOptions();
-        handleGeneroOutros();
-        handleEspecieOutros();
-        updatePrazoDisplay();
-
-        document.getElementById('protocoloForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-
-            const submitButton = document.getElementById('submitButton');
-            if (submitButton.disabled) {
-                return;
-            }
-
-            submitButton.disabled = true;
-            submitButton.classList.add('is-loading');
-
-            let isValid = true;
-            const requiredFields = [
-                'numeroProcesso', 'volume', 'secretaria', 'dataEntrada', 'horaEntrada',
-                'objeto', 'prioridade'
-            ];
-
-            requiredFields.forEach(fieldId => {
-                const element = document.getElementById(fieldId);
-                const errorElement = document.getElementById(fieldId + 'Error');
-                if (element && !element.value.trim()) {
-                    element.classList.add('is-invalid');
-                    if (errorElement) errorElement.style.display = 'block';
-                    isValid = false;
-                } else {
-                    if (element) element.classList.remove('is-invalid');
-                    if (errorElement) errorElement.style.display = 'none';
-                }
-            });
-
-            let finalGeneroValue = generoSelect.value;
-            if (generoSelect.value === 'OUTROS_GENERO') {
-                if (!generoOutrosInput.value.trim()) {
-                    generoOutrosInput.classList.add('is-invalid');
-                    document.getElementById('generoError').style.display = 'block';
-                    isValid = false;
-                } else {
-                    generoOutrosInput.classList.remove('is-invalid');
-                    document.getElementById('generoError').style.display = 'none';
-                    finalGeneroValue = generoOutrosInput.value.trim();
-                }
-            } else if (!generoSelect.value) {
-                generoSelect.classList.add('is-invalid');
-                document.getElementById('generoError').style.display = 'block';
-                isValid = false;
-            } else {
-                generoSelect.classList.remove('is-invalid');
-                document.getElementById('generoError').style.display = 'none';
-            }
-
-            let finalEspecieValue = especieSelect.value;
-            if (especieSelect.value === 'OUTROS_ESPECIE' ||
-                (especieSelect.value && especiesPorGenero[generoSelect.value] && !especiesPorGenero[generoSelect.value].some(e => e.name === especieSelect.value) && generoSelect.value !== 'OUTROS_GENERO')) {
-                if (!especieOutrosInput.value.trim()) {
-                    especieOutrosInput.classList.add('is-invalid');
-                    document.getElementById('especieError').style.display = 'block';
-                    isValid = false;
-                } else {
-                    especieOutrosInput.classList.remove('is-invalid');
-                    document.getElementById('especieError').style.display = 'none';
-                    finalEspecieValue = especieOutrosInput.value.trim();
-                }
-            } else if (!especieSelect.value) {
-                especieSelect.classList.add('is-invalid');
-                document.getElementById('especieError').style.display = 'block';
-                isValid = false;
-            } else {
-                especieSelect.classList.remove('is-invalid');
-                document.getElementById('especieError').style.display = 'none';
-            }
-
-            if (!isValid) {
-                resetSubmitButton();
-                return;
-            }
-
-            try {
-                const formData = {
-                    numero_processo: numeroProcessoInput.value,
-                    volume: document.getElementById('volume').value,
-                    secretaria: secretariaSelect.value,
-                    data_entrada: document.getElementById('dataEntrada').value,
-                    hora_entrada: document.getElementById('horaEntrada').value,
-                    data_saida: document.getElementById('dataSaida').value || null,
-                    hora_saida: document.getElementById('horaSaida').value || null,
-                    genero: finalGeneroValue,
-                    especie: finalEspecieValue,
-                    objeto: document.getElementById('objeto').value,
-                    contratada: document.getElementById('contratada').value || null,
-                    recorrente: document.getElementById('recorrente').value || 'NAO',
-                    prioridade: prioridadeSelect.value,
-                    tecnico: document.getElementById('tecnico').value || null,
-                    numero_despacho: document.getElementById('numeroDespacho').value || null,
-                    observacao: document.getElementById('observacao').value || null
-                };
-
-                const response = await fetch('{% url "salvar_processo" %}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': csrftoken,
-                    },
-                    body: JSON.stringify(formData)
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    const successMessage = document.getElementById('successMessage');
-                    successMessage.classList.remove('is-hidden');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-
-                    setTimeout(() => {
-                        successMessage.classList.add('is-hidden');
-                        limparFormulario();
-                    }, 3000);
-                } else {
-                    alert('Erro ao salvar: ' + result.message);
-                    resetSubmitButton();
-                }
-            } catch (error) {
-                alert('Erro na comunicação com o servidor: ' + error.message);
-                resetSubmitButton();
-            }
-        });
     });
 </script>
 {% endblock %}

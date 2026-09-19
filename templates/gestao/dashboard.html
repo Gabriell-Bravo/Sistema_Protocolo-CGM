@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard da Gestão{% endblock %}
+{% block page_subtitle %}Situação atual do acervo e indicadores do período.{% endblock %}
+
+{% block content %}
+<div class="stack">
+
+    {# item 47: todos os cards são clicáveis #}
+    <section class="stats stats--dashboard">
+        {% for card in cards %}
+        <a class="stat stat--{{ card.cor }} stat--link" href="{{ card.url }}">
+            <span class="stat__icon"><span class="material-symbols-rounded">{{ card.icone }}</span></span>
+            <div>
+                <div class="stat__value">{{ card.valor }}</div>
+                <div class="stat__label">{{ card.rotulo }}</div>
+            </div>
+        </a>
+        {% endfor %}
+    </section>
+
+    {# filtros do período (item 49) — aplicam-se ao quadro, aos indicadores e aos tempos #}
+    <section class="filters">
+        <form method="get" class="filters__grid">
+            <div class="field">
+                <label class="field__label" for="inicio">De</label>
+                <input type="date" id="inicio" name="inicio" class="input" value="{{ inicio|date:'Y-m-d' }}">
+            </div>
+            <div class="field">
+                <label class="field__label" for="fim">Até</label>
+                <input type="date" id="fim" name="fim" class="input" value="{{ fim|date:'Y-m-d' }}">
+            </div>
+            <div class="field">
+                <label class="field__label" for="grupo">Grupo</label>
+                <select id="grupo" name="grupo" class="select">
+                    <option value="">Todos</option>
+                    {% for valor, rotulo in grupos %}
+                        <option value="{{ valor }}" {% if filtros.grupo == valor %}selected{% endif %}>{{ rotulo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label class="field__label" for="analista">Analista</label>
+                <select id="analista" name="analista" class="select">
+                    <option value="">Todos</option>
+                    {% for a in analistas %}
+                        <option value="{{ a.id }}" {% if filtros.analista == a.id|stringformat:'s' %}selected{% endif %}>{{ a.get_full_name|default:a.username }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label class="field__label" for="secretaria">Secretaria</label>
+                <input type="text" id="secretaria" name="secretaria" class="input" value="{{ filtros.secretaria|default:'' }}" placeholder="Parte do nome">
+            </div>
+            <div class="field">
+                <label class="field__label" for="especie">Espécie</label>
+                <select id="especie" name="especie" class="select">
+                    <option value="">Todas</option>
+                    {% for e in especies %}
+                        <option value="{{ e.id }}" {% if filtros.especie == e.id|stringformat:'s' %}selected{% endif %}>{{ e.nome }} ({{ e.get_grupo_display }}){% if not e.ativo %} — inativa{% endif %}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn--primary">Aplicar</button>
+                <a href="{% url 'gestao_dashboard' %}" class="btn btn--ghost">Limpar</a>
+            </div>
+        </form>
+        <div class="filters__chips">
+            {% for rotulo, de, ate in atalhos %}
+                <a class="chip" href="?inicio={{ de|date:'Y-m-d' }}&fim={{ ate|date:'Y-m-d' }}">{{ rotulo }}</a>
+            {% endfor %}
+        </div>
+    </section>
+
+    {# item 48: quadro da equipe, alimentado pela Gestão de Pessoas CGM. Sem ranking. #}
+    <section class="table-card">
+        <div class="table-card__header">
+            <span class="table-card__title">Equipe de análise</span>
+            <a class="btn btn--sm btn--outline" href="{% url 'gestao_pessoas' %}">
+                <span class="material-symbols-rounded">group</span>
+                Gestão de Pessoas CGM
+            </a>
+        </div>
+        <div class="table-scroll table-scroll--compact">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Analista</th><th>Grupo</th><th>Disponibilidade hoje</th>
+                        <th>Em análise</th><th>Vencidos</th>
+                        <th>Concluídos no período</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for linha in equipe %}
+                    <tr>
+                        <td><strong>{{ linha.nome }}</strong></td>
+                        <td>{{ linha.grupo }}</td>
+                        <td>
+                            <span class="badge badge--dot {% if linha.disponivel %}badge--success{% else %}badge--warning{% endif %}">{{ linha.disponibilidade }}</span>
+                        </td>
+                        <td>{{ linha.em_analise }}</td>
+                        <td>{% if linha.vencidos %}<span class="badge badge--danger">{{ linha.vencidos }}</span>{% else %}0{% endif %}</td>
+                        <td>{{ linha.concluidos }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6"><div class="empty empty--compact">
+                        <div class="empty__title">Nenhum analista ativo cadastrado</div>
+                    </div></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="cell-muted">Carga de trabalho em ordem alfabética. Não é ranking de servidores.</p>
+    </section>
+
+    {# item 49: indicadores do período #}
+    <section class="card">
+        <div class="card__header">
+            <span class="card__title">Indicadores de {{ inicio|date:"d/m/Y" }} a {{ fim|date:"d/m/Y" }}</span>
+        </div>
+        <div class="card__body">
+            <div class="stats">
+                <div class="stat"><div><div class="stat__value">{{ periodo.recebidos }}</div><div class="stat__label">Recebidos</div></div></div>
+                <div class="stat"><div><div class="stat__value">{{ periodo.liberados_assinatura }}</div><div class="stat__label">Liberados para assinatura</div></div></div>
+                <div class="stat"><div><div class="stat__value">{{ periodo.saidas_concluidas }}</div><div class="stat__label">Saídas concluídas</div></div></div>
+                <div class="stat"><div><div class="stat__value">{{ periodo.estoque_inicial }}</div><div class="stat__label">Estoque inicial</div></div></div>
+                <div class="stat"><div><div class="stat__value">{{ periodo.estoque_final }}</div><div class="stat__label">Estoque final</div></div></div>
+                <div class="stat"><div><div class="stat__value">{{ periodo.retornos }}</div><div class="stat__label">Retornos / reanálises</div></div></div>
+            </div>
+        </div>
+    </section>
+
+    {# item 50: tempos do fluxo #}
+    <section class="table-card">
+        <div class="table-card__header">
+            <span class="table-card__title">Tempo médio do fluxo (dias)</span>
+            <span class="table-card__count">{{ tempos.processos }} processo{{ tempos.processos|pluralize:"s" }} com saída no período</span>
+        </div>
+        <div class="table-scroll table-scroll--compact">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Em fila<div class="cell-muted">entrada → assumir</div></th>
+                        <th>Análise<div class="cell-muted">assumir → liberar</div></th>
+                        <th>Pós-análise<div class="cell-muted">liberar → retirada</div></th>
+                        <th>Aguardando retirada<div class="cell-muted">retirada → saída</div></th>
+                        <th>Total<div class="cell-muted">entrada → saída</div></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>{{ tempos.em_fila|default_if_none:"—" }}</td>
+                        <td>{{ tempos.analise|default_if_none:"—" }}</td>
+                        <td>{{ tempos.pos_analise|default_if_none:"—" }}</td>
+                        <td>{{ tempos.aguardando_retirada|default_if_none:"—" }}</td>
+                        <td><strong>{{ tempos.total|default_if_none:"—" }}</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <p class="cell-muted">Calculado a partir dos registros de data e hora da tramitação — nada é digitado.</p>
+    </section>
+
+    <div class="dashboard-colunas">
+        <section class="table-card">
+            <div class="table-card__header">
+                <span class="table-card__title">Volume por grupo</span>
+            </div>
+            <div class="table-scroll table-scroll--compact">
+                <table class="table">
+                    <thead><tr><th>Grupo</th><th>Processos recebidos</th></tr></thead>
+                    <tbody>
+                        {% for linha in periodo.por_grupo %}
+                            <tr><td>{{ linha.rotulo }}</td><td>{{ linha.total }}</td></tr>
+                        {% empty %}
+                            <tr><td colspan="2" class="cell-muted">Nenhum processo recebido no período.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="table-card">
+            <div class="table-card__header">
+                <span class="table-card__title">Volume por Secretaria</span>
+            </div>
+            <div class="table-scroll table-scroll--compact">
+                <table class="table">
+                    <thead><tr><th>Secretaria</th><th>Processos recebidos</th></tr></thead>
+                    <tbody>
+                        {% for linha in periodo.por_secretaria %}
+                            <tr><td>{{ linha.secretaria|default:"—" }}</td><td>{{ linha.total }}</td></tr>
+                        {% empty %}
+                            <tr><td colspan="2" class="cell-muted">Nenhum processo recebido no período.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="table-card">
+            <div class="table-card__header">
+                <span class="table-card__title">Volume por espécie</span>
+            </div>
+            <div class="table-scroll table-scroll--compact">
+                <table class="table">
+                    <thead><tr><th>Espécie</th><th>Processos recebidos</th></tr></thead>
+                    <tbody>
+                        {% for linha in periodo.por_especie %}
+                            <tr><td>{{ linha.especie|default:"—" }}</td><td>{{ linha.total }}</td></tr>
+                        {% empty %}
+                            <tr><td colspan="2" class="cell-muted">Nenhum processo recebido no período.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}

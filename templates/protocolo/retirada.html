@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block title %}Retirada de Processos{% endblock %}
+{% block page_title %}Retirada de Processos{% endblock %}
+{% block page_subtitle %}Disponibilize os processos assinados e registre a saída física.{% endblock %}
+
+{% block content %}
+<div class="stack">
+
+    {# item 12: a Gestão coleta para assinatura; o Protocolo acompanha o retorno #}
+    <section class="card">
+        <header class="card__header">
+            <h2 class="card__title">Aguardando assinatura do Controlador — {{ total_aguardando }}</h2>
+        </header>
+        {% if aguardando_assinatura %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Processo</th>
+                    <th>Volumes</th>
+                    <th>Contratada / Favorecido / Interessado</th>
+                    <th>Liberado por</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for processo in aguardando_assinatura %}
+                <tr>
+                    <td>{{ processo.numero_processo }}</td>
+                    <td>{{ processo.volume }}</td>
+                    <td>{{ processo.contratada|default:"—" }}</td>
+                    <td>{{ processo.liberado_assinatura_por|default:"—" }}</td>
+                    <td class="table__actions">
+                        {# item 13 #}
+                        <form method="post"
+                              action="{% url 'tram_disponibilizar_retirada' processo.id %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn--sm">
+                                Disponibilizar para retirada
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty">Nenhum processo liberado para assinatura.</p>
+        {% endif %}
+    </section>
+
+    {# item 14 #}
+    <section class="card">
+        <header class="card__header">
+            <h2 class="card__title">Processos disponíveis para retirada — {{ total_disponiveis }}</h2>
+        </header>
+
+        {% if disponiveis %}
+        <form method="post" action="{% url 'tram_registrar_saida' %}"
+              onsubmit="return confirmarSaida(this);">
+            {% csrf_token %}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" id="marcar-todos"></th>
+                        <th>Processo</th>
+                        <th>Volumes</th>
+                        <th>Contratada / Favorecido / Interessado</th>
+                        <th>Destino</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for processo in disponiveis %}
+                    <tr>
+                        <td>
+                            <input type="checkbox" name="processos"
+                                   value="{{ processo.id }}" class="chk-processo">
+                        </td>
+                        <td>{{ processo.numero_processo }}</td>
+                        <td>{{ processo.volume }}</td>
+                        <td>{{ processo.contratada|default:"—" }}</td>
+                        <td>{{ processo.destino|default:"—" }}</td>
+                        <td class="table__actions">
+                            {# item 16 #}
+                            <a class="btn btn--sm btn--ghost"
+                               href="{% url 'tram_form_alterar_destino' processo.id %}">
+                                Alterar destino
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div class="card__footer">
+                <button type="submit" class="btn btn--primary">Registrar saída</button>
+            </div>
+        </form>
+        {% else %}
+        <p class="empty">Nenhum processo disponível para retirada.</p>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.getElementById('marcar-todos')?.addEventListener('change', function () {
+        document.querySelectorAll('.chk-processo').forEach(c => c.checked = this.checked);
+    });
+
+    function confirmarSaida(form) {
+        const n = form.querySelectorAll('.chk-processo:checked').length;
+        if (n === 0) {
+            alert('Selecione ao menos um processo.');
+            return false;
+        }
+        return confirm('Confirmar a saída de ' + n + ' processo' + (n > 1 ? 's' : '') + ' selecionado' + (n > 1 ? 's' : '') + '?');
+    }
+</script>
+{% endblock %}
