@@ -1,6 +1,6 @@
 # processos/forms.py
 from django import forms
-from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
+from django.contrib.auth.forms import UserCreationForm, AuthenticationForm, SetPasswordForm
 from django.contrib.auth.models import User
 from .models import Processo, Profile # Import Profile
 from .services.permissions import PAPEL_PARA_NIVEL
@@ -29,6 +29,15 @@ class CustomUserCreationForm(UserCreationForm):
             profile.level = PAPEL_PARA_NIVEL.get(profile.papel, '3')
             profile.save()
         return user
+
+
+class AdminResetPasswordForm(SetPasswordForm):
+    """Redefinição de senha feita pelo superadministrador, sem a senha atual."""
+
+    def __init__(self, user, *args, **kwargs):
+        super().__init__(user, *args, **kwargs)
+        self.fields['new_password1'].label = 'Nova senha'
+        self.fields['new_password2'].label = 'Confirme a nova senha'
 
 # ... (rest of your forms like ProcessoForm, AuthenticationForm remain the same)
 class ProcessoForm(forms.ModelForm):

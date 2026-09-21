@@ -30,6 +30,8 @@ urlpatterns = [
          views.update_user_level, name='update_user_level'),
     path('manage_users/delete/<int:user_id>/',
          views.delete_user, name='delete_user'),
+    path('manage_users/reset_password/<int:user_id>/',
+         views.reset_user_password, name='reset_user_password'),
     path('api/get_especies_by_genero/', views.get_especies_by_genero,
          name='get_especies_by_genero'),
     path('api/get_all_especies/', views.get_all_especies, name='get_all_especies'),

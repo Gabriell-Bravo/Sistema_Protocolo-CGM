@@ -15,7 +15,7 @@ from django.db.models.functions import Coalesce
 from django.contrib import messages
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.decorators import login_required, user_passes_test
-from .forms import CustomUserCreationForm
+from .forms import AdminResetPasswordForm, CustomUserCreationForm
 from django.contrib.auth.models import User
 from .forms import ProcessoForm
 import openpyxl
@@ -1113,6 +1113,45 @@ def delete_user(request, user_id):
             f'{alvo.username} foi {"reativado" if alvo.is_active else "desativado"}. '
             'O histórico dele foi preservado.')
     return redirect('manage_users')
+
+
+def _encerrar_sessoes_do_usuario(usuario):
+    """Encerra sessões abertas do usuário após a senha ser redefinida."""
+    from django.contrib.sessions.models import Session
+
+    agora = timezone.now()
+    for sessao in Session.objects.filter(expire_date__gte=agora):
+        dados = sessao.get_decoded()
+        if str(dados.get('_auth_user_id')) == str(usuario.pk):
+            sessao.delete()
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def reset_user_password(request, user_id):
+    alvo = get_object_or_404(User, id=user_id)
+    if alvo.id == request.user.id:
+        messages.error(
+            request,
+            'Para alterar a sua senha, use a opção Alterar senha.')
+        return redirect('password_change')
+
+    if request.method == 'POST':
+        form = AdminResetPasswordForm(alvo, request.POST)
+        if form.is_valid():
+            form.save()
+            _encerrar_sessoes_do_usuario(alvo)
+            messages.success(
+                request,
+                f'Senha de {alvo.username} redefinida. Informe a nova senha ao usuário.')
+            return redirect('manage_users')
+    else:
+        form = AdminResetPasswordForm(alvo)
+
+    return render(request, 'admin/reset_user_password.html', {
+        'form': form,
+        'alvo': alvo,
+    })
 
 
 @login_required

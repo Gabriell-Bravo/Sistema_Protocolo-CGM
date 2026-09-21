@@ -53,6 +53,10 @@
                             </form>
 
                             {% if u.id != request.user.id %}
+                                <a href="{% url 'reset_user_password' u.id %}" class="icon-btn icon-btn--warning"
+                                   title="Redefinir senha">
+                                    <span class="material-symbols-rounded">lock_reset</span>
+                                </a>
                                 {# item 36: desativar preserva o histórico; não há exclusão #}
                                 <form action="{% url 'delete_user' u.id %}" method="post"
                                       onsubmit="return confirm('{% if u.is_active %}Desativar{% else %}Reativar{% endif %} este usuário? O histórico dele é preservado.');">

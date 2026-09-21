@@ -164,6 +164,36 @@ class AcoesHttpTest(BaseProcessoTestCase):
         self.analista_lic2.refresh_from_db()
         self.assertFalse(self.analista_lic2.is_active)
 
+    def test_admin_redefine_senha_de_outro_usuario(self):
+        admin = self.gestao
+        admin.is_staff = True
+        admin.is_superuser = True
+        admin.save()
+        self.client.force_login(admin)
+        nova = 'SenhaTemp#2026a'
+        resposta = self.client.post(
+            reverse('reset_user_password', args=[self.analista_lic2.id]),
+            {'new_password1': nova, 'new_password2': nova})
+        self.assertRedirects(resposta, reverse('manage_users'))
+        self.analista_lic2.refresh_from_db()
+        self.assertTrue(self.analista_lic2.check_password(nova))
+        self.assertFalse(self.analista_lic2.check_password('senha-teste-123'))
+
+    def test_nao_admin_nao_redefine_senha(self):
+        self.client.force_login(self.protocolo)
+        resposta = self.client.get(
+            reverse('reset_user_password', args=[self.analista_lic2.id]))
+        self.assertEqual(resposta.status_code, 302)
+
+    def test_admin_nao_redefine_a_propria_senha_por_essa_tela(self):
+        admin = self.gestao
+        admin.is_staff = True
+        admin.is_superuser = True
+        admin.save()
+        self.client.force_login(admin)
+        resposta = self.client.get(reverse('reset_user_password', args=[admin.id]))
+        self.assertRedirects(resposta, reverse('password_change'))
+
     def test_fluxo_completo_por_http(self):
         processo = self.processo_em_analise()
         self.client.force_login(self.analista_lic)
