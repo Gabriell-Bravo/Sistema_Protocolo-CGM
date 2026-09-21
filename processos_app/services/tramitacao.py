@@ -29,10 +29,10 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from ..models import Processo, SequenciaRelatorio
+from ..models import Pendencia, Processo, SequenciaRelatorio
 from . import permissions as perm
 from . import prazos
-from .eventos import registrar_evento, registrar_diff
+from .eventos import registrar_evento, registrar_diff, registrar_evento_pendencia
 
 
 class TransicaoInvalida(ValidationError):
@@ -153,6 +153,89 @@ def assumir(processo_id, usuario):
 
 
 # --------------------------------------------------------------------------
+# Declinar análise — devolve o processo à fila
+# --------------------------------------------------------------------------
+
+CAMPOS_ANALISE_AO_DECLINAR = [
+    'analista_responsavel', 'data_hora_assumido', 'tecnico', 'data_analise',
+    'numero_despacho', 'numero_relatorio', 'observacao', 'valor', 'periodo',
+    'destino', 'destino_fk', 'status_analise', 'situacao_tramite',
+]
+
+
+@transaction.atomic
+def declinar_analise(processo_id, usuario, motivo):
+    """EM_ANALISE -> DISPONIVEL.
+
+    O analista responsável desiste, ou a Gestão destranca o processo.
+    A tentativa de análise é limpa; o histórico do ato permanece.
+    """
+    processo = _travar(processo_id)
+
+    perm.assert_permissao(
+        perm.pode_declinar_analise(usuario, processo),
+        'Somente o analista responsável ou a Gestão podem declinar a análise.')
+
+    if processo.situacao_tramite != 'EM_ANALISE':
+        raise TransicaoInvalida(
+            f'Processo em "{processo.get_situacao_tramite_display()}" '
+            'não pode ser devolvido à fila. Só é possível declinar enquanto '
+            'estiver em análise.')
+
+    motivo = (motivo or '').strip()
+    if not motivo:
+        raise TransicaoInvalida('Informe o motivo para devolver o processo à fila.')
+
+    analista_anterior = processo.nome_analista or perm.nome_usuario(
+        processo.analista_responsavel)
+    numero_relatorio_anterior = processo.numero_relatorio or ''
+
+    processo.analista_responsavel = None
+    processo.data_hora_assumido = None
+    processo.tecnico = None
+    processo.data_analise = None
+    processo.numero_despacho = None
+    processo.numero_relatorio = None
+    processo.observacao = None
+    processo.valor = None
+    processo.periodo = None
+    processo.destino = None
+    processo.destino_fk = None
+    processo.status_analise = 'NAO_APLICAVEL'
+    processo.situacao_tramite = 'DISPONIVEL'
+    processo.save(update_fields=CAMPOS_ANALISE_AO_DECLINAR)
+
+    motivo_pendencia = f'Análise declinada: {motivo}'
+    abertas = list(processo.pendencias.select_for_update().filter(
+        status__in=Pendencia.STATUS_ABERTOS))
+    agora = timezone.now()
+    for pendencia in abertas:
+        pendencia.status = 'CANCELADA'
+        pendencia.cancelada_em = agora
+        pendencia.cancelada_por = usuario
+        pendencia.motivo_cancelamento = motivo_pendencia
+        pendencia.save(update_fields=[
+            'status', 'cancelada_em', 'cancelada_por', 'motivo_cancelamento'])
+        registrar_evento_pendencia(pendencia, 'CANCELADA', usuario, motivo_pendencia)
+
+    registrar_evento(
+        processo, 'ANALISE_DECLINADA', usuario,
+        descricao=(
+            f'Análise declinada por {perm.nome_usuario(usuario)}. '
+            f'Antes: {analista_anterior or "—"}. Motivo: {motivo}'),
+        analista_anterior=analista_anterior,
+        motivo=motivo,
+        numero_relatorio_anterior=numero_relatorio_anterior,
+        pendencias_canceladas=len(abertas),
+    )
+    registrar_diff(
+        processo, 'situacao_tramite',
+        f'Em análise por {analista_anterior}',
+        'Disponível para análise', usuario)
+    return processo
+
+
+# --------------------------------------------------------------------------
 # Direcionar / redirecionar assinatura (itens 8 e 10)
 # --------------------------------------------------------------------------
 
@@ -181,13 +264,13 @@ def direcionar_assinatura(processo_id, usuario, destinatario_id):
     try:
         destinatario_id = int(destinatario_id)
     except (TypeError, ValueError):
-        raise TransicaoInvalida('Selecione o analista que vai assinar.')
+        raise TransicaoInvalida('Selecione o analista de destino.')
     destinatario = User.objects.filter(id=destinatario_id).first()
     if not perm.is_analista_ativo(destinatario):
         raise TransicaoInvalida('Destinatário deve ser um analista ativo.')
     if destinatario.id == usuario.id:
         raise TransicaoInvalida(
-            'Para assinar você mesmo, use "Liberar para assinatura".')
+            'Para enviar você mesmo ao Controlador, use "Encaminhar para o Controlador".')
     # Item 8: NÃO restringir ao mesmo grupo.
     # Item 9: indisponibilidade (férias, curso) informa, não bloqueia.
 

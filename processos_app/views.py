@@ -1461,7 +1461,7 @@ def analista_processo(request, process_id):
                     request, '; '.join(getattr(exc, 'messages', [str(exc)])))
                 return redirect('analista_processo', process_id=processo.id)
             messages.success(
-                request, "Análise liberada. O processo segue para assinatura.")
+                request, "Processo encaminhado para o Controlador.")
             return redirect('area_analista')
 
         if acao == 'direcionar':
@@ -1472,7 +1472,7 @@ def analista_processo(request, process_id):
                 messages.error(
                     request, '; '.join(getattr(exc, 'messages', [str(exc)])))
                 return redirect('analista_processo', process_id=processo.id)
-            messages.success(request, "Assinatura direcionada.")
+            messages.success(request, "Processo encaminhado para outro analista.")
             return redirect('analista_processo', process_id=processo.id)
         if alteracoes:
             messages.success(
@@ -1513,6 +1513,8 @@ def analista_processo(request, process_id):
         'ja_direcionado': processo.situacao_tramite == 'ASSINATURA_DIRECIONADA',
         'campos_faltantes': tramitacao.campos_faltantes(processo),
         'analistas': views_tramitacao.opcoes_de_analistas(request.user),
+        'pode_declinar': perm.pode_declinar_analise(request.user, processo)
+                         and processo.situacao_tramite == 'EM_ANALISE',
     })
 
 

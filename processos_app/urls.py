@@ -53,6 +53,8 @@ urlpatterns = [
     # ------------------------------------------------------------------
     path('tramitacao/<int:process_id>/assumir/',
          tram.assumir, name='tram_assumir'),
+    path('tramitacao/<int:process_id>/declinar/',
+         tram.declinar_analise, name='tram_declinar_analise'),
     path('tramitacao/<int:process_id>/direcionar-assinatura/',
          tram.direcionar_assinatura, name='tram_direcionar_assinatura'),
     path('tramitacao/<int:process_id>/liberar-assinatura/',

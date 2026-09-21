@@ -179,6 +179,17 @@ class AcoesHttpTest(BaseProcessoTestCase):
         self.assertTrue(self.analista_lic2.check_password(nova))
         self.assertFalse(self.analista_lic2.check_password('senha-teste-123'))
 
+    def test_gestao_devolve_processo_a_fila(self):
+        processo = self.processo_em_analise()
+        self.client.force_login(self.gestao)
+        resposta = self.client.post(
+            reverse('tram_declinar_analise', args=[processo.id]),
+            {'motivo': 'Tentativa de teste'})
+        self.assertRedirects(resposta, reverse('gestao_processos'))
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'DISPONIVEL')
+        self.assertIsNone(processo.analista_responsavel)
+
     def test_nao_admin_nao_redefine_senha(self):
         self.client.force_login(self.protocolo)
         resposta = self.client.get(

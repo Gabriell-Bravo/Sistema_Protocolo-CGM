@@ -512,6 +512,7 @@ class EventoProcesso(models.Model):
     TIPO_CHOICES = [
         ('PROCESSO_CADASTRADO', 'Processo cadastrado'),
         ('PROCESSO_ASSUMIDO', 'Processo assumido'),
+        ('ANALISE_DECLINADA', 'Análise declinada'),
         ('ASSINATURA_DIRECIONADA', 'Assinatura direcionada'),
         ('ASSINATURA_REDIRECIONADA', 'Assinatura redirecionada'),
         ('LIBERADO_ASSINATURA', 'Liberado para assinatura'),

@@ -259,6 +259,14 @@
         });
     }
 
+    window.pedirMotivoFormulario = function (form, mensagem) {
+        var motivo = window.prompt(mensagem);
+        if (!motivo || !motivo.trim()) { return false; }
+        var campo = form.querySelector('input[name="motivo"]');
+        if (campo) { campo.value = motivo.trim(); }
+        return true;
+    };
+
     document.addEventListener('DOMContentLoaded', function () {
         initTheme();
         initSidebar();

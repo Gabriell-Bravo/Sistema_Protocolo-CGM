@@ -71,9 +71,9 @@
                                 <form method="post" action="{% url 'tram_liberar_assinatura' processo.id %}">
                                     {% csrf_token %}
                                     <button type="submit" class="btn btn--primary btn--sm"
-                                            onclick="return confirm('Liberar este processo para assinatura?');">
+                                            onclick="return confirm('Encaminhar este processo para o Controlador?');">
                                         <span class="material-symbols-rounded">draw</span>
-                                        Liberar assinatura
+                                        Encaminhar ao Controlador
                                     </button>
                                 </form>
                             {% elif processo.eh_meu %}
@@ -81,11 +81,33 @@
                                     <span class="material-symbols-rounded">edit_note</span>
                                     Analisar
                                 </a>
+                                {% if not modo_gestao %}
+                                <form method="post" action="{% url 'tram_declinar_analise' processo.id %}"
+                                      onsubmit="return confirm('Devolver este processo à fila sem análise? Ele ficará disponível de novo.');">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="motivo" value="Encaminhado para a fila sem análise">
+                                    <button type="submit" class="btn btn--outline btn--sm" title="Fila sem análise">
+                                        <span class="material-symbols-rounded">undo</span>
+                                        Fila sem análise
+                                    </button>
+                                </form>
+                                {% endif %}
                             {% else %}
                                 <a href="{% url 'analista_processo' processo.id %}" class="btn btn--outline btn--sm">
                                     <span class="material-symbols-rounded">visibility</span>
                                     Ver
                                 </a>
+                                {% if modo_gestao and processo.situacao_tramite == 'EM_ANALISE' %}
+                                <form method="post" action="{% url 'tram_declinar_analise' processo.id %}"
+                                      onsubmit="return confirm('Devolver este processo à fila sem análise? Ele ficará disponível de novo.');">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="motivo" value="Encaminhado para a fila sem análise">
+                                    <button type="submit" class="btn btn--outline btn--sm" title="Fila sem análise">
+                                        <span class="material-symbols-rounded">undo</span>
+                                        Fila sem análise
+                                    </button>
+                                </form>
+                                {% endif %}
                             {% endif %}
                         </div>
                     </td>

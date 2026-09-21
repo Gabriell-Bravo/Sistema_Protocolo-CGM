@@ -159,6 +159,13 @@ def pode_assumir_processo(user, processo):
     return pode_analisar_grupo(user, processo.genero)
 
 
+def pode_declinar_analise(user, processo):
+    """Devolver o processo à fila: quem assumiu, ou a Gestão para destrancar."""
+    if is_gestao(user):
+        return True
+    return is_analista(user) and processo.analista_responsavel_id == user.id
+
+
 def pode_analisar_processo(user, processo):
     """Editar a análise: só o analista que assumiu."""
     return (is_analista(user)

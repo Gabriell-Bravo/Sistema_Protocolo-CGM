@@ -86,7 +86,14 @@
         </form>
     {% endif %}
 
-    <form method="post" class="card" id="formAnalise">
+    <section class="card">
+    {% if pode_declinar %}
+    <form id="formFilaSemAnalise" method="post" action="{% url 'tram_declinar_analise' processo.id %}" hidden>
+        {% csrf_token %}
+        <input type="hidden" name="motivo" value="Encaminhado para a fila sem análise">
+    </form>
+    {% endif %}
+    <form method="post" id="formAnalise">
         {% csrf_token %}
         <div class="form-section">
             <div class="form-section__title">
@@ -136,16 +143,27 @@
                     <textarea id="observacao" name="observacao" class="textarea" rows="4" {% if not pode_editar %}readonly{% endif %}>{{ processo.observacao|default:'' }}</textarea>
                 </div>
             </div>
+            {% if pode_editar %}
+            <div class="form-actions" style="margin-top:14px;">
+                <button type="submit" name="acao" value="salvar" class="btn btn--outline">
+                    <span class="material-symbols-rounded">save</span>
+                    Salvar análise
+                </button>
+            </div>
+            {% endif %}
         </div>
-        {% if pode_editar or pode_direcionar or pode_liberar %}
+        {% if pode_direcionar or pode_liberar %}
         <div class="form-section">
+            <div class="form-section__title">
+                <span class="material-symbols-rounded">send</span>
+                Encaminhamento
+            </div>
 
-            {# item 10: o direcionamento anterior nao e apagado #}
             {% if ja_direcionado %}
-                <div class="alert alert--info">
+                <div class="alert alert--info" style="margin-bottom:12px;">
                     <span class="material-symbols-rounded">forward_to_inbox</span>
                     <span>
-                        Assinatura direcionada para
+                        Encaminhado para
                         <strong>{{ processo.nome_assinatura_direcionada }}</strong>
                         em {{ processo.assinatura_direcionada_em|date:"d/m/Y H:i" }}.
                         A análise continua registrada em nome de
@@ -155,56 +173,51 @@
             {% endif %}
 
             {% if assinatura_para_mim %}
-                <div class="alert alert--info">
+                <div class="alert alert--info" style="margin-bottom:12px;">
                     <span class="material-symbols-rounded">draw</span>
                     <span>
-                        A assinatura deste processo foi direcionada a você.
-                        Ao liberar, fica registrado que
+                        Este processo foi encaminhado a você.
+                        Ao enviar ao Controlador, fica registrado que
                         {{ processo.nome_analista }} fez a análise e você
                         assinou.
                     </span>
                 </div>
             {% endif %}
 
-            {# so libera com a analise preenchida #}
             {% if campos_faltantes %}
-                <div class="alert alert--warning">
+                <div class="alert alert--warning" style="margin-bottom:12px;">
                     <span class="material-symbols-rounded">edit_note</span>
                     <span>
-                        Preencha a análise para liberar ou direcionar a
-                        assinatura. Faltando:
+                        Preencha a análise para encaminhar ao Controlador ou a outro analista. Faltando:
                         <strong>{{ campos_faltantes|join:", " }}</strong>.
                     </span>
                 </div>
             {% endif %}
 
-            <div class="form-actions">
-                {% if pode_editar %}
-                <button type="submit" name="acao" value="salvar" class="btn btn--outline">
-                    <span class="material-symbols-rounded">save</span>
-                    Salvar análise
-                </button>
-                {% endif %}
-
+            <div class="encaminhamento">
                 {% if pode_liberar %}
-                <button type="submit" name="acao" value="concluir"
-                        class="btn btn--primary"
-                        {% if campos_faltantes %}disabled title="Preencha a análise primeiro."{% endif %}
-                        onclick="return confirm('Liberar este processo para assinatura?');">
-                    <span class="material-symbols-rounded">task_alt</span>
-                    Liberar para assinatura
-                </button>
+                <div class="encaminhamento__opcao">
+                    <div class="encaminhamento__texto">
+                        <div class="encaminhamento__titulo">Encaminhar para o Controlador</div>
+                        <div class="encaminhamento__hint">A análise está pronta. O processo segue para assinatura.</div>
+                    </div>
+                    <button type="submit" name="acao" value="concluir"
+                            class="btn btn--primary"
+                            {% if campos_faltantes %}disabled title="Preencha a análise primeiro."{% endif %}
+                            onclick="return confirm('Encaminhar este processo para o Controlador?');">
+                        <span class="material-symbols-rounded">draw</span>
+                        Encaminhar para o Controlador
+                    </button>
+                </div>
                 {% endif %}
-            </div>
 
-            {# itens 8 e 10: so o analista responsavel direciona #}
-            {% if pode_direcionar %}
-            <div class="form-grid form-grid--full" style="margin-top:1rem">
-                <div class="field">
-                    <label class="field__label" for="destinatario">
-                        {% if ja_direcionado %}Redirecionar assinatura para{% else %}Direcionar assinatura para outro analista{% endif %}
-                    </label>
-                    <select id="destinatario" name="destinatario" class="select">
+                {% if pode_direcionar %}
+                <div class="encaminhamento__opcao">
+                    <div class="encaminhamento__texto">
+                        <div class="encaminhamento__titulo">Encaminhar para outro analista</div>
+                        <div class="encaminhamento__hint">Quem analisou continua sendo você. O colega só encaminha ao Controlador.</div>
+                    </div>
+                    <select id="destinatario" name="destinatario" class="select" aria-label="Analista de destino">
                         <option value="">Selecione um analista…</option>
                         {% for a in analistas %}
                             <option value="{{ a.id }}"
@@ -213,24 +226,55 @@
                             </option>
                         {% endfor %}
                     </select>
-                    <span class="field__hint">
-                        A indisponibilidade do colega é informação, não
-                        impedimento. Quem analisou continua sendo você.
-                    </span>
+                    <button type="submit" name="acao" value="direcionar"
+                            class="btn btn--outline"
+                            {% if campos_faltantes %}disabled title="Preencha a análise primeiro."{% endif %}>
+                        <span class="material-symbols-rounded">forward_to_inbox</span>
+                        {% if ja_direcionado %}Reencaminhar{% else %}Encaminhar para outro analista{% endif %}
+                    </button>
                 </div>
+                {% endif %}
+
+                {% if pode_declinar %}
+                <div class="encaminhamento__opcao">
+                    <div class="encaminhamento__texto">
+                        <div class="encaminhamento__titulo">Encaminhar para fila de processos (sem análise)</div>
+                        <div class="encaminhamento__hint">O processo volta a ficar disponível, sem analista. A tentativa de análise é desfeita.</div>
+                    </div>
+                    <button type="submit" form="formFilaSemAnalise" class="btn btn--outline"
+                            onclick="return confirm('Devolver este processo à fila sem análise? Ele ficará disponível de novo.');">
+                        <span class="material-symbols-rounded">undo</span>
+                        Encaminhar para a fila
+                    </button>
+                </div>
+                {% endif %}
             </div>
-            <div class="form-actions">
-                <button type="submit" name="acao" value="direcionar"
-                        class="btn btn--outline"
-                        {% if campos_faltantes %}disabled title="Preencha a análise primeiro."{% endif %}>
-                    <span class="material-symbols-rounded">forward_to_inbox</span>
-                    {% if ja_direcionado %}Redirecionar{% else %}Direcionar para outro analista{% endif %}
-                </button>
-            </div>
-            {% endif %}
         </div>
         {% endif %}
     </form>
+
+    {% if pode_declinar and not pode_direcionar and not pode_liberar %}
+    <div class="form-section">
+        <div class="form-section__title">
+            <span class="material-symbols-rounded">send</span>
+            Encaminhamento
+        </div>
+        <div class="encaminhamento">
+            <div class="encaminhamento__opcao">
+                <div class="encaminhamento__texto">
+                    <div class="encaminhamento__titulo">Encaminhar para fila de processos (sem análise)</div>
+                    <div class="encaminhamento__hint">O processo volta a ficar disponível, sem analista. A tentativa de análise é desfeita.</div>
+                </div>
+                <button type="submit" form="formFilaSemAnalise" class="btn btn--outline"
+                        onclick="return confirm('Devolver este processo à fila sem análise? Ele ficará disponível de novo.');">
+                    <span class="material-symbols-rounded">undo</span>
+                    Encaminhar para a fila
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    </section>
 
     <section class="card" id="blocoPendencias">
         <div class="card__header">

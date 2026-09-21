@@ -54,6 +54,49 @@ class AssumirTest(BaseProcessoTestCase):
         self.assertNotEqual(p1.numero_relatorio, p2.numero_relatorio)
 
 
+class DeclinarAnaliseTest(BaseProcessoTestCase):
+
+    def test_analista_devolve_a_fila(self):
+        processo = self.processo_em_analise()
+        tramitacao.declinar_analise(processo.id, self.analista_lic, 'Assumi por engano')
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'DISPONIVEL')
+        self.assertIsNone(processo.analista_responsavel)
+        self.assertFalse(processo.observacao)
+        self.assertEqual(processo.status_analise, 'NAO_APLICAVEL')
+        self.assertTrue(EventoProcesso.objects.filter(
+            processo=processo, tipo='ANALISE_DECLINADA').exists())
+
+    def test_gestao_tambem_devolve(self):
+        processo = self.processo_em_analise()
+        tramitacao.declinar_analise(processo.id, self.gestao, 'Teste da Priscila')
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'DISPONIVEL')
+        self.assertIsNone(processo.analista_responsavel)
+
+    def test_outro_analista_e_protocolo_nao_declinam(self):
+        processo = self.processo_em_analise()
+        for usuario in (self.analista_lic2, self.protocolo):
+            with self.assertRaises(PermissionDenied):
+                tramitacao.declinar_analise(processo.id, usuario, 'Não')
+
+    def test_exige_motivo_e_so_em_analise(self):
+        processo = self.processo_em_analise()
+        with self.assertRaises(TransicaoInvalida):
+            tramitacao.declinar_analise(processo.id, self.analista_lic, '')
+        tramitacao.liberar_assinatura(processo.id, self.analista_lic)
+        with self.assertRaises(TransicaoInvalida):
+            tramitacao.declinar_analise(processo.id, self.analista_lic, 'Tarde demais')
+
+    def test_cancela_pendencias_abertas(self):
+        from processos_app.services import pendencias
+        processo = self.processo_em_analise()
+        p = pendencias.criar(processo.id, self.analista_lic, 'Tentativa de teste')
+        tramitacao.declinar_analise(processo.id, self.analista_lic, 'Desfazer teste')
+        p.refresh_from_db()
+        self.assertEqual(p.status, 'CANCELADA')
+
+
 class LiberacaoTest(BaseProcessoTestCase):
 
     def test_exige_analise_completa(self):

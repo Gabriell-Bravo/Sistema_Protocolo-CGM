@@ -63,12 +63,24 @@ def assumir(request, process_id):
 
 @login_required
 @require_POST
+def declinar_analise(request, process_id):
+    """Devolve o processo à fila como disponível."""
+    destino = 'gestao_processos' if perm.is_gestao(request.user) else 'area_analista'
+    erro, _ = _executar(
+        request, tramitacao.declinar_analise, destino,
+        process_id, request.user, request.POST.get('motivo'),
+        sucesso='Processo devolvido à fila, sem análise.')
+    return erro or redirect(destino)
+
+
+@login_required
+@require_POST
 def direcionar_assinatura(request, process_id):
     """itens 8 e 10: direcionar e redirecionar a assinatura."""
     erro, processo = _executar(
         request, tramitacao.direcionar_assinatura, 'area_analista',
         process_id, request.user, request.POST.get('destinatario'),
-        sucesso='Assinatura direcionada.')
+        sucesso='Processo encaminhado para outro analista.')
     if erro:
         return erro
     return redirect('analista_processo', process_id=processo.id)
@@ -81,7 +93,7 @@ def liberar_assinatura(request, process_id):
     erro, _ = _executar(
         request, tramitacao.liberar_assinatura, 'area_analista',
         process_id, request.user,
-        sucesso='Processo liberado para assinatura.')
+        sucesso='Processo encaminhado para o Controlador.')
     return erro or redirect('area_analista')
 
 
