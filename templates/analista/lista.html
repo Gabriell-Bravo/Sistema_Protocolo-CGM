@@ -2,40 +2,40 @@
 
 {% block title %}Análise de Processos{% endblock %}
 {% block page_title %}Fila de análise{% endblock %}
-{% block page_subtitle %}Assuma um processo disponível. Os demais analistas continuam vendo a fila.{% endblock %}
+{% block page_subtitle %}Aqui aparece o que está disponível, o que está com você e o que foi direcionado a você.{% endblock %}
 
 {% block content %}
 <div class="stack">
     <section class="stats">
-        <div class="stat stat--primary">
-            <span class="stat__icon"><span class="material-symbols-rounded">fact_check</span></span>
-            <div>
-                <div class="stat__value">{{ total_processos }}</div>
-                <div class="stat__label">Na fila</div>
-            </div>
-        </div>
-        <div class="stat stat--success">
+        <a class="stat stat--success stat--link" href="?filtro=disponiveis{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}">
             <span class="stat__icon"><span class="material-symbols-rounded">front_hand</span></span>
             <div>
                 <div class="stat__value">{{ total_disponiveis }}</div>
                 <div class="stat__label">Disponíveis</div>
             </div>
-        </div>
-        <div class="stat stat--violet">
+        </a>
+        <a class="stat stat--violet stat--link" href="?filtro=comigo{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}">
             <span class="stat__icon"><span class="material-symbols-rounded">person</span></span>
             <div>
                 <div class="stat__value">{{ total_comigo }}</div>
                 <div class="stat__label">Em análise por você</div>
             </div>
-        </div>
-        <div class="stat stat--danger">
+        </a>
+        <a class="stat stat--primary stat--link {% if filtro_atual == 'liberados' %}is-active{% endif %}"
+           href="?filtro=liberados{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}">
+            <span class="stat__icon"><span class="material-symbols-rounded">draw</span></span>
+            <div>
+                <div class="stat__value">{{ total_com_controlador }}</div>
+                <div class="stat__label">Com o Controlador</div>
+            </div>
+        </a>
+        <a class="stat stat--danger stat--link" href="?filtro=vencidos{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}">
             <span class="stat__icon"><span class="material-symbols-rounded">running_with_errors</span></span>
             <div>
                 <div class="stat__value">{{ total_atrasados }}</div>
                 <div class="stat__label">Prazo vencido</div>
             </div>
-        </div>
-        {# item 37: indicador de atendimentos indicados pela Gestão #}
+        </a>
         <a class="stat stat--warning stat--link" href="{% url 'meus_atendimentos' %}">
             <span class="stat__icon"><span class="material-symbols-rounded">assignment_turned_in</span></span>
             <div>
@@ -77,6 +77,13 @@
             {% endif %}
         </div>
     </section>
+
+    {% if filtro_atual == 'liberados' %}
+    <div class="alert alert--info">
+        <span class="material-symbols-rounded">info</span>
+        <span>Estes processos já foram encaminhados. A assinatura do Controlador é fora do sistema — aqui só o volume. Não há o que analisar.</span>
+    </div>
+    {% endif %}
 
     {% if mostra_licitacoes %}
         {% include "analista/_fila_grupo.html" with titulo="Licitações e Contratos" grupo_css="licitacoes" icone="gavel" processos=licitacoes mostrar_contratada=True modo_gestao=False pode_assumir=pode_assumir %}

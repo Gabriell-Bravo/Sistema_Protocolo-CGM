@@ -216,3 +216,40 @@ class AcoesHttpTest(BaseProcessoTestCase):
         self.assertEqual(processo.situacao_tramite, 'SAIDA_CONCLUIDA',
                          'verificar nome do campo do lote em views_tramitacao.registrar_saida')
         self.assertFalse(tramitacao.ativos().filter(id=processo.id).exists())
+
+
+@override_settings(**STATIC)
+class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
+
+    def test_processos_ativos_mostra_quem_analisa(self):
+        processo = self.processo_em_analise()
+        self.client.force_login(self.protocolo)
+        resposta = self.client.get(reverse('listar_processos'))
+        self.assertContains(resposta, 'Em análise por')
+        self.assertContains(resposta, processo.nome_analista)
+
+    def test_fila_padrao_esconde_o_que_esta_com_o_controlador(self):
+        disponivel = self.novo_processo(numero_processo='1001/2026')
+        comigo = self.processo_em_analise()
+        comigo.numero_processo = '1002/2026'
+        comigo.save(update_fields=['numero_processo'])
+        outro = self.processo_em_analise(analista=self.analista_lic2)
+        outro.numero_processo = '1003/2026'
+        outro.save(update_fields=['numero_processo'])
+        no_controlador = self.processo_em_analise()
+        no_controlador.numero_processo = '1004/2026'
+        no_controlador.save(update_fields=['numero_processo'])
+        tramitacao.liberar_assinatura(no_controlador.id, self.analista_lic)
+
+        self.client.force_login(self.analista_lic)
+        resposta = self.client.get(reverse('area_analista'))
+        self.assertEqual(resposta.context['total_com_controlador'], 1)
+        self.assertContains(resposta, 'Com o Controlador')
+        self.assertContains(resposta, '1001/2026')
+        self.assertContains(resposta, '1002/2026')
+        self.assertNotContains(resposta, '1003/2026')
+        self.assertNotContains(resposta, '1004/2026')
+
+        resposta = self.client.get(reverse('area_analista') + '?filtro=liberados')
+        self.assertContains(resposta, '1004/2026')
+        self.assertContains(resposta, 'A assinatura do Controlador é fora do sistema')

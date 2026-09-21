@@ -22,7 +22,7 @@ class Processo(models.Model):
         ('DISPONIVEL', 'Disponível para análise'),
         ('EM_ANALISE', 'Em análise'),
         ('ASSINATURA_DIRECIONADA', 'Direcionado para assinatura'),
-        ('AGUARDANDO_ASSINATURA', 'Liberado para assinatura'),
+        ('AGUARDANDO_ASSINATURA', 'Com o Controlador'),
         ('DISPONIVEL_RETIRADA', 'Disponível para retirada'),
         ('SAIDA_CONCLUIDA', 'Saída concluída'),
     ]
@@ -341,6 +341,20 @@ class Processo(models.Model):
                 or self.analista_responsavel.username
             )
         return self.tecnico or ''
+
+    @property
+    def situacao_exibicao(self):
+        """Situação com o nome de quem está analisando, quando houver."""
+        if self.situacao_tramite == 'EM_ANALISE':
+            nome = self.nome_analista
+            return f'Em análise por {nome}' if nome else 'Em análise'
+        if self.situacao_tramite == 'ASSINATURA_DIRECIONADA':
+            dest = self.nome_assinatura_direcionada
+            if dest:
+                return f'Direcionado para {dest}'
+        if self.situacao_tramite == 'AGUARDANDO_ASSINATURA':
+            return 'Com o Controlador'
+        return self.get_situacao_tramite_display()
 
     class Meta:
         db_table = 'processos'

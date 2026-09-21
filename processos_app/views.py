@@ -203,16 +203,21 @@ def anotar_situacao_fila(processos, user):
                 processo.pode_liberar = False
             processo.pode_assumir = False
             processo.eh_meu = processo.analista_responsavel_id == user.id
-        elif processo.situacao_tramite in ('AGUARDANDO_ASSINATURA',
-                                          'DISPONIVEL_RETIRADA'):
+        elif processo.situacao_tramite == 'AGUARDANDO_ASSINATURA':
+            processo.situacao_fila = 'assinatura'
+            processo.situacao_label = 'Com o Controlador'
+            processo.situacao_class = 'badge--primary'
+            processo.pode_assumir = False
+            processo.eh_meu = False
+            processo.pode_liberar = False
+        elif processo.situacao_tramite == 'DISPONIVEL_RETIRADA':
             processo.situacao_fila = 'assinatura'
             processo.situacao_label = processo.get_situacao_tramite_display()
             processo.situacao_class = 'badge--primary'
             processo.pode_assumir = False
             processo.eh_meu = False
             processo.pode_liberar = False
-        elif (processo.situacao_tramite == 'EM_ANALISE'
-              and processo.analista_responsavel_id):
+        elif processo.situacao_tramite == 'EM_ANALISE':
             if processo.analista_responsavel_id == user.id:
                 processo.situacao_fila = 'voce'
                 processo.situacao_label = 'Em análise por você'
@@ -222,9 +227,7 @@ def anotar_situacao_fila(processos, user):
                 processo.pode_liberar = False
             else:
                 processo.situacao_fila = 'outro'
-                processo.situacao_label = (
-                    f'Em análise por {processo.nome_analista}'
-                )
+                processo.situacao_label = processo.situacao_exibicao
                 processo.situacao_class = 'badge--other'
                 processo.pode_assumir = False
                 processo.eh_meu = False
@@ -1191,31 +1194,45 @@ CAMPOS_ANALISE = [
 
 
 # item 37: filtros da Minha Fila. Os da Gestão atendem aos cards do Dashboard.
+# A fila do analista parte do que ele pode trabalhar; "Com o Controlador"
+# fica no contador (e abre só se clicar no card).
 FILTROS_ANALISTA = [
-    ('todos', 'Todos'),
+    ('trabalho', 'Para trabalhar'),
     ('disponiveis', 'Disponíveis'),
     ('comigo', 'Comigo'),
     ('direcionados', 'Direcionados para mim'),
-    ('outros', 'Com outros'),
-    ('liberados', 'Liberados para assinatura'),
     ('vencidos', 'Vencidos'),
 ]
+FILTROS_EXTRAS_ANALISTA = {'liberados'}
 FILTROS_GESTAO = [
     ('todos', 'Todos'),
     ('disponiveis', 'Disponíveis'),
     ('em_analise', 'Em análise'),
     ('direcionados_gestao', 'Assinatura direcionada'),
-    ('liberados', 'Liberados para assinatura'),
+    ('liberados', 'Com o Controlador'),
     ('vencidos', 'Vencidos'),
     ('vence_hoje', 'Vencendo hoje'),
     ('urgentes', 'Urgentes'),
 ]
 
 
-def filtrar_fila(processos, filtro, usuario):
+def eh_trabalho_analista(processo, uid):
+    """O que o analista ainda tem o que fazer na fila."""
+    sit = processo.situacao_tramite
+    if sit == 'DISPONIVEL':
+        return True
+    if sit == 'EM_ANALISE' and processo.analista_responsavel_id == uid:
+        return True
+    if sit == 'ASSINATURA_DIRECIONADA' and processo.assinatura_direcionada_para_id == uid:
+        return True
+    return False
+
+
+def filtrar_fila(processos, filtro, usuario, vencidos_so_trabalho=False):
     """Aplica um filtro da fila sobre processos já anotados (prazo e situação)."""
     uid = usuario.id
     regras = {
+        'trabalho': lambda p: eh_trabalho_analista(p, uid),
         'disponiveis': lambda p: p.situacao_tramite == 'DISPONIVEL',
         'comigo': lambda p: p.situacao_tramite == 'EM_ANALISE' and p.analista_responsavel_id == uid,
         'direcionados': lambda p: (p.situacao_tramite == 'ASSINATURA_DIRECIONADA'
@@ -1226,7 +1243,10 @@ def filtrar_fila(processos, filtro, usuario):
         'em_analise': lambda p: p.situacao_tramite in ('EM_ANALISE', 'ASSINATURA_DIRECIONADA'),
         'direcionados_gestao': lambda p: p.situacao_tramite == 'ASSINATURA_DIRECIONADA',
         'liberados': lambda p: p.situacao_tramite == 'AGUARDANDO_ASSINATURA',
-        'vencidos': lambda p: p.prazo_status == 'atrasado',
+        'vencidos': lambda p: (
+            p.prazo_status == 'atrasado'
+            and (not vencidos_so_trabalho or eh_trabalho_analista(p, uid))
+        ),
         'vence_hoje': lambda p: p.prazo_status == 'hoje',
         'urgentes': lambda p: p.prioridade == 'URGENTE',
     }
@@ -1241,9 +1261,13 @@ def consultar_fila_grupos(request, opcoes_filtro=FILTROS_ANALISTA):
     `todos` é o conjunto sem filtro — base dos totais do topo da tela.
     """
     termo_pesquisa = request.GET.get('pesquisa', '').strip()
-    filtro = request.GET.get('filtro', 'todos')
-    if filtro not in dict(opcoes_filtro):
-        filtro = 'todos'
+    padrao = opcoes_filtro[0][0]
+    filtro = request.GET.get('filtro', padrao)
+    conhecidos = {chave for chave, _ in opcoes_filtro}
+    if padrao == 'trabalho':
+        conhecidos |= FILTROS_EXTRAS_ANALISTA
+    if filtro not in conhecidos:
+        filtro = padrao
 
     base_query = tramitacao.ativos().filter(
         genero__in=['LICITACOES_E_CONTRATOS', 'LIQUIDACOES'],
@@ -1268,9 +1292,12 @@ def consultar_fila_grupos(request, opcoes_filtro=FILTROS_ANALISTA):
     for processo in processos:
         prazos_service.anotar(processo, hoje)
 
-    contagens = [(chave, rotulo, len(filtrar_fila(processos, chave, request.user)))
+    vencidos_so_trabalho = padrao == 'trabalho'
+    contagens = [(chave, rotulo, len(filtrar_fila(
+        processos, chave, request.user, vencidos_so_trabalho)))
                  for chave, rotulo in opcoes_filtro]
-    filtrados = filtrar_fila(processos, filtro, request.user)
+    filtrados = filtrar_fila(
+        processos, filtro, request.user, vencidos_so_trabalho)
     licitacoes = [p for p in filtrados if p.genero == 'LICITACOES_E_CONTRATOS']
     liquidacoes = [p for p in filtrados if p.genero == 'LIQUIDACOES']
     return processos, licitacoes, liquidacoes, termo_pesquisa, filtro, contagens
@@ -1302,8 +1329,13 @@ def area_analista(request):
 
     total_disponiveis = sum(1 for p in processos if p.situacao_fila == 'disponivel')
     total_comigo = sum(1 for p in processos if p.situacao_fila == 'voce')
-    total_atrasados = sum(1 for p in processos if p.prazo_status == 'atrasado')
+    total_com_controlador = sum(
+        1 for p in processos if p.situacao_tramite == 'AGUARDANDO_ASSINATURA')
+    total_atrasados = sum(
+        1 for p in processos
+        if p.prazo_status == 'atrasado' and eh_trabalho_analista(p, request.user.id))
     total_atendimentos = svc_pendencias.total_atendimentos_indicados(request.user)
+    total_trabalho = sum(1 for p in processos if eh_trabalho_analista(p, request.user.id))
 
     return render(request, 'analista/lista.html', {
         'total_atendimentos': total_atendimentos,
@@ -1315,9 +1347,10 @@ def area_analista(request):
             request.user, 'LICITACOES_E_CONTRATOS'),
         'mostra_liquidacoes': bool(liquidacoes) or can_access_genero(
             request.user, 'LIQUIDACOES'),
-        'total_processos': len(processos),
+        'total_processos': total_trabalho,
         'total_disponiveis': total_disponiveis,
         'total_comigo': total_comigo,
+        'total_com_controlador': total_com_controlador,
         'total_atrasados': total_atrasados,
         'termo_pesquisa': termo_pesquisa,
         'modo_gestao': False,
@@ -1334,6 +1367,8 @@ def gestao_processos(request):
     total_disponiveis = sum(1 for p in processos if p.situacao_fila == 'disponivel')
     total_em_analise = sum(1 for p in processos
                            if p.situacao_tramite in ('EM_ANALISE', 'ASSINATURA_DIRECIONADA'))
+    total_com_controlador = sum(
+        1 for p in processos if p.situacao_tramite == 'AGUARDANDO_ASSINATURA')
     total_urgentes = sum(1 for p in processos if p.prioridade == 'URGENTE')
 
     return render(request, 'gestao/processos.html', {
@@ -1344,6 +1379,7 @@ def gestao_processos(request):
         'total_processos': len(processos),
         'total_disponiveis': total_disponiveis,
         'total_em_analise': total_em_analise,
+        'total_com_controlador': total_com_controlador,
         'total_urgentes': total_urgentes,
         'termo_pesquisa': termo_pesquisa,
         'modo_gestao': True,

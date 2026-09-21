@@ -179,6 +179,13 @@
                 if (modal) modal.classList.remove('is-open');
                 return;
             }
+            var opener = event.target.closest('[data-modal-open]');
+            if (opener) {
+                event.preventDefault();
+                var modalOpen = document.getElementById(opener.getAttribute('data-modal-open'));
+                if (modalOpen) modalOpen.classList.add('is-open');
+                return;
+            }
             if (event.target.classList && event.target.classList.contains('modal')) {
                 event.target.classList.remove('is-open');
             }

@@ -190,7 +190,7 @@
                         <td class="editable" data-field="hora_entrada">{{ processo.hora_entrada|time:"H:i" }}</td>
                         <td class="" data-field="data_saida" id="data_saida_{{ processo.id }}">{{ processo.data_saida|default:''|date:"Y-m-d" }}</td>
                         <td class="" data-field="hora_saida" id="hora_saida_{{ processo.id }}">{{ processo.hora_saida|default:''|time:"H:i" }}</td>
-                        <td><span class="badge">{{ processo.get_situacao_tramite_display }}</span></td>
+                        <td><span class="badge badge--situacao {% if processo.situacao_tramite == 'EM_ANALISE' %}badge--mine{% elif processo.situacao_tramite == 'AGUARDANDO_ASSINATURA' %}badge--primary{% endif %}">{{ processo.situacao_exibicao }}</span></td>
                         <td>
                             <span class="badge badge--dot {% if processo.prazo_status == 'atrasado' %}badge--danger{% elif processo.prazo_status == 'hoje' or processo.prazo_status == 'atencao' %}badge--warning{% elif processo.prazo_status == 'ok' %}badge--success{% endif %}">
                                 {{ processo.prazo_formatado }}

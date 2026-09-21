@@ -55,7 +55,7 @@ def cards(referencia=None):
         {'rotulo': 'Em análise', 'valor': por_situacao.get('EM_ANALISE', 0)
                                           + por_situacao.get('ASSINATURA_DIRECIONADA', 0),
          'icone': 'manage_accounts', 'cor': 'violet', 'url': _url('gestao_processos', 'filtro=em_analise')},
-        {'rotulo': 'Liberados para assinatura', 'valor': por_situacao.get('AGUARDANDO_ASSINATURA', 0),
+        {'rotulo': 'Com o Controlador', 'valor': por_situacao.get('AGUARDANDO_ASSINATURA', 0),
          'icone': 'draw', 'cor': 'primary', 'url': _url('gestao_liberados_assinatura')},
         {'rotulo': 'Disponíveis para retirada', 'valor': por_situacao.get('DISPONIVEL_RETIRADA', 0),
          'icone': 'assignment_return', 'cor': 'success',

@@ -15,6 +15,8 @@ class AssumirTest(BaseProcessoTestCase):
         processo.refresh_from_db()
         self.assertEqual(processo.situacao_tramite, 'EM_ANALISE')
         self.assertEqual(processo.analista_responsavel, self.analista_lic)
+        self.assertEqual(processo.situacao_exibicao,
+                         f'Em análise por {processo.nome_analista}')
 
     def test_segundo_analista_nao_assume(self):
         """Concorrência (item 39), em sequência — ver alerta no relatório."""

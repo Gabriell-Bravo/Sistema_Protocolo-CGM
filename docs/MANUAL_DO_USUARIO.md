@@ -77,9 +77,9 @@ A assinatura do Controlador **não** é feita no sistema: é no papel. O sistema
 | Situação | O que significa |
 |---|---|
 | Disponível para análise | Entrou e ainda ninguém assumiu |
-| Em análise | Um analista está com ele |
-| Direcionado para assinatura | Foi encaminhado para outro analista assinar/liberar |
-| Liberado para assinatura | Pronto para o Controlador assinar |
+| Em análise por [nome] | Um analista está com ele |
+| Direcionado para [nome] | Foi encaminhado para outro analista assinar/liberar |
+| Com o Controlador | Pronto para o Controlador assinar (no papel) |
 | Disponível para retirada | Já pode ser retirado pelo órgão |
 | Saída concluída | Já saiu da CGM |
 
@@ -115,7 +115,7 @@ Se a espécie ainda não existir no cadastro, use **Outros (espécie não cadast
 
 ### 3.2 Processos Ativos
 
-Aqui estão os processos **ainda na CGM** (sem saída).
+Aqui estão os processos **ainda na CGM** (sem saída). Na coluna **Situação**, se estiver em análise, aparece o nome de quem assumiu.
 
 Você pode:
 
@@ -171,9 +171,11 @@ Você **não** cadastra processo, **não** registra saída, **não** muda priori
 
 ### 4.1 Fila de análise
 
-Os cards no topo mostram quantos estão na fila, disponíveis, com você, com prazo vencido e com atendimento indicado.
+Os cards no topo mostram quantos estão **disponíveis**, **com você**, **com o Controlador**, com prazo vencido e com atendimento indicado.
 
-Filtros úteis: **Todos**, **Disponíveis**, **Comigo**, **Direcionados para mim**, **Com outros**, **Liberados para assinatura**, **Vencidos**.
+A lista padrão (**Para trabalhar**) traz só o que você ainda pode agir: disponíveis, os que estão com você e os direcionados a você. Processo já enviado ao Controlador **não** aparece nessa lista — só no número do card. Clique no card se quiser ver quais são; não há o que analisar neles.
+
+Filtros: **Para trabalhar**, **Disponíveis**, **Comigo**, **Direcionados para mim**, **Vencidos**.
 
 Na linha do processo:
 
@@ -196,21 +198,13 @@ Na linha do processo:
 
 Para **liberar para assinatura** ou **direcionar**, o sistema exige pelo menos: status da análise (não use “Não Aplicável”), número de despacho ou de relatório, e destino. Algumas espécies também exigem valor.
 
-**Encaminhar para o Controlador:** a análise está pronta e o processo segue para assinatura.
+**Encaminhar:** clique em **Encaminhar**. Abre a lista com três opções:
 
-**Encaminhar para outro analista:** escolha o colega. Quem analisou continua sendo você; o colega só encaminha ao Controlador. Se o colega estiver de férias ou em curso, isso aparece no seletor como **informação** — não impede o encaminhamento.
+- **Para o Controlador** — a análise está pronta e o processo segue para assinatura.
+- **Para outro analista** — escolha o colega. Quem analisou continua sendo você; o colega só encaminha ao Controlador.
+- **Para a fila (sem análise)** — o processo volta a ficar disponível, sem analista. Os dados da tentativa são limpos.
 
-Só dá para editar a análise enquanto o processo está **Em análise** e você é o responsável.
-
-### 4.3 Encaminhar para a fila (sem análise)
-
-Se assumiu por engano ou a análise não vai seguir, use **Encaminhar para fila de processos (sem análise)**.
-
-O processo volta a **Disponível para análise**, sem analista. Os dados da tentativa são limpos. Pendências abertas dessa tentativa são canceladas.
-
-Não dá para fazer isso depois de encaminhar ao Controlador.
-
-A Gestão também pode devolver à fila se o processo ficou preso com alguém.
+As duas primeiras só ligam com a análise preenchida.
 
 ### 4.4 Pendências
 
@@ -240,7 +234,7 @@ Menu próprio com o que a Gestão já sinalizou. Dá para **Abrir processo**, **
 2. **Assuma** um processo disponível (do seu grupo).
 3. Preencha a análise e **Salvar análise**.
 4. Se faltar algo, **Adicionar** pendência.
-5. Quando estiver completo: **Encaminhar para o Controlador** (ou para outro analista).
+5. Quando estiver completo: **Encaminhar** e escolha o destino.
 6. Olhe **Atendimentos indicados** no começo do dia.
 
 ---
@@ -263,7 +257,7 @@ Dá para filtrar por período, grupo, analista, secretaria e espécie. Há tamb�
 
 ### 5.2 Gestão de Processos
 
-Fila completa dos dois grupos. Use para ver o estoque e **alterar a prioridade** no seletor da linha (grava na hora).
+Fila completa dos dois grupos. Use para ver o estoque e **alterar a prioridade** no seletor da linha (grava na hora). O card **Com o Controlador** mostra quantos já foram encaminhados para assinatura.
 
 A ação da linha é **Ver** — não existe **Assumir** para a Gestão.
 
