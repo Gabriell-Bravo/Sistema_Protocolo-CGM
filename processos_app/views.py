@@ -428,12 +428,8 @@ def listar_processos(request):
     pode_saida = perm.pode_registrar_saida(request.user)
     for processo in processos:
         prazos_service.anotar(processo, hoje)
-        # Saída: fluxo normal só a partir de "Disponível para retirada"
-        # (item 15); acervo anterior à nova tramitação tem via de transição.
-        processo.pode_registrar_saida = pode_saida and (
-            processo.situacao_tramite == 'DISPONIVEL_RETIRADA'
-            or tramitacao.eh_legado(processo))
-        processo.saida_legado = processo.situacao_tramite != 'DISPONIVEL_RETIRADA'
+        processo.pode_registrar_saida = (
+            pode_saida and tramitacao.pode_saida_direta(processo))
 
     all_generos = [g for g in Processo.objects.values_list('genero', flat=True)
                    .distinct().order_by('genero') if can_access_genero(request.user, g)]
@@ -1001,21 +997,16 @@ def get_process_by_number(request, numero_processo):
 def marcar_saida_processo(request, process_id):
     """Botão de saída da lista de ativos.
 
-    CORREÇÃO (item 15): a versão anterior gravava SAIDA_CONCLUIDA a partir
-    de QUALQUER situação, pulando análise, assinatura e retirada. Agora:
-      - fluxo normal: só "Disponível para retirada" (services.tramitacao);
-      - acervo anterior à nova tramitação: via de transição própria,
-        registrada como tal no histórico (tramitacao.registrar_saida_legado).
+    O Protocolo registra a saída de qualquer processo ainda na CGM, sem
+    exigir análise, assinatura ou disponibilizar para retirada. A
+    tramitação completa continua disponível para quando a casa usar.
     """
-    processo = get_object_or_404(Processo, id=process_id)
+    get_object_or_404(Processo, id=process_id)
     try:
-        if processo.situacao_tramite == 'DISPONIVEL_RETIRADA':
-            tramitacao.registrar_saida([processo.id], request.user)
-        else:
-            tramitacao.registrar_saida_legado(processo.id, request.user)
+        tramitacao.registrar_saida_direta(process_id, request.user)
     except Exception as exc:
         return _erro_json(exc)
-    processo.refresh_from_db()
+    processo = Processo.objects.get(id=process_id)
     return JsonResponse({
         "success": True,
         "message": "Saída registrada.",

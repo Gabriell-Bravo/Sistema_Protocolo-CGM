@@ -91,6 +91,8 @@ A assinatura do Controlador **não** é feita no sistema: é no papel. O sistema
 
 O Protocolo registra a **entrada**, acompanha o que está na casa e registra a **saída**.
 
+Enquanto a análise e a assinatura ainda não estiverem organizadas no dia a dia, **não precisa esperar essas etapas**. Em **Processos Ativos**, o botão de saída (ícone de porta) registra a saída na hora.
+
 **Menu:** Novo Processo · Processos Ativos · Retirada · Finalizados · Alterar Senha · Sair
 
 ### 3.1 Cadastrar um processo novo
@@ -122,13 +124,18 @@ Você pode:
 - Buscar por número, secretaria, objeto, contratada etc.
 - Filtrar por prioridade, situação, grupo e espécie.
 - **Editar** dados de protocolo (lápis): número, volume, secretaria, entrada, espécie, objeto, contratada, recorrente.
+- **Registrar saída** (ícone de porta): o processo sai da CGM na hora, mesmo que ainda não tenha passado por análise.
 - Abrir o **Histórico** (quantas vezes o processo já passou pela CGM).
 
 Você **não** cancela processo, **não** assume análise e **não** muda prioridade.
 
 ### 3.3 Retirada
 
-Use esta tela no fim da passagem.
+Há duas formas de registrar a saída.
+
+**Do dia a dia (sem esperar análise)** — em **Processos Ativos**, clique no botão de saída (ícone de porta) na linha do processo. Confirme. Pronto.
+
+**Quando a tramitação completa estiver em uso**
 
 **Passo 1 — Depois que o Controlador assinou (no papel)**
 
@@ -140,7 +147,7 @@ Na lista **Aguardando assinatura do Controlador**, clique em **Disponibilizar pa
 2. Confira o **destino**. Se estiver errado, clique em **Alterar destino**, informe o novo destino e quem autorizou.
 3. Clique em **Registrar saída**.
 
-A saída é em lote: ou registra todos os marcados, ou não registra nenhum.
+A saída em lote: ou registra todos os marcados, ou não registra nenhum.
 
 ### 3.4 Finalizados
 
@@ -152,9 +159,8 @@ Alguns processos pedem **monitoramento** depois da saída (pendente, atrasado, c
 
 1. Chegou processo → **Novo Processo** → **Salvar Processo**.
 2. Acompanhar em **Processos Ativos**.
-3. Controlador assinou → **Retirada** → **Disponibilizar para retirada**.
-4. Órgão retirou → marcar → **Registrar saída**.
-5. Se precisar de planilha → **Finalizados** → **Exportar Excel**.
+3. O processo saiu → em **Processos Ativos**, botão de saída (ícone de porta).
+4. Se precisar de planilha → **Finalizados** → **Exportar Excel**.
 
 ---
 
@@ -343,6 +349,9 @@ Não. Cada analista só vê o próprio grupo. A Gestão vê os dois.
 
 **Cadastrei a pendência. E agora?**  
 A Gestão faz a diligência fora do sistema e clica em **Indicar atendimento**. Depois o analista confirma se resolveu.
+
+**O processo precisa ser analisado para eu dar saída?**  
+Não. Em **Processos Ativos**, o Protocolo registra a saída na hora. Análise e assinatura são etapas extras, para quando a casa estiver organizada.
 
 **Onde assino o despacho no sistema?**  
 Em lugar nenhum. A assinatura do Controlador é no papel. No sistema, o analista **encaminha para o Controlador** e a Gestão usa a tela **Para assinar** para saber o que recolher.

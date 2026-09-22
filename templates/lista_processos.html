@@ -239,7 +239,7 @@
                                 {% endif %}
                                 {% if processo.pode_registrar_saida %}
                                     <button type="button" class="icon-btn icon-btn--warning"
-                                            title="{% if processo.saida_legado %}Registrar saída (processo anterior à nova tramitação){% else %}Registrar saída{% endif %}"
+                                            title="Registrar saída"
                                             onclick="marcarSaida('{{ processo.id }}')">
                                         <span class="material-symbols-rounded">logout</span>
                                     </button>

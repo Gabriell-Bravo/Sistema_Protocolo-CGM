@@ -22,6 +22,10 @@ Fluxo com direcionamento
     -> AGUARDANDO_ASSINATURA -> DISPONIVEL_RETIRADA -> SAIDA_CONCLUIDA
 
 Não existe estado ASSINADO: a assinatura do Controlador é física (item 6).
+
+Enquanto a casa não usa a tramitação completa no dia a dia, o Protocolo
+pode registrar a saída de qualquer processo ainda na CGM
+(`registrar_saida_direta`), sem passar por análise nem assinatura.
 """
 
 from django.contrib.auth.models import User
@@ -627,27 +631,16 @@ def eh_legado(processo):
     return not tem_evento
 
 
-@transaction.atomic
-def registrar_saida_legado(processo_id, usuario):
-    """Saída direta de processo do acervo anterior à nova tramitação.
+def pode_saida_direta(processo):
+    """O Protocolo pode dar saída neste processo agora, sem as etapas do meio."""
+    return (
+        not processo.esta_cancelado
+        and processo.data_saida is None
+        and processo.situacao_tramite in Processo.SITUACOES_ATIVAS
+    )
 
-    ATENÇÃO — regra de TRANSIÇÃO. Os processos que já estavam na CGM foram
-    analisados fora do sistema; exigir que passem por assumir, liberar e
-    disponibilizar só para poderem sair criaria registros fictícios. Aqui o
-    Protocolo registra a saída como antes, com evento próprio marcado como
-    legado. Processo novo NÃO usa este caminho. Remover esta função quando o
-    acervo antigo tiver saído (consultar `sanear_dados`).
-    """
-    processo = _travar(processo_id)
-    perm.assert_permissao(perm.pode_registrar_saida(usuario),
-                          'Somente o Protocolo pode registrar saída.')
-    if processo.esta_cancelado:
-        raise TransicaoInvalida('Processo cancelado não recebe saída.')
-    if not eh_legado(processo):
-        raise TransicaoInvalida(
-            'Este processo segue a nova tramitação: a saída só é registrada '
-            'depois de "Disponível para retirada".')
 
+def _gravar_saida(processo, usuario, descricao, dados_evento):
     agora = timezone.now()
     local = timezone.localtime(agora)
     processo.situacao_tramite = 'SAIDA_CONCLUIDA'
@@ -657,13 +650,57 @@ def registrar_saida_legado(processo_id, usuario):
     processo.hora_saida = local.time().replace(microsecond=0)
     processo.save(update_fields=['situacao_tramite', 'saida_concluida_em',
                                  'saida_concluida_por', 'data_saida', 'hora_saida'])
-    registrar_evento(
-        processo, 'SAIDA_CONCLUIDA', usuario,
-        descricao=('Saída registrada pelo Protocolo (processo anterior à '
-                   'nova tramitação).'),
-        legado=True, destino=processo.destino)
-    registrar_diff(processo, 'data_saida', '', processo.data_saida.strftime('%Y-%m-%d'), usuario)
+    registrar_evento(processo, 'SAIDA_CONCLUIDA', usuario,
+                     descricao=descricao, **dados_evento)
+    registrar_diff(processo, 'data_saida', '',
+                   processo.data_saida.strftime('%Y-%m-%d'), usuario)
     return processo
+
+
+@transaction.atomic
+def registrar_saida_direta(processo_id, usuario):
+    """Saída pelo Protocolo de qualquer processo ainda na CGM.
+
+    A tramitação completa (assumir, encaminhar, disponibilizar) continua
+    existindo. Esta via existe para a casa conseguir registrar entrada e
+    saída sem estar organizada nas etapas do meio.
+    """
+    processo = _travar(processo_id)
+    perm.assert_permissao(perm.pode_registrar_saida(usuario),
+                          'Somente o Protocolo pode registrar saída.')
+    if processo.esta_cancelado:
+        raise TransicaoInvalida('Processo cancelado não recebe saída.')
+    if not pode_saida_direta(processo):
+        raise TransicaoInvalida(
+            'Este processo já saiu ou não está mais na CGM.')
+
+    situacao_anterior = processo.get_situacao_tramite_display()
+    codigo_anterior = processo.situacao_tramite
+    legado = eh_legado(processo)
+    if legado:
+        descricao = ('Saída registrada pelo Protocolo (processo anterior à '
+                     'nova tramitação).')
+        dados = {'legado': True, 'destino': processo.destino}
+    elif codigo_anterior == 'DISPONIVEL_RETIRADA':
+        descricao = f'Saída registrada por {perm.nome_usuario(usuario)}.'
+        dados = {'destino': processo.destino}
+    else:
+        descricao = (
+            f'Saída registrada pelo Protocolo, sem passar pelas etapas de '
+            f'análise. Situação anterior: {situacao_anterior}.'
+        )
+        dados = {
+            'saida_direta': True,
+            'situacao_anterior': codigo_anterior,
+            'destino': processo.destino,
+        }
+    return _gravar_saida(processo, usuario, descricao, dados)
+
+
+@transaction.atomic
+def registrar_saida_legado(processo_id, usuario):
+    """Compatível com o acervo antigo; usa a saída direta do Protocolo."""
+    return registrar_saida_direta(processo_id, usuario)
 
 
 # --------------------------------------------------------------------------

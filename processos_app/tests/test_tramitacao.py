@@ -228,11 +228,19 @@ class LegadoTest(BaseProcessoTestCase):
         evento = EventoProcesso.objects.get(processo=processo, tipo='SAIDA_CONCLUIDA')
         self.assertTrue(evento.dados.get('legado'))
 
-    def test_processo_novo_nao_usa_via_legado(self):
+    def test_protocolo_da_saida_de_processo_novo_sem_analise(self):
         processo = self.novo_processo()
         self.assertFalse(tramitacao.eh_legado(processo))
-        with self.assertRaises(TransicaoInvalida):
-            tramitacao.registrar_saida_legado(processo.id, self.protocolo)
+        tramitacao.registrar_saida_direta(processo.id, self.protocolo)
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'SAIDA_CONCLUIDA')
+        evento = EventoProcesso.objects.get(processo=processo, tipo='SAIDA_CONCLUIDA')
+        self.assertTrue(evento.dados.get('saida_direta'))
+
+    def test_gestao_nao_da_saida_direta(self):
+        processo = self.novo_processo()
+        with self.assertRaises(PermissionDenied):
+            tramitacao.registrar_saida_direta(processo.id, self.gestao)
 
 
 class DestinoPrioridadeCancelamentoTest(BaseProcessoTestCase):

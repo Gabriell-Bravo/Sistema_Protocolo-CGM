@@ -129,13 +129,14 @@ class AcoesHttpTest(BaseProcessoTestCase):
         processo.refresh_from_db()
         self.assertIsNotNone(processo.cancelado_em)
 
-    def test_saida_pelo_botao_so_no_estado_certo(self):
-        processo = self.processo_em_analise()
+    def test_saida_pelo_botao_funciona_sem_as_etapas_do_meio(self):
+        processo = self.novo_processo()
         self.client.force_login(self.protocolo)
         resposta = self.client.post(reverse('marcar_saida_processo', args=[processo.id]))
-        self.assertEqual(resposta.status_code, 400)
+        self.assertEqual(resposta.status_code, 200, resposta.content)
         processo.refresh_from_db()
-        self.assertEqual(processo.situacao_tramite, 'EM_ANALISE')
+        self.assertEqual(processo.situacao_tramite, 'SAIDA_CONCLUIDA')
+        self.assertIsNotNone(processo.data_saida)
 
     def test_gestao_nao_pratica_ato_na_tela_do_processo(self):
         processo = self.novo_processo()
