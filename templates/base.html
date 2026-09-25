@@ -144,6 +144,14 @@
                 </a>
             {% endif %}
 
+            <div class="sidebar__group-label">Ajuda</div>
+            <a href="{% url 'manual_usuario' %}"
+               class="nav-item {% if nav == 'manual_usuario' %}is-active{% endif %}"
+               title="Guia de uso">
+                <span class="material-symbols-rounded">menu_book</span>
+                <span class="nav-item__label">Guia de uso</span>
+            </a>
+
             <div class="sidebar__group-label">Conta</div>
             <a href="{% url 'password_change' %}"
                class="nav-item {% if nav == 'password_change' or nav == 'password_change_done' %}is-active{% endif %}"

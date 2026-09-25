@@ -1,12 +1,16 @@
 # processos_app/urls.py (Updated)
 
+from django.contrib.auth.decorators import login_required
 from django.urls import path
+from django.views.generic import TemplateView
 from . import views
 from . import views_gestao as gest
 from . import views_pendencias as pend
 from . import views_tramitacao as tram
 
 urlpatterns = [
+    path('manual/', login_required(TemplateView.as_view(
+        template_name='manual/index.html')), name='manual_usuario'),
     path('', views.inicio, name='index'),
     path('cadastrar', views.cadastrar_processo, name='cadastrar_processo'),
     path('salvar', views.salvar_processo, name='salvar_processo'),
