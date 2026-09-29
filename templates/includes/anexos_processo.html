@@ -8,23 +8,33 @@
     {% if pode_anexar %}
     <form method="post" action="{% url 'anexar_arquivo' processo.id %}" enctype="multipart/form-data" class="anexo-form">
         {% csrf_token %}
-        <input type="file" name="arquivos" multiple required
-               aria-label="Arquivos para anexar">
-        <button type="submit" class="btn btn--primary">
-            <span class="material-symbols-rounded">attach_file</span>
-            Anexar arquivos
-        </button>
-        <span class="field__hint">PDF, Word, Excel, imagem ou texto, até 15 MB cada. Análise, pendências e encaminhamento continuam disponíveis e não são obrigatórios.</span>
+        <div class="anexo-form__linha">
+            <label class="anexo-picker">
+                <input type="file" name="arquivos" class="anexo-picker__input" multiple required
+                       aria-label="Arquivos para anexar">
+                <span class="btn btn--outline">
+                    <span class="material-symbols-rounded">folder_open</span>
+                    Escolher arquivos
+                </span>
+                <span class="anexo-picker__rotulo" data-vazio="Nenhum arquivo escolhido">Nenhum arquivo escolhido</span>
+            </label>
+            <button type="submit" class="btn btn--primary">
+                <span class="material-symbols-rounded">attach_file</span>
+                Anexar
+            </button>
+        </div>
+        <p class="anexo-form__dica">PDF, Word, Excel, imagem ou texto. Até 15 MB cada. Análise, pendências e encaminhamento continuam disponíveis e não são obrigatórios.</p>
     </form>
     {% endif %}
 
     {% if anexos %}
-    <ul class="pendencia-list">
+    <ul class="anexo-lista">
         {% for anexo in anexos %}
-        <li class="pendencia-item">
-            <div>
-                <a href="{% url 'baixar_anexo' anexo.id %}">{{ anexo.nome_original }}</a>
-                <div class="pendencia-item__meta">
+        <li class="anexo-item">
+            <span class="material-symbols-rounded anexo-item__icone">draft</span>
+            <div class="anexo-item__corpo">
+                <a class="anexo-item__nome" href="{% url 'baixar_anexo' anexo.id %}">{{ anexo.nome_original }}</a>
+                <div class="anexo-item__meta">
                     {{ anexo.tamanho_legivel }}
                     · {{ anexo.enviado_por.get_full_name|default:anexo.enviado_por.username|default:"—" }}
                     · {{ anexo.enviado_em|date:"d/m/Y H:i" }}

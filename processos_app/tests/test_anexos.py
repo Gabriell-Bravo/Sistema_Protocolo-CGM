@@ -60,14 +60,14 @@ class AnexoProcessoTest(BaseProcessoTestCase):
 
         self.client.force_login(self.analista_lic)
         pagina = self.client.get(reverse('analista_processo', args=[self.processo.id]))
-        self.assertContains(pagina, 'Anexar arquivos')
+        self.assertContains(pagina, 'Escolher arquivos')
         self.assertContains(pagina, 'parecer.pdf')
         self.assertContains(pagina, 'não são obrigatórios')
 
         self.client.force_login(self.gestao)
         consulta = self.client.get(reverse('analista_processo', args=[self.processo.id]))
         self.assertContains(consulta, 'parecer.pdf')
-        self.assertNotContains(consulta, 'Anexar arquivos')
+        self.assertNotContains(consulta, 'Escolher arquivos')
 
         for usuario in (self.gestao, self.protocolo, self.analista_lic2):
             self.client.force_login(usuario)
@@ -78,7 +78,7 @@ class AnexoProcessoTest(BaseProcessoTestCase):
         self.client.force_login(self.protocolo)
         historico = self.client.get(reverse('ver_historico_processo', args=[self.processo.id]))
         self.assertContains(historico, 'parecer.pdf')
-        self.assertNotContains(historico, 'Anexar arquivos')
+        self.assertNotContains(historico, 'Escolher arquivos')
 
     def test_liquidacao_nao_anexa_e_outro_grupo_nao_baixa(self):
         resposta = self._post_anexo(self.analista_liq, self.processo, _pdf())
@@ -91,7 +91,7 @@ class AnexoProcessoTest(BaseProcessoTestCase):
 
         self.client.force_login(self.analista_liq)
         tela = self.client.get(reverse('analista_processo', args=[self.liquidacao.id]))
-        self.assertNotContains(tela, 'Anexar arquivos')
+        self.assertNotContains(tela, 'Escolher arquivos')
 
         self._post_anexo(self.analista_lic, self.processo, _pdf())
         anexo = AnexoProcesso.objects.get()

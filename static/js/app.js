@@ -274,6 +274,23 @@
         return true;
     };
 
+    function initAnexos() {
+        var inputs = document.querySelectorAll('.anexo-picker__input');
+        for (var i = 0; i < inputs.length; i++) {
+            inputs[i].addEventListener('change', function () {
+                var rotulo = this.parentNode.querySelector('.anexo-picker__rotulo');
+                if (!rotulo) return;
+                var nomes = [];
+                for (var j = 0; j < this.files.length; j++) {
+                    nomes.push(this.files[j].name);
+                }
+                rotulo.textContent = nomes.length
+                    ? nomes.join(', ')
+                    : (rotulo.getAttribute('data-vazio') || 'Nenhum arquivo escolhido');
+            });
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         initTheme();
         initSidebar();
@@ -281,5 +298,6 @@
         initFilters();
         initColumnPickers();
         initModals();
+        initAnexos();
     });
 })();
