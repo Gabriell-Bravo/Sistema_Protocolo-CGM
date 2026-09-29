@@ -205,7 +205,7 @@
                 </thead>
                 <tbody>
                     {% for processo in processos %}
-                    <tr data-id="{{ processo.id }}">
+                    <tr data-id="{{ processo.id }}" class="{{ processo.prioridade_linha_class }}">
                         <td class="editable col-sticky" data-field="numero_processo">{{ processo.numero_processo }}</td>
                         <td class="editable" data-field="volume">{{ processo.volume|default:'' }}</td>
                         <td class="editable" data-field="secretaria">{{ processo.secretaria }}</td>

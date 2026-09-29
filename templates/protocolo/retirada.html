@@ -25,7 +25,7 @@
             </thead>
             <tbody>
                 {% for processo in aguardando_assinatura %}
-                <tr>
+                <tr class="{{ processo.prioridade_linha_class }}">
                     <td>{{ processo.numero_processo }}</td>
                     <td>{{ processo.volume }}</td>
                     <td>{{ processo.contratada|default:"—" }}</td>
@@ -72,7 +72,7 @@
                 </thead>
                 <tbody>
                     {% for processo in disponiveis %}
-                    <tr>
+                    <tr class="{{ processo.prioridade_linha_class }}">
                         <td>
                             <input type="checkbox" name="processos"
                                    value="{{ processo.id }}" class="chk-processo">

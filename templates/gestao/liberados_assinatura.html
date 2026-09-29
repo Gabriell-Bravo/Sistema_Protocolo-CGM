@@ -21,7 +21,7 @@
             </thead>
             <tbody>
                 {% for processo in processos %}
-                <tr>
+                <tr class="{{ processo.prioridade_linha_class }}">
                     <td>{{ processo.numero_processo }}</td>
                     <td>{{ processo.secretaria }}</td>
                     <td>{{ processo.volume }}</td>

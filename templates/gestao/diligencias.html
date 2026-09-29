@@ -43,7 +43,7 @@
                 </thead>
                 <tbody>
                     {% for pendencia in pendencias %}
-                    <tr>
+                    <tr class="{{ pendencia.processo.prioridade_linha_class }}">
                         <td><strong>{{ pendencia.processo.numero_processo }}</strong></td>
                         <td>{{ pendencia.processo.secretaria }}</td>
                         <td class="cell-wrap">{{ pendencia.descricao }}</td>

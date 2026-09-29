@@ -248,6 +248,17 @@ def pode_consultar_processo(user, processo):
     return is_gestao(user) or (is_analista(user) and pode_ver_grupo(user, processo.genero))
 
 
+def pode_anexar_arquivo(user, processo):
+    """Anexar arquivo: analista de Licitações, no processo desse grupo.
+
+    Não exige assumir, preencher análise, pendência ou encaminhamento.
+    """
+    if not user or not user.is_active or processo.esta_cancelado:
+        return False
+    return (get_papel(user) == ANALISTA_LICITACOES
+            and processo.grupo == GRUPO_LICITACOES)
+
+
 # --------------------------------------------------------------------------
 # Tela inicial por papel (item 5)
 # --------------------------------------------------------------------------

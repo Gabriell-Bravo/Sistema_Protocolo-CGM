@@ -86,6 +86,8 @@
         </form>
     {% endif %}
 
+    {% include "includes/anexos_processo.html" %}
+
     <section class="card">
     {% if pode_declinar %}
     <form id="formFilaSemAnalise" method="post" action="{% url 'tram_declinar_analise' processo.id %}" hidden>
@@ -100,6 +102,9 @@
                 <span class="material-symbols-rounded">edit_note</span>
                 {% if eh_liquidacao %}Informações da liquidação{% else %}Alimentar análise{% endif %}
             </div>
+            {% if eh_licitacao %}
+            <p class="field__hint" style="margin:-6px 0 14px;">Opcional para este grupo. O registro principal é o arquivo anexado acima.</p>
+            {% endif %}
             <div class="form-grid form-grid--full">
                 {% if eh_liquidacao %}
                 <div class="field">

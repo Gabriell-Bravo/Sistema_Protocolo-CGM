@@ -24,7 +24,7 @@
             </thead>
             <tbody>
                 {% for processo in processos %}
-                <tr class="tr-situacao-{{ processo.situacao_fila }}">
+                <tr class="tr-situacao-{{ processo.situacao_fila }} {{ processo.prioridade_linha_class }}">
                     <td>
                         {% if modo_gestao %}
                             <form method="post" action="{% url 'gestao_alterar_prioridade' processo.id %}" class="prio-form">

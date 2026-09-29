@@ -298,6 +298,17 @@ class Processo(models.Model):
         return ''
 
     @property
+    def prioridade_linha_class(self):
+        """Cor da linha na lista: verde (normal), amarelo (prioritário), vermelho (urgente)."""
+        if self.prioridade == 'URGENTE':
+            return 'tr-prio-urgente'
+        if self.prioridade in ('PRIORITARIO', 'SIM'):
+            return 'tr-prio-prioritario'
+        if self.prioridade in ('NORMAL', 'NAO'):
+            return 'tr-prio-normal'
+        return ''
+
+    @property
     def grupo(self):
         """item 21: o grupo vem da espécie cadastrada. O texto `genero` é o
         valor legado, usado enquanto a espécie não estiver vinculada."""
@@ -535,6 +546,8 @@ class EventoProcesso(models.Model):
         ('SAIDA_CONCLUIDA', 'Saída concluída'),
         ('PRIORIDADE_ALTERADA', 'Prioridade alterada'),
         ('PROCESSO_CANCELADO', 'Processo cancelado'),
+        ('ARQUIVO_ANEXADO', 'Arquivo anexado'),
+        ('ARQUIVO_REMOVIDO', 'Arquivo removido'),
     ]
 
     processo = models.ForeignKey(
@@ -564,6 +577,54 @@ class EventoProcesso(models.Model):
         ordering = ['-criado_em', '-id']
         verbose_name = "Evento do Processo"
         verbose_name_plural = "Eventos dos Processos"
+
+
+def _caminho_anexo(instance, filename):
+    """Nome no disco sem o caminho enviado pelo navegador."""
+    import uuid
+    from pathlib import Path
+    extensao = Path(filename or '').suffix.lower()[:10]
+    return f'anexos/{instance.processo_id}/{uuid.uuid4().hex}{extensao}'
+
+
+class AnexoProcesso(models.Model):
+    """Arquivo anexado pelo analista de Licitações e Contratos.
+
+    O arquivo não substitui a análise: ela continua disponível e opcional.
+    Quem pode ver o processo baixa o arquivo por uma rota autenticada.
+    """
+
+    processo = models.ForeignKey(
+        Processo, on_delete=models.CASCADE, related_name='anexos',
+        verbose_name="Processo")
+    arquivo = models.FileField(
+        upload_to=_caminho_anexo, verbose_name="Arquivo")
+    nome_original = models.CharField(
+        max_length=255, verbose_name="Nome original")
+    tamanho = models.PositiveIntegerField(default=0, verbose_name="Tamanho (bytes)")
+    enviado_por = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='anexos_enviados', verbose_name="Enviado por")
+    enviado_em = models.DateTimeField(
+        default=timezone.now, verbose_name="Enviado em")
+
+    def __str__(self):
+        return self.nome_original
+
+    @property
+    def tamanho_legivel(self):
+        n = self.tamanho or 0
+        if n < 1024:
+            return f'{n} B'
+        if n < 1024 * 1024:
+            return f'{n / 1024:.0f} KB'
+        return f'{n / (1024 * 1024):.1f} MB'
+
+    class Meta:
+        db_table = 'anexos_processo'
+        ordering = ['-enviado_em', '-id']
+        verbose_name = "Anexo do Processo"
+        verbose_name_plural = "Anexos do Processo"
 
 
 class EventoPendencia(models.Model):

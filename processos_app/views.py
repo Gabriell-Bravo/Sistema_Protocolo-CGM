@@ -614,6 +614,10 @@ def ver_historico_processo(request, process_id):
         'eventos': processo.eventos.select_related('usuario').all(),
         # item 50: tempos do fluxo deste processo, calculados dos carimbos
         'tempos': indicadores.tempos_do_processo(processo),
+        'processo': processo,
+        'anexos': processo.anexos.select_related('enviado_por'),
+        'eh_licitacao': processo.grupo == 'LICITACOES_E_CONTRATOS',
+        'pode_anexar': False,
     })
 
 
@@ -1534,6 +1538,9 @@ def analista_processo(request, process_id):
         'passagens': montar_passagens(processo),
         'pode_editar': pode_editar,
         'eh_liquidacao': processo.genero == 'LIQUIDACOES',
+        'eh_licitacao': processo.grupo == 'LICITACOES_E_CONTRATOS',
+        'anexos': processo.anexos.select_related('enviado_por'),
+        'pode_anexar': perm.pode_anexar_arquivo(request.user, processo),
         'pode_direcionar': pode_direcionar,
         'pode_liberar': pode_liberar,
         'assinatura_para_mim': assinatura_para_mim,

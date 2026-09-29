@@ -4,6 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.urls import path
 from django.views.generic import TemplateView
 from . import views
+from . import views_anexos as anexos
 from . import views_gestao as gest
 from . import views_pendencias as pend
 from . import views_tramitacao as tram
@@ -44,6 +45,12 @@ urlpatterns = [
          views.analista_processo, name='analista_processo'),
     path('analista/processo/<int:process_id>/assumir/',
          views.assumir_processo, name='assumir_processo'),
+    path('analista/processo/<int:process_id>/anexos/',
+         anexos.anexar_arquivo, name='anexar_arquivo'),
+    path('anexos/<int:anexo_id>/baixar/',
+         anexos.baixar_anexo, name='baixar_anexo'),
+    path('anexos/<int:anexo_id>/remover/',
+         anexos.remover_anexo, name='remover_anexo'),
     path('analista/processo/<int:process_id>/pendencia/',
          views.adicionar_pendencia, name='adicionar_pendencia'),
     path('analista/pendencia/<int:pendencia_id>/remover/',

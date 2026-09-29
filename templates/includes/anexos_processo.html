@@ -1,0 +1,52 @@
+{% if eh_licitacao %}
+<section class="card" id="blocoAnexos">
+    <div class="card__header">
+        <span class="card__title">Arquivos anexados</span>
+        <span class="card__hint">{{ anexos|length }} arquivo{{ anexos|length|pluralize:"s" }}</span>
+    </div>
+
+    {% if pode_anexar %}
+    <form method="post" action="{% url 'anexar_arquivo' processo.id %}" enctype="multipart/form-data" class="anexo-form">
+        {% csrf_token %}
+        <input type="file" name="arquivos" multiple required
+               aria-label="Arquivos para anexar">
+        <button type="submit" class="btn btn--primary">
+            <span class="material-symbols-rounded">attach_file</span>
+            Anexar arquivos
+        </button>
+        <span class="field__hint">PDF, Word, Excel, imagem ou texto, até 15 MB cada. Análise, pendências e encaminhamento continuam disponíveis e não são obrigatórios.</span>
+    </form>
+    {% endif %}
+
+    {% if anexos %}
+    <ul class="pendencia-list">
+        {% for anexo in anexos %}
+        <li class="pendencia-item">
+            <div>
+                <a href="{% url 'baixar_anexo' anexo.id %}">{{ anexo.nome_original }}</a>
+                <div class="pendencia-item__meta">
+                    {{ anexo.tamanho_legivel }}
+                    · {{ anexo.enviado_por.get_full_name|default:anexo.enviado_por.username|default:"—" }}
+                    · {{ anexo.enviado_em|date:"d/m/Y H:i" }}
+                </div>
+            </div>
+            {% if pode_anexar %}
+            <form method="post" action="{% url 'remover_anexo' anexo.id %}"
+                  onsubmit="return confirm('Remover este arquivo?');">
+                {% csrf_token %}
+                <button type="submit" class="icon-btn icon-btn--danger" title="Remover arquivo">
+                    <span class="material-symbols-rounded">delete</span>
+                </button>
+            </form>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty empty--compact">
+        <span class="material-symbols-rounded">attach_file</span>
+        <div class="empty__title">Nenhum arquivo anexado</div>
+    </div>
+    {% endif %}
+</section>
+{% endif %}

@@ -2231,6 +2231,24 @@ button.encaminhamento__opcao:disabled {
     padding: 16px 18px 18px;
 }
 
+.anexo-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding: 0 18px 16px;
+}
+
+.anexo-form .field__hint {
+    flex-basis: 100%;
+}
+
+.anexo-form input[type="file"] {
+    max-width: 100%;
+    font: inherit;
+    font-size: 13px;
+}
+
 .pendencia-add__row {
     display: flex;
     gap: 10px;
@@ -2442,4 +2460,97 @@ tr.is-inativo td {
     .paginacao {
         justify-content: center;
     }
+}
+
+/* Linha do processo pela prioridade.
+   Verde claro = normal, amarelo = prioritário, vermelho = urgente.
+   Inclui coluna fixa e ações, que têm fundo próprio. */
+.table tbody tr.tr-prio-normal > td,
+.table tbody tr.tr-prio-normal:hover > td,
+.table tbody tr.tr-prio-normal > td.col-sticky,
+.table tbody tr.tr-prio-normal:hover > td.col-sticky,
+.table tbody tr.tr-prio-normal > td.col-actions,
+.table tbody tr.tr-prio-normal:hover > td.col-actions {
+    background: #d8f5df;
+}
+
+.table tbody tr.tr-prio-prioritario > td,
+.table tbody tr.tr-prio-prioritario:hover > td,
+.table tbody tr.tr-prio-prioritario > td.col-sticky,
+.table tbody tr.tr-prio-prioritario:hover > td.col-sticky,
+.table tbody tr.tr-prio-prioritario > td.col-actions,
+.table tbody tr.tr-prio-prioritario:hover > td.col-actions {
+    background: #fff3a3;
+}
+
+.table tbody tr.tr-prio-urgente > td,
+.table tbody tr.tr-prio-urgente:hover > td,
+.table tbody tr.tr-prio-urgente > td.col-sticky,
+.table tbody tr.tr-prio-urgente:hover > td.col-sticky,
+.table tbody tr.tr-prio-urgente > td.col-actions,
+.table tbody tr.tr-prio-urgente:hover > td.col-actions {
+    background: #ffb4b4;
+}
+
+.table tbody tr.tr-prio-normal:hover > td,
+.table tbody tr.tr-prio-normal:hover > td.col-sticky,
+.table tbody tr.tr-prio-normal:hover > td.col-actions {
+    background: #c4edd0;
+}
+
+.table tbody tr.tr-prio-prioritario:hover > td,
+.table tbody tr.tr-prio-prioritario:hover > td.col-sticky,
+.table tbody tr.tr-prio-prioritario:hover > td.col-actions {
+    background: #ffe56a;
+}
+
+.table tbody tr.tr-prio-urgente:hover > td,
+.table tbody tr.tr-prio-urgente:hover > td.col-sticky,
+.table tbody tr.tr-prio-urgente:hover > td.col-actions {
+    background: #ff9a9a;
+}
+
+[data-theme="dark"] .table tbody tr.tr-prio-normal > td,
+[data-theme="dark"] .table tbody tr.tr-prio-normal:hover > td,
+[data-theme="dark"] .table tbody tr.tr-prio-normal > td.col-sticky,
+[data-theme="dark"] .table tbody tr.tr-prio-normal:hover > td.col-sticky,
+[data-theme="dark"] .table tbody tr.tr-prio-normal > td.col-actions,
+[data-theme="dark"] .table tbody tr.tr-prio-normal:hover > td.col-actions {
+    background: #14532d;
+}
+
+[data-theme="dark"] .table tbody tr.tr-prio-prioritario > td,
+[data-theme="dark"] .table tbody tr.tr-prio-prioritario:hover > td,
+[data-theme="dark"] .table tbody tr.tr-prio-prioritario > td.col-sticky,
+[data-theme="dark"] .table tbody tr.tr-prio-prioritario:hover > td.col-sticky,
+[data-theme="dark"] .table tbody tr.tr-prio-prioritario > td.col-actions,
+[data-theme="dark"] .table tbody tr.tr-prio-prioritario:hover > td.col-actions {
+    background: #713f12;
+}
+
+[data-theme="dark"] .table tbody tr.tr-prio-urgente > td,
+[data-theme="dark"] .table tbody tr.tr-prio-urgente:hover > td,
+[data-theme="dark"] .table tbody tr.tr-prio-urgente > td.col-sticky,
+[data-theme="dark"] .table tbody tr.tr-prio-urgente:hover > td.col-sticky,
+[data-theme="dark"] .table tbody tr.tr-prio-urgente > td.col-actions,
+[data-theme="dark"] .table tbody tr.tr-prio-urgente:hover > td.col-actions {
+    background: #7f1d1d;
+}
+
+[data-theme="dark"] .table tbody tr.tr-prio-normal:hover > td,
+[data-theme="dark"] .table tbody tr.tr-prio-normal:hover > td.col-sticky,
+[data-theme="dark"] .table tbody tr.tr-prio-normal:hover > td.col-actions {
+    background: #166534;
+}
+
+[data-theme="dark"] .table tbody tr.tr-prio-prioritario:hover > td,
+[data-theme="dark"] .table tbody tr.tr-prio-prioritario:hover > td.col-sticky,
+[data-theme="dark"] .table tbody tr.tr-prio-prioritario:hover > td.col-actions {
+    background: #854d0e;
+}
+
+[data-theme="dark"] .table tbody tr.tr-prio-urgente:hover > td,
+[data-theme="dark"] .table tbody tr.tr-prio-urgente:hover > td.col-sticky,
+[data-theme="dark"] .table tbody tr.tr-prio-urgente:hover > td.col-actions {
+    background: #991b1b;
 }
