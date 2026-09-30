@@ -460,6 +460,7 @@ def listar_processos(request):
         'can_delete': perm.pode_cancelar_processo(request.user),
         'can_mark_saida': pode_saida,
         'can_create_process': perm.pode_cadastrar_processo(request.user),
+        'pode_desfazer': perm.pode_desfazer_tramite(request.user),
         'dados_formulario': svc_cadastros.dados_para_formulario(),
     })
 
@@ -792,6 +793,7 @@ def listar_finalizados(request):
         'campos_editaveis': sorted(svc_processos.campos_editaveis(request.user)),
         'can_delete': perm.pode_cancelar_processo(request.user),
         'can_concluir_monitoramento': perm.is_gestao(request.user),
+        'pode_desfazer': perm.pode_desfazer_tramite(request.user),
         'dados_formulario': svc_cadastros.dados_para_formulario(),
     })
 
@@ -1357,7 +1359,7 @@ def area_analista(request):
 
 
 @login_required
-@user_passes_test(pode_usar_gestao)
+@user_passes_test(perm.pode_acessar_fila_gestao)
 def gestao_processos(request):
     processos, licitacoes, liquidacoes, termo_pesquisa, filtro, contagens = (
         consultar_fila_grupos(request, FILTROS_GESTAO))
@@ -1380,7 +1382,7 @@ def gestao_processos(request):
         'total_com_controlador': total_com_controlador,
         'total_urgentes': total_urgentes,
         'termo_pesquisa': termo_pesquisa,
-        'modo_gestao': True,
+        'modo_gestao': perm.is_gestao(request.user),
         'pode_assumir': False,
         'prioridades': svc_cadastros.opcoes_prioridade(),
         'filtro_atual': filtro,
@@ -1429,10 +1431,11 @@ def assumir_processo(request, process_id):
 
 
 @login_required
-@user_passes_test(lambda u: perm.is_analista(u) or perm.is_gestao(u))
+@user_passes_test(lambda u: perm.is_analista(u) or perm.is_gestao(u)
+                  or perm.eh_administrador(u))
 def analista_processo(request, process_id):
-    """Tela do processo. Analista trabalha aqui; Gestão só consulta
-    (item 2: visão global sem ato técnico). Todo POST exige analista."""
+    """Tela do processo. Analista trabalha aqui; Gestão e administrador
+    consultam. O administrador também desfaz a tramitação."""
     processo = get_object_or_404(
         Processo.objects.select_related(
             'analista_responsavel', 'assinatura_direcionada_para',
@@ -1444,7 +1447,9 @@ def analista_processo(request, process_id):
             "Você não tem permissão para analisar este processo.", status=403)
 
     if request.method == 'POST' and not perm.is_analista(request.user):
-        raise PermissionDenied('A Gestão consulta o processo, mas não pratica atos de análise.')
+        raise PermissionDenied(
+            'A Gestão e o administrador consultam o processo; atos de '
+            'análise são do analista.')
 
     anotar_situacao_fila([processo], request.user)
     eh_responsavel = processo.analista_responsavel_id == request.user.id
@@ -1466,8 +1471,8 @@ def analista_processo(request, process_id):
     if request.method == 'POST':
         acao = request.POST.get('acao', 'salvar')
 
-        # Cada ação tem sua própria autorização (item 52). Quem recebeu a
-        # assinatura direcionada libera, mas não edita a análise.
+        # Encaminhar a outro analista transfere o responsável. Liberar
+        # para o Controlador continua exigindo permissão própria.
         permitido = {
             'salvar': pode_editar,
             'concluir': pode_liberar,
@@ -1505,8 +1510,8 @@ def analista_processo(request, process_id):
                 messages.error(
                     request, '; '.join(getattr(exc, 'messages', [str(exc)])))
                 return redirect('analista_processo', process_id=processo.id)
-            messages.success(request, "Processo encaminhado para outro analista.")
-            return redirect('analista_processo', process_id=processo.id)
+            messages.success(request, "Processo encaminhado. Passou a ser do analista escolhido.")
+            return redirect('area_analista')
         if alteracoes:
             messages.success(
                 request, f"Análise salva. {alteracoes} campo(s) atualizado(s).")
@@ -1551,6 +1556,9 @@ def analista_processo(request, process_id):
         'analistas': views_tramitacao.opcoes_de_analistas(request.user),
         'pode_declinar': perm.pode_declinar_analise(request.user, processo)
                          and processo.situacao_tramite == 'EM_ANALISE',
+        'desfazer': (processo.acao_desfazer
+                     if perm.pode_desfazer_tramite(request.user)
+                     else None),
     })
 
 

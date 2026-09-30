@@ -1,20 +1,20 @@
 # processos_app/services/relatorios.py
 """Controle de relatório: sequência numérica e planilha das análises.
 
-O administrador informa o último número já usado. O próximo processo
-assumido (espécie que gera relatório) recebe o seguinte.
+O administrador informa o último número já usado. O número só é gerado
+quando o processo é encaminhado para assinatura (Controlador). Analista
+e administrador podem corrigir o número à mão.
 
-Cada assunção grava uma linha na planilha. Salvar a análise atualiza
-os demais campos. Declinar desvincula a linha, mas o número não volta
-a ser usado.
+Declinar desvincula a linha, mas o número não volta a ser usado.
 """
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from ..models import LinhaControleRelatorio, SequenciaRelatorio
+from ..models import LinhaControleRelatorio, Processo, SequenciaRelatorio
 from . import permissions as perm
+from .eventos import registrar_diff
 
 
 GRUPO_PADRAO = perm.GRUPO_LIQUIDACOES
@@ -32,6 +32,35 @@ def estado_sequencia(grupo=GRUPO_PADRAO):
         'proximo': proximo,
         'ultimo': max(proximo - 1, 0),
     }
+
+
+def especie_gera_relatorio(processo):
+    especie = processo.especie_fk if processo.especie_fk_id else None
+    if especie is not None:
+        return bool(especie.gera_relatorio)
+    return processo.genero == perm.GRUPO_LIQUIDACOES
+
+
+def numeros_usados(grupo, ignorar=None):
+    """Números já emitidos: no processo ou na planilha (mesmo após declinar)."""
+    ignorar = set(ignorar or ())
+    usados = set()
+    fontes = (
+        Processo.objects.filter(genero=grupo)
+            .exclude(numero_relatorio__isnull=True)
+            .exclude(numero_relatorio='')
+            .values_list('numero_relatorio', flat=True),
+        LinhaControleRelatorio.objects.filter(grupo=grupo)
+            .exclude(numero_relatorio='')
+            .values_list('numero_relatorio', flat=True),
+    )
+    for lista in fontes:
+        for bruto in lista:
+            try:
+                usados.add(int(str(bruto).strip()))
+            except (TypeError, ValueError):
+                continue
+    return usados - ignorar
 
 
 @transaction.atomic
@@ -52,6 +81,88 @@ def definir_ultimo_numero(usuario, ultimo, grupo=GRUPO_PADRAO):
     seq.proximo_numero = ultimo + 1
     seq.save(update_fields=['proximo_numero'])
     return estado_sequencia(grupo)
+
+
+def proximo_numero(grupo):
+    """Trava a sequência para dois encaminhamentos não saírem iguais."""
+    SequenciaRelatorio.objects.get_or_create(
+        grupo=grupo, defaults={'proximo_numero': 1540})
+    seq = SequenciaRelatorio.objects.select_for_update().get(grupo=grupo)
+    usados = numeros_usados(grupo)
+    numero = int(seq.proximo_numero or 1)
+    if numero < 1:
+        numero = 1
+    while numero in usados:
+        numero += 1
+    seq.proximo_numero = numero + 1
+    seq.save(update_fields=['proximo_numero'])
+    return str(numero)
+
+
+def atribuir_se_preciso(processo):
+    """Gera o número só se a espécie gera relatório e o processo ainda não tem.
+
+    Não grava o processo: o chamador inclui `numero_relatorio` no save.
+    """
+    if not especie_gera_relatorio(processo):
+        return False
+    if processo.numero_relatorio:
+        registrar(processo)
+        return False
+    processo.numero_relatorio = proximo_numero(processo.genero)
+    registrar(processo)
+    return True
+
+
+def _inteiro_atual(processo):
+    try:
+        return int(str(processo.numero_relatorio).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+@transaction.atomic
+def alterar_numero(usuario, processo_id, novo):
+    """Analista ou administrador corrige o número de relatório à mão."""
+    processo = (Processo.objects.select_for_update()
+                .filter(id=processo_id).first())
+    if processo is None:
+        raise RelatorioInvalido('Processo não encontrado.')
+    perm.assert_permissao(
+        perm.pode_editar_numero_relatorio(usuario, processo),
+        'Somente analista do grupo e administrador alteram o número de relatório.')
+    try:
+        novo = int(str(novo).strip())
+    except (TypeError, ValueError):
+        raise RelatorioInvalido('Informe um número inteiro para o relatório.')
+    if novo < 1:
+        raise RelatorioInvalido('O número do relatório deve ser maior que zero.')
+
+    atual = _inteiro_atual(processo)
+    if atual == novo:
+        return processo
+
+    ignorar = {atual} if atual is not None else set()
+    if novo in numeros_usados(processo.genero, ignorar=ignorar):
+        raise RelatorioInvalido(f'O número {novo} já está em uso.')
+
+    anterior = processo.numero_relatorio or ''
+    processo.numero_relatorio = str(novo)
+    processo.save(update_fields=['numero_relatorio'])
+    try:
+        registrar(processo)
+    except IntegrityError:
+        raise RelatorioInvalido(f'O número {novo} já está em uso.')
+
+    seq, _ = SequenciaRelatorio.objects.select_for_update().get_or_create(
+        grupo=processo.genero or GRUPO_PADRAO,
+        defaults={'proximo_numero': novo + 1})
+    if int(seq.proximo_numero or 0) <= novo:
+        seq.proximo_numero = novo + 1
+        seq.save(update_fields=['proximo_numero'])
+
+    registrar_diff(processo, 'numero_relatorio', anterior, str(novo), usuario)
+    return processo
 
 
 def registrar(processo):

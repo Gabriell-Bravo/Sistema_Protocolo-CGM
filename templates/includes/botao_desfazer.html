@@ -1,0 +1,13 @@
+{% if pode_desfazer_tramite and processo.acao_desfazer %}
+<form method="post" action="{% url 'tram_desfazer_tramite' processo.id %}"
+      onsubmit="return confirm('{{ processo.acao_desfazer.confirmacao|escapejs }}');">
+    {% csrf_token %}
+    <input type="hidden" name="motivo" value="Desfeito pelo administrador">
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <button type="submit" class="{{ classe|default:'btn btn--outline btn--sm' }}"
+            title="{{ processo.acao_desfazer.rotulo }}">
+        <span class="material-symbols-rounded">undo</span>
+        {{ processo.acao_desfazer.rotulo }}
+    </button>
+</form>
+{% endif %}

@@ -128,9 +128,9 @@ class Processo(models.Model):
         verbose_name="Número do relatório"
     )
 
-    # --- Assinatura (itens 7, 8, 10 e 11) --------------------------------
-    # analista_responsavel continua representando QUEM ANALISOU. Nunca é
-    # sobrescrito por assinatura substitutiva.
+    # --- Assinatura -------------------------------------------------------
+    # Encaminhar a outro analista transfere o responsável. O campo
+    # assinatura_direcionada_* permanece para processos já direcionados.
     assinatura_direcionada_para = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -319,6 +319,38 @@ class Processo(models.Model):
     @property
     def esta_cancelado(self):
         return self.cancelado_em is not None
+
+    @property
+    def acao_desfazer(self):
+        """Rótulo do último passo que o administrador pode desfazer."""
+        if self.esta_cancelado:
+            return {
+                'rotulo': 'Desfazer cancelamento',
+                'confirmacao': 'Reativar este processo cancelado?',
+            }
+        mapa = {
+            'EM_ANALISE': {
+                'rotulo': 'Desfazer análise',
+                'confirmacao': 'Devolver este processo à fila sem análise?',
+            },
+            'ASSINATURA_DIRECIONADA': {
+                'rotulo': 'Desfazer encaminhamento',
+                'confirmacao': 'Voltar este processo para o analista responsável?',
+            },
+            'AGUARDANDO_ASSINATURA': {
+                'rotulo': 'Desfazer encaminhamento',
+                'confirmacao': 'Tirar este processo do Controlador e devolver ao analista?',
+            },
+            'DISPONIVEL_RETIRADA': {
+                'rotulo': 'Desfazer retirada',
+                'confirmacao': 'Voltar este processo para aguardar a assinatura?',
+            },
+            'SAIDA_CONCLUIDA': {
+                'rotulo': 'Desfazer saída',
+                'confirmacao': 'Devolver este processo à retirada?',
+            },
+        }
+        return mapa.get(self.situacao_tramite)
 
     @property
     def esta_ativo(self):
@@ -546,6 +578,7 @@ class EventoProcesso(models.Model):
         ('SAIDA_CONCLUIDA', 'Saída concluída'),
         ('PRIORIDADE_ALTERADA', 'Prioridade alterada'),
         ('PROCESSO_CANCELADO', 'Processo cancelado'),
+        ('TRAMITE_DESFEITO', 'Tramitação desfeita'),
         ('ARQUIVO_ANEXADO', 'Arquivo anexado'),
         ('ARQUIVO_REMOVIDO', 'Arquivo removido'),
     ]
@@ -676,7 +709,7 @@ class SequenciaRelatorio(models.Model):
 
 
 class LinhaControleRelatorio(models.Model):
-    """Linha da planilha Controle de relatório, gravada ao assumir Liquidações."""
+    """Linha da planilha Controle de relatório, gravada ao encaminhar à assinatura."""
 
     processo = models.OneToOneField(
         Processo, on_delete=models.SET_NULL, null=True, blank=True,

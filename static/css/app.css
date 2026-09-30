@@ -2653,43 +2653,49 @@ tr.is-inativo td {
 [data-theme="dark"] .table tbody tr.tr-prio-normal > td,
 [data-theme="dark"] .table tbody tr.tr-prio-normal > td.col-sticky,
 [data-theme="dark"] .table tbody tr.tr-prio-normal > td.col-actions {
-    background: #1f8f4e;
-    color: #f0fdf4;
+    background: #d8f5df;
+    color: #0f172a;
 }
 
 [data-theme="dark"] .table tbody tr.tr-prio-prioritario > td,
 [data-theme="dark"] .table tbody tr.tr-prio-prioritario > td.col-sticky,
 [data-theme="dark"] .table tbody tr.tr-prio-prioritario > td.col-actions {
-    background: #b5810a;
-    color: #fffbeb;
+    background: #fff3a3;
+    color: #0f172a;
 }
 
 [data-theme="dark"] .table tbody tr.tr-prio-urgente > td,
 [data-theme="dark"] .table tbody tr.tr-prio-urgente > td.col-sticky,
 [data-theme="dark"] .table tbody tr.tr-prio-urgente > td.col-actions {
-    background: #dc2626;
-    color: #fef2f2;
+    background: #ffb4b4;
+    color: #0f172a;
 }
 
 [data-theme="dark"] .table tbody tr.tr-prio-normal:hover > td,
 [data-theme="dark"] .table tbody tr.tr-prio-normal:hover > td.col-sticky,
 [data-theme="dark"] .table tbody tr.tr-prio-normal:hover > td.col-actions {
-    background: #27a85c;
-    color: #f0fdf4;
+    background: #c4edd0;
+    color: #0f172a;
 }
 
 [data-theme="dark"] .table tbody tr.tr-prio-prioritario:hover > td,
 [data-theme="dark"] .table tbody tr.tr-prio-prioritario:hover > td.col-sticky,
 [data-theme="dark"] .table tbody tr.tr-prio-prioritario:hover > td.col-actions {
-    background: #ca9612;
-    color: #fffbeb;
+    background: #ffe56a;
+    color: #0f172a;
 }
 
 [data-theme="dark"] .table tbody tr.tr-prio-urgente:hover > td,
 [data-theme="dark"] .table tbody tr.tr-prio-urgente:hover > td.col-sticky,
 [data-theme="dark"] .table tbody tr.tr-prio-urgente:hover > td.col-actions {
-    background: #ef4444;
-    color: #fef2f2;
+    background: #ff9a9a;
+    color: #0f172a;
+}
+
+[data-theme="dark"] .table tbody tr.tr-prio-normal > td .cell-muted,
+[data-theme="dark"] .table tbody tr.tr-prio-prioritario > td .cell-muted,
+[data-theme="dark"] .table tbody tr.tr-prio-urgente > td .cell-muted {
+    color: #475569;
 }
 
 .balao {

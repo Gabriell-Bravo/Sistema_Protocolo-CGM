@@ -99,7 +99,8 @@ class GestaoPessoasTest(BaseProcessoTestCase):
         processo = self.processo_em_analise()
         tramitacao.direcionar_assinatura(processo.id, self.analista_lic, self.analista_liq.id)
         processo.refresh_from_db()
-        self.assertEqual(processo.situacao_tramite, 'ASSINATURA_DIRECIONADA')
+        self.assertEqual(processo.situacao_tramite, 'EM_ANALISE')
+        self.assertEqual(processo.analista_responsavel, self.analista_liq)
 
 
 class MonitoramentoTest(BaseProcessoTestCase):

@@ -296,6 +296,30 @@ class AcoesHttpTest(BaseProcessoTestCase):
         self.assertEqual(processo.situacao_tramite, 'DISPONIVEL')
         self.assertIsNone(processo.analista_responsavel)
 
+    def test_admin_desfaz_analise_e_encaminhamento_pela_tela(self):
+        from .base import criar_usuario
+        admin = criar_usuario('admin_undo', 'PROTOCOLO', is_superuser=True)
+        processo = self.processo_em_analise()
+        self.client.force_login(admin)
+        fila = self.client.get(reverse('gestao_processos'))
+        self.assertEqual(fila.status_code, 200)
+        self.assertContains(fila, 'Fila sem análise')
+        self.client.post(
+            reverse('tram_desfazer_tramite', args=[processo.id]),
+            {'motivo': 'Desfeito pelo administrador'})
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'DISPONIVEL')
+
+        processo = self.processo_em_analise()
+        tramitacao.liberar_assinatura(processo.id, self.analista_lic)
+        assinar = self.client.get(reverse('gestao_liberados_assinatura'))
+        self.assertContains(assinar, 'Desfazer encaminhamento')
+        self.client.post(
+            reverse('tram_desfazer_tramite', args=[processo.id]),
+            {'motivo': 'Desfeito pelo administrador'})
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'EM_ANALISE')
+
     def test_nao_admin_nao_redefine_senha(self):
         self.client.force_login(self.protocolo)
         resposta = self.client.get(

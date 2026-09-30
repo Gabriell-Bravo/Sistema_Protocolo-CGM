@@ -17,6 +17,7 @@
                     <th>Analisado por</th>
                     <th>Liberado por</th>
                     <th>Liberado em</th>
+                    {% if pode_desfazer_tramite %}<th class="col-actions">Ações</th>{% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -28,6 +29,13 @@
                     <td>{{ processo.nome_analista|default:"—" }}</td>
                     <td>{{ processo.liberado_assinatura_por|default:"—" }}</td>
                     <td>{{ processo.liberado_assinatura_em|date:"d/m/Y H:i"|default:"—" }}</td>
+                    {% if pode_desfazer_tramite %}
+                    <td class="col-actions">
+                        <div class="actions">
+                            {% include "includes/botao_desfazer.html" %}
+                        </div>
+                    </td>
+                    {% endif %}
                 </tr>
                 {% endfor %}
             </tbody>

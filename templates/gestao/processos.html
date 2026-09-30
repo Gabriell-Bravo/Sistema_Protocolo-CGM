@@ -78,9 +78,9 @@
         </div>
     </section>
 
-    {% include "analista/_fila_grupo.html" with titulo="Licitações e Contratos" grupo_css="licitacoes" icone="gavel" processos=licitacoes mostrar_contratada=True modo_gestao=True pode_assumir=False %}
+    {% include "analista/_fila_grupo.html" with titulo="Licitações e Contratos" grupo_css="licitacoes" icone="gavel" processos=licitacoes mostrar_contratada=True modo_gestao=modo_gestao pode_assumir=False %}
 
-    {% include "analista/_fila_grupo.html" with titulo="Liquidações" grupo_css="liquidacoes" icone="payments" processos=liquidacoes mostrar_contratada=True modo_gestao=True pode_assumir=False %}
+    {% include "analista/_fila_grupo.html" with titulo="Liquidações" grupo_css="liquidacoes" icone="payments" processos=liquidacoes mostrar_contratada=True modo_gestao=modo_gestao pode_assumir=False %}
 </div>
 
 <div id="balao-urgencia" class="balao" hidden>

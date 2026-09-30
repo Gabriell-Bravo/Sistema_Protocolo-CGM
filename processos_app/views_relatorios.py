@@ -7,6 +7,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from .services import permissions as perm
@@ -65,5 +66,26 @@ def definir_ultimo_numero(request):
     messages.success(
         request,
         f'Último relatório definido como {estado["ultimo"]}. '
-        f'O próximo assumido receberá o nº {estado["proximo"]}.')
+        f'O próximo encaminhado para assinatura receberá o nº {estado["proximo"]}.')
     return redirect('controle_relatorio')
+
+
+@login_required
+@require_POST
+def alterar_numero(request, process_id):
+    perm.assert_permissao(
+        perm.pode_editar_numero_relatorio(request.user),
+        'Somente analista e administrador alteram o número de relatório.')
+    destino = request.POST.get('next') or ''
+    if not destino.startswith('/'):
+        destino = reverse('controle_relatorio')
+    try:
+        processo = svc.alterar_numero(
+            request.user, process_id, request.POST.get('numero_relatorio'))
+        messages.success(
+            request,
+            f'Número do relatório de {processo.numero_processo} '
+            f'atualizado para {processo.numero_relatorio}.')
+    except (PermissionDenied, ValidationError) as exc:
+        messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
+    return redirect(destino)

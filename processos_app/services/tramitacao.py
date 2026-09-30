@@ -33,7 +33,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from ..models import LinhaControleRelatorio, Pendencia, Processo, SequenciaRelatorio, UrgenciaRecorrente
+from ..models import Pendencia, Processo, UrgenciaRecorrente
 from . import permissions as perm
 from . import prazos
 from .eventos import registrar_evento, registrar_diff, registrar_evento_pendencia
@@ -51,14 +51,14 @@ class TransicaoInvalida(ValidationError):
 # "Direcionar para outro analista".
 #
 # Licitações e Contratos não exige esses campos: o registro da análise é
-# o arquivo anexado. Liquidações continua exigindo o relatório na tela.
+# o arquivo anexado. Liquidações exige status e destino; o número do
+# relatório é gerado ao encaminhar para o Controlador.
 #
 # Para mudar a exigência, altere só estas listas.
 CAMPOS_OBRIGATORIOS_LIBERACAO = {
     'LICITACOES_E_CONTRATOS': [],
     'LIQUIDACOES': [
         ('status_analise', 'Status da análise'),
-        ('numero_relatorio', 'Número do relatório'),
         ('destino', 'Destino'),
     ],
 }
@@ -145,18 +145,7 @@ def assumir(processo_id, usuario):
     processo.tecnico = perm.nome_usuario(usuario)
     if not processo.data_analise:
         processo.data_analise = timezone.localdate()
-    # item 21: a espécie diz se gera relatório. Sem espécie cadastrada,
-    # vale a regra anterior (todo processo de Liquidações gera).
-    especie = processo.especie_fk if processo.especie_fk_id else None
-    gera_relatorio = (especie.gera_relatorio if especie is not None
-                      else processo.genero == perm.GRUPO_LIQUIDACOES)
-    if gera_relatorio and not processo.numero_relatorio:
-        processo.numero_relatorio = _proximo_numero_relatorio(processo.genero)
     processo.save()
-
-    if processo.numero_relatorio:
-        from .relatorios import registrar as registrar_relatorio
-        registrar_relatorio(processo)
 
     registrar_evento(
         processo, 'PROCESSO_ASSUMIDO', usuario,
@@ -188,7 +177,8 @@ def declinar_analise(processo_id, usuario, motivo):
 
     perm.assert_permissao(
         perm.pode_declinar_analise(usuario, processo),
-        'Somente o analista responsável ou a Gestão podem declinar a análise.')
+        'Somente o analista responsável, a Gestão ou o administrador '
+        'podem declinar a análise.')
 
     if processo.situacao_tramite != 'EM_ANALISE':
         raise TransicaoInvalida(
@@ -253,31 +243,170 @@ def declinar_analise(processo_id, usuario, motivo):
 
 
 # --------------------------------------------------------------------------
+# Administrador: desfazer o último avanço de tramitação
+# --------------------------------------------------------------------------
+
+def _ultimo_evento(processo, tipo):
+    return (processo.eventos.filter(tipo=tipo)
+            .order_by('-criado_em', '-id').first())
+
+
+@transaction.atomic
+def desfazer_tramite(processo_id, usuario, motivo=''):
+    """Desfaz o último avanço. Só o administrador.
+
+    EM_ANALISE volta à fila (mesma limpeza de declinar). Os demais estados
+    recuam um passo e preservam a análise já gravada.
+    """
+    perm.assert_permissao(
+        perm.pode_desfazer_tramite(usuario),
+        'Somente o administrador pode desfazer a tramitação.')
+
+    motivo = (motivo or '').strip() or 'Desfeito pelo administrador'
+    atual = Processo.objects.filter(id=processo_id).first()
+    if atual is None:
+        raise TransicaoInvalida('Processo não encontrado.')
+    if atual.esta_cancelado:
+        return _desfazer_cancelamento(_travar(processo_id), usuario, motivo)
+    if atual.situacao_tramite == 'EM_ANALISE':
+        return declinar_analise(processo_id, usuario, motivo)
+
+    processo = _travar(processo_id)
+    situacao = processo.situacao_tramite
+    if situacao == 'ASSINATURA_DIRECIONADA':
+        return _desfazer_direcionamento(processo, usuario, motivo)
+    if situacao == 'AGUARDANDO_ASSINATURA':
+        return _desfazer_liberacao(processo, usuario, motivo)
+    if situacao == 'DISPONIVEL_RETIRADA':
+        return _desfazer_retirada(processo, usuario, motivo)
+    if situacao == 'SAIDA_CONCLUIDA' or processo.data_saida:
+        return _desfazer_saida(processo, usuario, motivo)
+    raise TransicaoInvalida(
+        f'Processo em "{processo.get_situacao_tramite_display()}" '
+        'não tem um passo anterior para desfazer.')
+
+
+def _registrar_desfazer(processo, usuario, motivo, de, para):
+    registrar_evento(
+        processo, 'TRAMITE_DESFEITO', usuario,
+        descricao=(
+            f'Tramitação desfeita por {perm.nome_usuario(usuario)}. '
+            f'De "{de}" para "{para}". Motivo: {motivo}'),
+        motivo=motivo,
+        situacao_anterior=de,
+        situacao_nova=para,
+    )
+    registrar_diff(processo, 'situacao_tramite', de, para, usuario)
+    return processo
+
+
+def _desfazer_direcionamento(processo, usuario, motivo):
+    destinatario = processo.nome_assinatura_direcionada or '—'
+    processo.assinatura_direcionada_para = None
+    processo.assinatura_direcionada_em = None
+    processo.situacao_tramite = 'EM_ANALISE'
+    processo.save(update_fields=[
+        'assinatura_direcionada_para', 'assinatura_direcionada_em',
+        'situacao_tramite'])
+    return _registrar_desfazer(
+        processo, usuario, motivo,
+        f'Direcionado para {destinatario}',
+        f'Em análise por {processo.nome_analista or "—"}')
+
+
+def _desfazer_liberacao(processo, usuario, motivo):
+    processo.liberado_assinatura_por = None
+    processo.liberado_assinatura_em = None
+    if processo.assinatura_direcionada_para_id:
+        processo.situacao_tramite = 'ASSINATURA_DIRECIONADA'
+        para = (f'Direcionado para {processo.nome_assinatura_direcionada}')
+    else:
+        processo.situacao_tramite = 'EM_ANALISE'
+        para = f'Em análise por {processo.nome_analista or "—"}'
+    processo.save(update_fields=[
+        'liberado_assinatura_por', 'liberado_assinatura_em',
+        'situacao_tramite'])
+    return _registrar_desfazer(
+        processo, usuario, motivo, 'Com o Controlador', para)
+
+
+def _desfazer_retirada(processo, usuario, motivo):
+    processo.disponivel_retirada_em = None
+    processo.disponivel_retirada_por = None
+    processo.situacao_tramite = 'AGUARDANDO_ASSINATURA'
+    processo.save(update_fields=[
+        'disponivel_retirada_em', 'disponivel_retirada_por',
+        'situacao_tramite'])
+    return _registrar_desfazer(
+        processo, usuario, motivo,
+        'Disponível para retirada', 'Com o Controlador')
+
+
+def _desfazer_saida(processo, usuario, motivo):
+    evento = _ultimo_evento(processo, 'SAIDA_CONCLUIDA')
+    dados = (evento.dados or {}) if evento else {}
+    anterior = dados.get('situacao_anterior')
+    if dados.get('saida_direta') and anterior in Processo.SITUACOES_ATIVAS:
+        destino = anterior
+        rotulo_para = dict(Processo.SITUACAO_TRAMITE_CHOICES).get(
+            destino, destino)
+    elif dados.get('legado'):
+        destino = 'DISPONIVEL'
+        rotulo_para = 'Disponível para análise'
+    else:
+        destino = 'DISPONIVEL_RETIRADA'
+        rotulo_para = 'Disponível para retirada'
+    processo.saida_concluida_em = None
+    processo.saida_concluida_por = None
+    processo.data_saida = None
+    processo.hora_saida = None
+    processo.situacao_tramite = destino
+    processo.save(update_fields=[
+        'saida_concluida_em', 'saida_concluida_por',
+        'data_saida', 'hora_saida', 'situacao_tramite'])
+    return _registrar_desfazer(
+        processo, usuario, motivo, 'Saída concluída', rotulo_para)
+
+
+def _desfazer_cancelamento(processo, usuario, motivo):
+    processo.cancelado_em = None
+    processo.cancelado_por = None
+    processo.motivo_cancelamento = ''
+    processo.save(update_fields=[
+        'cancelado_em', 'cancelado_por', 'motivo_cancelamento'])
+    registrar_evento(
+        processo, 'TRAMITE_DESFEITO', usuario,
+        descricao=(
+            f'Cancelamento desfeito por {perm.nome_usuario(usuario)}. '
+            f'Motivo: {motivo}'),
+        motivo=motivo)
+    return processo
+
+
+# --------------------------------------------------------------------------
 # Direcionar / redirecionar assinatura (itens 8 e 10)
 # --------------------------------------------------------------------------
 
 @transaction.atomic
 def direcionar_assinatura(processo_id, usuario, destinatario_id):
-    """EM_ANALISE -> ASSINATURA_DIRECIONADA, ou troca do destinatário
-    enquanto ainda estiver em ASSINATURA_DIRECIONADA.
+    """Transfere a análise para outro analista (EM_ANALISE).
 
-    Só o analista responsável executa. Não há aprovação gerencial: a
-    Gestão apenas visualiza (item 8).
+    O processo deixa de ser de quem encaminhou e passa a ser do colega:
+    ele analisa, devolve à fila ou envia ao Controlador.
     """
     processo = _travar(processo_id)
 
     perm.assert_permissao(
         perm.pode_direcionar_assinatura(usuario, processo),
-        'Somente o analista responsável pode direcionar a assinatura.')
+        'Somente o analista responsável pode encaminhar a outro analista.')
 
     if processo.situacao_tramite not in ('EM_ANALISE', 'ASSINATURA_DIRECIONADA'):
         raise TransicaoInvalida(
             f'Processo em "{processo.get_situacao_tramite_display()}" '
-            'não permite direcionar assinatura.')
+            'não permite encaminhar a outro analista.')
 
-    _exigir_analise_completa(processo, 'direcionar a assinatura')
+    _exigir_analise_completa(processo, 'encaminhar a outro analista')
 
-    # CORREÇÃO: seletor vazio chegava como '' e a consulta levantava erro 500.
     try:
         destinatario_id = int(destinatario_id)
     except (TypeError, ValueError):
@@ -288,29 +417,43 @@ def direcionar_assinatura(processo_id, usuario, destinatario_id):
     if destinatario.id == usuario.id:
         raise TransicaoInvalida(
             'Para enviar você mesmo ao Controlador, use "Encaminhar para o Controlador".')
-    # Item 8: NÃO restringir ao mesmo grupo.
-    # Item 9: indisponibilidade (férias, curso) informa, não bloqueia.
 
-    anterior = processo.assinatura_direcionada_para
-    redirecionamento = processo.situacao_tramite == 'ASSINATURA_DIRECIONADA'
+    responsavel_anterior = processo.analista_responsavel
+    ja_direcionado = processo.situacao_tramite == 'ASSINATURA_DIRECIONADA'
 
-    processo.assinatura_direcionada_para = destinatario
-    processo.assinatura_direcionada_em = timezone.now()
-    processo.situacao_tramite = 'ASSINATURA_DIRECIONADA'
-    processo.save(update_fields=['assinatura_direcionada_para',
-                                 'assinatura_direcionada_em',
-                                 'situacao_tramite'])
+    processo.analista_responsavel = destinatario
+    processo.tecnico = perm.nome_usuario(destinatario)
+    processo.data_hora_assumido = timezone.now()
+    processo.assinatura_direcionada_para = None
+    processo.assinatura_direcionada_em = None
+    processo.situacao_tramite = 'EM_ANALISE'
+    processo.save(update_fields=[
+        'analista_responsavel', 'tecnico', 'data_hora_assumido',
+        'assinatura_direcionada_para', 'assinatura_direcionada_em',
+        'situacao_tramite'])
 
-    # Item 10: o direcionamento anterior não é apagado — vira evento.
+    Pendencia.objects.filter(
+        processo=processo, status__in=Pendencia.STATUS_ABERTOS
+    ).update(responsavel_tecnico=destinatario)
+
+    if processo.numero_relatorio:
+        from .relatorios import registrar as registrar_relatorio
+        registrar_relatorio(processo)
+
     registrar_evento(
         processo,
-        'ASSINATURA_REDIRECIONADA' if redirecionamento else 'ASSINATURA_DIRECIONADA',
+        'ASSINATURA_REDIRECIONADA' if ja_direcionado else 'ASSINATURA_DIRECIONADA',
         usuario,
-        descricao=(f'Assinatura direcionada para '
-                   f'{perm.nome_usuario(destinatario)}.'),
-        destinatario_anterior=perm.nome_usuario(anterior) if anterior else None,
+        descricao=(
+            f'Análise encaminhada para {perm.nome_usuario(destinatario)}. '
+            f'O processo passou a ser dele.'),
+        analista_anterior=perm.nome_usuario(responsavel_anterior),
         destinatario=perm.nome_usuario(destinatario),
     )
+    registrar_diff(
+        processo, 'tecnico',
+        perm.nome_usuario(responsavel_anterior),
+        perm.nome_usuario(destinatario), usuario)
     return processo
 
 
@@ -348,12 +491,16 @@ def liberar_assinatura(processo_id, usuario):
 
     _exigir_analise_completa(processo, 'liberar para assinatura')
 
+    from .relatorios import atribuir_se_preciso
+    atribuir_se_preciso(processo)
+
     processo.situacao_tramite = 'AGUARDANDO_ASSINATURA'
     processo.liberado_assinatura_por = usuario
     processo.liberado_assinatura_em = timezone.now()
     processo.save(update_fields=['situacao_tramite',
                                  'liberado_assinatura_por',
-                                 'liberado_assinatura_em'])
+                                 'liberado_assinatura_em',
+                                 'numero_relatorio'])
 
     substitutiva = usuario.id != processo.analista_responsavel_id
     registrar_evento(
@@ -753,40 +900,3 @@ def _travar(processo_id):
     if processo is None:
         raise TransicaoInvalida('Processo não encontrado.')
     return processo
-
-
-def _numeros_relatorio_usados(grupo):
-    """Números já emitidos: no processo ou na planilha (mesmo após declinar)."""
-    usados = set()
-    fontes = (
-        Processo.objects.filter(genero=grupo)
-            .exclude(numero_relatorio__isnull=True)
-            .exclude(numero_relatorio='')
-            .values_list('numero_relatorio', flat=True),
-        LinhaControleRelatorio.objects.filter(grupo=grupo)
-            .exclude(numero_relatorio='')
-            .values_list('numero_relatorio', flat=True),
-    )
-    for lista in fontes:
-        for bruto in lista:
-            try:
-                usados.add(int(str(bruto).strip()))
-            except (TypeError, ValueError):
-                continue
-    return usados
-
-
-def _proximo_numero_relatorio(grupo):
-    """Um número por assunção. Trava a sequência para dois analistas não saírem iguais."""
-    SequenciaRelatorio.objects.get_or_create(
-        grupo=grupo, defaults={'proximo_numero': 1540})
-    seq = SequenciaRelatorio.objects.select_for_update().get(grupo=grupo)
-    usados = _numeros_relatorio_usados(grupo)
-    numero = int(seq.proximo_numero or 1)
-    if numero < 1:
-        numero = 1
-    while numero in usados:
-        numero += 1
-    seq.proximo_numero = numero + 1
-    seq.save(update_fields=['proximo_numero'])
-    return str(numero)

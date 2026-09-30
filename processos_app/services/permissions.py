@@ -8,8 +8,8 @@ Regras estruturais:
     chama `assert_permissao` ou o decorador `exige` (item 4).
   - Gestão NÃO é Analista: não assume processo, não analisa, não libera
     assinatura (item 2).
-  - `is_superuser` mantém o /admin, mas não substitui papel em ato de
-    tramitação.
+  - `is_superuser` mantém o /admin e pode desfazer tramitação já avançada
+    (análise, encaminhamento, retirada e saída). Não assume nem analisa.
 
 Substitui os helpers que estavam em views.py:
     can_access_genero, filter_processes_by_user_level, is_analista,
@@ -84,8 +84,8 @@ def is_gestao(user):
 
 
 def eh_administrador(user):
-    """Superusuário do sistema. Não substitui o papel nas análises,
-    mas registra a saída dos processos como o Protocolo."""
+    """Superusuário do sistema. Não assume nem analisa no lugar do
+    analista, mas desfaz tramitação e registra a saída como o Protocolo."""
     return bool(user and user.is_authenticated and user.is_superuser)
 
 
@@ -193,10 +193,15 @@ def pode_assumir_processo(user, processo):
 
 
 def pode_declinar_analise(user, processo):
-    """Devolver o processo à fila: quem assumiu, ou a Gestão para destrancar."""
-    if is_gestao(user):
+    """Devolver o processo à fila: quem assumiu, a Gestão ou o administrador."""
+    if eh_administrador(user) or is_gestao(user):
         return True
     return is_analista(user) and processo.analista_responsavel_id == user.id
+
+
+def pode_desfazer_tramite(user):
+    """Desfazer o último avanço (análise, encaminhamento, retirada, saída)."""
+    return eh_administrador(user)
 
 
 def pode_analisar_processo(user, processo):
@@ -208,8 +213,7 @@ def pode_analisar_processo(user, processo):
 
 
 def pode_direcionar_assinatura(user, processo):
-    """item 8: somente o analista responsável pela análise. A Gestão apenas
-    visualiza o direcionamento."""
+    """Somente o analista responsável encaminha a outro colega."""
     return is_analista(user) and processo.analista_responsavel_id == user.id
 
 
@@ -254,7 +258,7 @@ def pode_consultar_finalizados(user):
 
 def pode_consultar_assinatura_e_diligencias(user):
     """Gestão age nessas filas; o analista só consulta o próprio grupo."""
-    return is_gestao(user) or is_analista(user)
+    return is_gestao(user) or is_analista(user) or eh_administrador(user)
 
 
 def pode_consultar_controle_relatorio(user):
@@ -265,6 +269,17 @@ def pode_consultar_controle_relatorio(user):
 def pode_definir_ultimo_relatorio(user):
     """Só o administrador informa o último número já usado."""
     return eh_administrador(user)
+
+
+def pode_editar_numero_relatorio(user, processo=None):
+    """Analista (do grupo) e administrador corrigem o número gerado automaticamente."""
+    if eh_administrador(user):
+        return True
+    if not is_analista(user):
+        return False
+    if processo is None:
+        return True
+    return pode_consultar_processo(user, processo)
 
 
 def pode_resolver_pendencia(user, pendencia):
@@ -297,8 +312,15 @@ def pode_editar_cadastros(user):
 
 
 def pode_consultar_processo(user, processo):
-    """Leitura da tela do processo: analista do grupo e Gestão (item 2)."""
-    return is_gestao(user) or (is_analista(user) and pode_ver_grupo(user, processo.genero))
+    """Leitura da tela do processo: analista do grupo, Gestão e administrador."""
+    if eh_administrador(user) or is_gestao(user):
+        return True
+    return is_analista(user) and pode_ver_grupo(user, processo.genero)
+
+
+def pode_acessar_fila_gestao(user):
+    """Fila da Gestão de Processos: Gestão e administrador (para desfazer)."""
+    return is_gestao(user) or eh_administrador(user)
 
 
 def pode_anexar_arquivo(user, processo):
@@ -378,6 +400,9 @@ def contexto_de_permissoes(user):
         'pode_cancelar_processo': pode_cancelar_processo(user),
         'pode_consultar_controle_relatorio': pode_consultar_controle_relatorio(user),
         'pode_definir_ultimo_relatorio': pode_definir_ultimo_relatorio(user),
+        'pode_editar_numero_relatorio': pode_editar_numero_relatorio(user),
+        'pode_desfazer_tramite': pode_desfazer_tramite(user),
+        'pode_acessar_fila_gestao': pode_acessar_fila_gestao(user),
     }
 
 
@@ -401,5 +426,8 @@ def contexto_processor(request):
             'pode_cancelar_processo': False,
             'pode_consultar_controle_relatorio': False,
             'pode_definir_ultimo_relatorio': False,
+            'pode_editar_numero_relatorio': False,
+            'pode_desfazer_tramite': False,
+            'pode_acessar_fila_gestao': False,
         }
     return contexto_de_permissoes(user)

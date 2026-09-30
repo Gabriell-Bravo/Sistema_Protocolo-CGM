@@ -6,7 +6,7 @@
 {% block content_class %}content--analysis{% endblock %}
 
 {% block topbar_actions %}
-    <a href="{% if is_gestao %}{% url 'gestao_processos' %}{% else %}{% url 'area_analista' %}{% endif %}" class="btn btn--outline">
+    <a href="{% if is_gestao or user.is_superuser %}{% url 'gestao_processos' %}{% else %}{% url 'area_analista' %}{% endif %}" class="btn btn--outline">
         <span class="material-symbols-rounded">arrow_back</span>
         Voltar à fila
     </a>
@@ -68,7 +68,7 @@
     {% if somente_leitura %}
         <div class="alert alert--info">
             <span class="material-symbols-rounded">visibility</span>
-            <span>Consulta da Gestão. A análise, o direcionamento e a liberação são atos do analista.</span>
+            <span>{% if user.is_superuser %}Consulta do administrador. Use desfazer para recuar a tramitação.{% else %}Consulta da Gestão. A análise, o direcionamento e a liberação são atos do analista.{% endif %}</span>
         </div>
     {% endif %}
 
@@ -95,6 +95,12 @@
         <input type="hidden" name="motivo" value="Encaminhado para a fila sem análise">
     </form>
     {% endif %}
+    {% if pode_editar_numero_relatorio %}
+    <form id="formNumeroRelatorio" method="post" action="{% url 'controle_relatorio_alterar_numero' processo.id %}" hidden>
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    </form>
+    {% endif %}
     <form method="post" id="formAnalise">
         {% csrf_token %}
         <div class="form-section">
@@ -109,8 +115,21 @@
                 {% if eh_liquidacao %}
                 <div class="field">
                     <label class="field__label" for="numero_relatorio">Número do relatório</label>
+                    {% if pode_editar_numero_relatorio %}
+                    <div class="pendencia-add__row">
+                        <input type="text" id="numero_relatorio" name="numero_relatorio" form="formNumeroRelatorio"
+                               class="input" inputmode="numeric" value="{{ processo.numero_relatorio|default:'' }}"
+                               placeholder="Gerado ao encaminhar para o Controlador">
+                        <button type="submit" form="formNumeroRelatorio" class="btn btn--outline">
+                            <span class="material-symbols-rounded">save</span>
+                            Salvar
+                        </button>
+                    </div>
+                    <span class="field__hint">O sistema gera o número ao encaminhar para assinatura. Você pode corrigir aqui se precisar.</span>
+                    {% else %}
                     <input type="text" id="numero_relatorio" class="input" value="{% if processo.numero_relatorio %}Relatório {{ processo.numero_relatorio }}{% endif %}" readonly>
-                    <span class="field__hint">Sequência única do grupo de Liquidações, gerada ao assumir.</span>
+                    <span class="field__hint">{% if processo.numero_relatorio %}Número gerado no encaminhamento ao Controlador.{% else %}Será gerado ao encaminhar para o Controlador.{% endif %}</span>
+                    {% endif %}
                 </div>
                 {% endif %}
                 <div class="field">
@@ -148,7 +167,7 @@
                     <textarea id="observacao" name="observacao" class="textarea" rows="4" {% if not pode_editar %}readonly{% endif %}>{{ processo.observacao|default:'' }}</textarea>
                 </div>
             </div>
-            {% if pode_editar or pode_liberar or pode_direcionar or pode_declinar %}
+            {% if pode_editar or pode_liberar or pode_direcionar or pode_declinar or desfazer %}
             <div class="form-actions" style="margin-top:14px;">
                 {% if pode_editar %}
                 <button type="submit" name="acao" value="salvar" class="btn btn--outline">
@@ -161,6 +180,9 @@
                     <span class="material-symbols-rounded">send</span>
                     Encaminhar
                 </button>
+                {% endif %}
+                {% if desfazer and not pode_declinar %}
+                    {% include "includes/botao_desfazer.html" %}
                 {% endif %}
             </div>
             {% endif %}
@@ -176,8 +198,7 @@
                     Encaminhado para
                     <strong>{{ processo.nome_assinatura_direcionada }}</strong>
                     em {{ processo.assinatura_direcionada_em|date:"d/m/Y H:i" }}.
-                    A análise continua registrada em nome de
-                    {{ processo.nome_analista }}.
+                    Quem receber encaminha ao Controlador.
                 </span>
             </div>
         {% endif %}
@@ -186,9 +207,7 @@
                 <span class="material-symbols-rounded">draw</span>
                 <span>
                     Este processo foi encaminhado a você.
-                    Ao enviar ao Controlador, fica registrado que
-                    {{ processo.nome_analista }} fez a análise e você
-                    assinou.
+                    Ao enviar ao Controlador, a análise fica no seu nome.
                 </span>
             </div>
         {% endif %}
@@ -240,7 +259,7 @@
                         <span class="material-symbols-rounded">forward_to_inbox</span>
                         <div class="encaminhamento__texto">
                             <div class="encaminhamento__titulo">Encaminhar para outro analista</div>
-                            <div class="encaminhamento__hint">Quem analisou continua sendo você.</div>
+                            <div class="encaminhamento__hint">O processo deixa de ser seu e passa a ser dele.</div>
                         </div>
                     </button>
                     {% endif %}
@@ -259,7 +278,7 @@
 
                 {% if pode_direcionar %}
                 <div id="encaminharAnalista" hidden>
-                    <p class="encaminhamento__hint" style="margin:0 0 12px;">Selecione o colega. A indisponibilidade é informação, não impedimento.</p>
+                    <p class="encaminhamento__hint" style="margin:0 0 12px;">Selecione o colega. O processo passa a ser dele.</p>
                     <select id="destinatario" name="destinatario" form="formAnalise" class="select" aria-label="Analista de destino">
                         <option value="">Selecione um analista…</option>
                         {% for a in analistas %}

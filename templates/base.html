@@ -126,8 +126,6 @@
                     <span class="material-symbols-rounded">dashboard</span>
                     <span class="nav-item__label">Dashboard</span>
                 </a>
-            {% endif %}
-            {% if is_gestao %}
                 <a href="{% url 'gestao_processos' %}"
                    class="nav-item {% if nav == 'gestao_processos' %}is-active{% endif %}"
                    title="Gestão de Processos">
@@ -146,6 +144,8 @@
                     <span class="material-symbols-rounded">campaign</span>
                     <span class="nav-item__label">Diligências</span>
                 </a>
+            {% endif %}
+            {% if is_gestao %}
                 <a href="{% url 'gestao_pessoas' %}"
                    class="nav-item {% if nav == 'gestao_pessoas' %}is-active{% endif %}"
                    title="Gestão de Pessoas CGM">

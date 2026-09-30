@@ -15,6 +15,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from .models import Processo
@@ -65,11 +66,33 @@ def assumir(request, process_id):
 @require_POST
 def declinar_analise(request, process_id):
     """Devolve o processo à fila como disponível."""
-    destino = 'gestao_processos' if perm.is_gestao(request.user) else 'area_analista'
+    destino = request.POST.get('next') or ''
+    if not destino.startswith('/'):
+        destino = (
+            reverse('gestao_processos')
+            if perm.is_gestao(request.user) or perm.eh_administrador(request.user)
+            else reverse('area_analista'))
     erro, _ = _executar(
         request, tramitacao.declinar_analise, destino,
         process_id, request.user, request.POST.get('motivo'),
         sucesso='Processo devolvido à fila, sem análise.')
+    return erro or redirect(destino)
+
+
+@login_required
+@require_POST
+def desfazer_tramite(request, process_id):
+    """Administrador desfaz o último avanço de tramitação."""
+    destino = request.POST.get('next') or ''
+    if not destino.startswith('/'):
+        destino = reverse(
+            'gestao_processos'
+            if perm.pode_acessar_fila_gestao(request.user)
+            else 'listar_processos')
+    erro, _ = _executar(
+        request, tramitacao.desfazer_tramite, destino,
+        process_id, request.user, request.POST.get('motivo'),
+        sucesso='Último passo da tramitação desfeito.')
     return erro or redirect(destino)
 
 
@@ -80,10 +103,10 @@ def direcionar_assinatura(request, process_id):
     erro, processo = _executar(
         request, tramitacao.direcionar_assinatura, 'area_analista',
         process_id, request.user, request.POST.get('destinatario'),
-        sucesso='Processo encaminhado para outro analista.')
+        sucesso='Processo encaminhado. Passou a ser do analista escolhido.')
     if erro:
         return erro
-    return redirect('analista_processo', process_id=processo.id)
+    return redirect('area_analista')
 
 
 @login_required

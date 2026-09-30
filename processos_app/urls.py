@@ -67,6 +67,8 @@ urlpatterns = [
          tram.assumir, name='tram_assumir'),
     path('tramitacao/<int:process_id>/declinar/',
          tram.declinar_analise, name='tram_declinar_analise'),
+    path('tramitacao/<int:process_id>/desfazer/',
+         tram.desfazer_tramite, name='tram_desfazer_tramite'),
     path('tramitacao/<int:process_id>/direcionar-assinatura/',
          tram.direcionar_assinatura, name='tram_direcionar_assinatura'),
     path('tramitacao/<int:process_id>/liberar-assinatura/',
@@ -127,4 +129,6 @@ urlpatterns = [
          rel.controle_relatorio, name='controle_relatorio'),
     path('controle-relatorio/ultimo-numero/',
          rel.definir_ultimo_numero, name='controle_relatorio_ultimo'),
+    path('controle-relatorio/processo/<int:process_id>/numero/',
+         rel.alterar_numero, name='controle_relatorio_alterar_numero'),
 ]

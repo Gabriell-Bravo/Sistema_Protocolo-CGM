@@ -40,9 +40,13 @@ class AssumirTest(BaseProcessoTestCase):
             with self.assertRaises(PermissionDenied):
                 tramitacao.assumir(processo.id, usuario)
 
-    def test_liquidacao_gera_numero_relatorio(self):
+    def test_liquidacao_gera_numero_relatorio_ao_encaminhar(self):
         processo = self.novo_processo(self.especie_liq)
         tramitacao.assumir(processo.id, self.analista_liq)
+        processo.refresh_from_db()
+        self.assertFalse(processo.numero_relatorio)
+        self.preencher_analise(processo, numero_despacho=None)
+        tramitacao.liberar_assinatura(processo.id, self.analista_liq)
         processo.refresh_from_db()
         self.assertTrue(processo.numero_relatorio)
 
@@ -51,6 +55,10 @@ class AssumirTest(BaseProcessoTestCase):
         p2 = self.novo_processo(self.especie_liq, numero_processo='2/2026')
         tramitacao.assumir(p1.id, self.analista_liq)
         tramitacao.assumir(p2.id, self.analista_liq)
+        self.preencher_analise(p1, numero_despacho=None)
+        self.preencher_analise(p2, numero_despacho=None)
+        tramitacao.liberar_assinatura(p1.id, self.analista_liq)
+        tramitacao.liberar_assinatura(p2.id, self.analista_liq)
         p1.refresh_from_db()
         p2.refresh_from_db()
         self.assertNotEqual(p1.numero_relatorio, p2.numero_relatorio)
@@ -97,6 +105,55 @@ class DeclinarAnaliseTest(BaseProcessoTestCase):
         tramitacao.declinar_analise(processo.id, self.analista_lic, 'Desfazer teste')
         p.refresh_from_db()
         self.assertEqual(p.status, 'CANCELADA')
+
+
+class DesfazerTramiteAdminTest(BaseProcessoTestCase):
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        from .base import criar_usuario
+        cls.admin = criar_usuario('admin_desfazer', 'PROTOCOLO', is_superuser=True)
+
+    def test_admin_desfaz_analise(self):
+        processo = self.processo_em_analise()
+        tramitacao.desfazer_tramite(processo.id, self.admin, 'Corrigir')
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'DISPONIVEL')
+        self.assertIsNone(processo.analista_responsavel)
+        self.assertTrue(EventoProcesso.objects.filter(
+            processo=processo, tipo='ANALISE_DECLINADA').exists())
+
+    def test_admin_desfaz_encaminhamento_ao_controlador(self):
+        processo = self.processo_em_analise()
+        tramitacao.liberar_assinatura(processo.id, self.analista_lic)
+        tramitacao.desfazer_tramite(processo.id, self.admin)
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'EM_ANALISE')
+        self.assertEqual(processo.analista_responsavel, self.analista_lic)
+        self.assertIsNone(processo.liberado_assinatura_por)
+        self.assertTrue(EventoProcesso.objects.filter(
+            processo=processo, tipo='TRAMITE_DESFEITO').exists())
+
+    def test_admin_desfaz_retirada_e_saida(self):
+        processo = self.processo_disponivel_retirada()
+        tramitacao.desfazer_tramite(processo.id, self.admin)
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'AGUARDANDO_ASSINATURA')
+
+        tramitacao.disponibilizar_retirada(processo.id, self.protocolo)
+        tramitacao.registrar_saida([processo.id], self.protocolo)
+        tramitacao.desfazer_tramite(processo.id, self.admin)
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'DISPONIVEL_RETIRADA')
+        self.assertIsNone(processo.data_saida)
+
+    def test_gestao_e_analista_nao_desfazem_encaminhamento(self):
+        processo = self.processo_em_analise()
+        tramitacao.liberar_assinatura(processo.id, self.analista_lic)
+        for usuario in (self.gestao, self.analista_lic, self.protocolo):
+            with self.assertRaises(PermissionDenied):
+                tramitacao.desfazer_tramite(processo.id, usuario)
 
 
 class LiberacaoTest(BaseProcessoTestCase):
@@ -152,31 +209,35 @@ class LiberacaoTest(BaseProcessoTestCase):
 
 class DirecionamentoTest(BaseProcessoTestCase):
 
-    def test_direcionar_e_assinatura_substitutiva(self):
+    def test_encaminhar_passa_a_ser_do_colega(self):
         processo = self.processo_em_analise()
         tramitacao.direcionar_assinatura(processo.id, self.analista_lic, self.analista_liq.id)
         processo.refresh_from_db()
-        self.assertEqual(processo.situacao_tramite, 'ASSINATURA_DIRECIONADA')
-        # Item 8: pode ser de outro grupo.
-        self.assertEqual(processo.assinatura_direcionada_para, self.analista_liq)
+        self.assertEqual(processo.situacao_tramite, 'EM_ANALISE')
+        self.assertEqual(processo.analista_responsavel, self.analista_liq)
+        self.assertIsNone(processo.assinatura_direcionada_para)
 
-        # Só o destinatário libera.
-        with self.assertRaises(TransicaoInvalida):
+        with self.assertRaises(PermissionDenied):
             tramitacao.liberar_assinatura(processo.id, self.analista_lic)
         tramitacao.liberar_assinatura(processo.id, self.analista_liq)
         processo.refresh_from_db()
         self.assertEqual(processo.situacao_tramite, 'AGUARDANDO_ASSINATURA')
-        # Item 7: quem analisou continua sendo quem analisou.
-        self.assertEqual(processo.analista_responsavel, self.analista_lic)
+        self.assertEqual(processo.analista_responsavel, self.analista_liq)
         evento = EventoProcesso.objects.get(processo=processo, tipo='LIBERADO_ASSINATURA')
-        self.assertTrue(evento.dados.get('assinatura_substitutiva'))
+        self.assertFalse(evento.dados.get('assinatura_substitutiva'))
 
-    def test_redirecionar_preserva_historico(self):
+    def test_so_o_novo_responsavel_reencaminha(self):
         processo = self.processo_em_analise()
         tramitacao.direcionar_assinatura(processo.id, self.analista_lic, self.analista_liq.id)
-        tramitacao.direcionar_assinatura(processo.id, self.analista_lic, self.analista_lic2.id)
+        with self.assertRaises(PermissionDenied):
+            tramitacao.direcionar_assinatura(
+                processo.id, self.analista_lic, self.analista_lic2.id)
+        tramitacao.direcionar_assinatura(
+            processo.id, self.analista_liq, self.analista_lic2.id)
+        processo.refresh_from_db()
+        self.assertEqual(processo.analista_responsavel, self.analista_lic2)
         self.assertTrue(EventoProcesso.objects.filter(
-            processo=processo, tipo='ASSINATURA_REDIRECIONADA').exists())
+            processo=processo, tipo='ASSINATURA_DIRECIONADA').exists())
 
     def test_seletor_vazio_nao_gera_erro_500(self):
         processo = self.processo_em_analise()
@@ -202,7 +263,8 @@ class DirecionamentoTest(BaseProcessoTestCase):
         tramitacao.direcionar_assinatura(
             processo.id, self.analista_lic, self.analista_liq.id)
         processo.refresh_from_db()
-        self.assertEqual(processo.situacao_tramite, 'ASSINATURA_DIRECIONADA')
+        self.assertEqual(processo.situacao_tramite, 'EM_ANALISE')
+        self.assertEqual(processo.analista_responsavel, self.analista_liq)
 
 
 class RetiradaESaidaTest(BaseProcessoTestCase):

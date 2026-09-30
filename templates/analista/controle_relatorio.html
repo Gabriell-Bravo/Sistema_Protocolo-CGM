@@ -2,7 +2,7 @@
 
 {% block title %}Controle de relatório{% endblock %}
 {% block page_title %}Controle de relatório{% endblock %}
-{% block page_subtitle %}{% if pode_definir_ultimo %}Defina o último número já usado. A planilha registra cada processo assumido com relatório.{% else %}Planilha dos processos analisados com número de relatório.{% endif %}{% endblock %}
+{% block page_subtitle %}{% if pode_definir_ultimo %}Defina o último número já usado. O número é gerado ao encaminhar para assinatura e pode ser corrigido na planilha.{% else %}Planilha dos processos encaminhados. O número é gerado automaticamente e você pode corrigi-lo na tabela.{% endif %}{% endblock %}
 
 {% block content %}
 <div class="stack">
@@ -20,7 +20,7 @@
                     <label class="field__label" for="ultimo_numero">Último número já usado</label>
                     <input type="number" min="0" id="ultimo_numero" name="ultimo_numero"
                            class="input" value="{{ sequencia.ultimo }}" required>
-                    <span class="field__hint">O próximo processo assumido receberá o nº {{ sequencia.proximo }}.</span>
+                    <span class="field__hint">O próximo encaminhado para assinatura receberá o nº {{ sequencia.proximo }}.</span>
                 </div>
             </div>
             <div class="form-actions" style="margin-top:14px;">
@@ -74,7 +74,22 @@
                 <tbody>
                     {% for linha in linhas %}
                     <tr>
-                        <td><strong>{{ linha.numero_relatorio }}</strong></td>
+                        <td>
+                            {% if pode_editar_numero_relatorio and linha.processo_id %}
+                            <form method="post" action="{% url 'controle_relatorio_alterar_numero' linha.processo_id %}" class="prio-form">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <input type="text" name="numero_relatorio" class="input" inputmode="numeric"
+                                       value="{{ linha.numero_relatorio }}" aria-label="Número do relatório"
+                                       style="width:7rem;font-weight:700;">
+                                <button type="submit" class="icon-btn icon-btn--primary" title="Salvar número">
+                                    <span class="material-symbols-rounded">save</span>
+                                </button>
+                            </form>
+                            {% else %}
+                            <strong>{{ linha.numero_relatorio }}</strong>
+                            {% endif %}
+                        </td>
                         <td>{{ linha.data_relatorio|date:"d/m/Y" }}</td>
                         <td class="col-sticky">
                             {% if linha.processo_id %}
@@ -100,7 +115,7 @@
                             <div class="empty empty--compact">
                                 <span class="material-symbols-rounded">table_chart</span>
                                 <div class="empty__title">Nenhuma linha registrada</div>
-                                <div>Quando um analista assumir um processo que gera relatório, a linha aparece aqui.</div>
+                                <div>Quando um processo que gera relatório for encaminhado ao Controlador, a linha aparece aqui.</div>
                             </div>
                         </td>
                     </tr>
