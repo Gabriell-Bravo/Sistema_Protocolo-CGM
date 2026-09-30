@@ -225,15 +225,18 @@ def pessoas(request):
     hoje = timezone.localdate()
     servidores = list(gestao_pessoas.servidores())
     disponibilidade = gestao_pessoas.mapa_disponibilidade(servidores, hoje)
+    logados = perm.ids_com_sessao_ativa()
     quadro = [{
         'nome': perm.nome_usuario(servidor),
         'papel': dict(Profile.PAPEL_CHOICES).get(perm.get_papel(servidor) or '', '—'),
         'disponibilidade': disponibilidade.get(servidor.id, gestao_pessoas.DISPONIVEL),
         'disponivel': disponibilidade.get(servidor.id) == gestao_pessoas.DISPONIVEL,
+        'logado': servidor.id in logados,
     } for servidor in servidores]
 
     return render(request, 'gestao/pessoas.html', {
         'quadro': quadro,
+        'total_logados': sum(1 for linha in quadro if linha['logado']),
         'registros': Paginator(gestao_pessoas.registros(), 50).get_page(request.GET.get('page')),
         'tipos': TipoIndisponibilidade.objects.filter(ativo=True),
         'servidores': servidores,
@@ -299,11 +302,15 @@ def dashboard(request):
     }
     mes_anterior_fim = hoje.replace(day=1) - timedelta(days=1)
 
+    periodo = indicadores.periodo(inicio, fim, **filtros)
+    tempos = indicadores.tempos_medios(inicio, fim, **filtros)
     return render(request, 'gestao/dashboard.html', {
         'cards': indicadores.cards(hoje),
+        'panorama': indicadores.panorama(hoje),
         'equipe': indicadores.equipe(inicio, fim, hoje),
-        'periodo': indicadores.periodo(inicio, fim, **filtros),
-        'tempos': indicadores.tempos_medios(inicio, fim, **filtros),
+        'periodo': periodo,
+        'tempos_grafico': indicadores.barras_tempo(tempos),
+        'tempos': tempos,
         'inicio': inicio,
         'fim': fim,
         'filtros': filtros,

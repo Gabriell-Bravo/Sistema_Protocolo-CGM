@@ -10,18 +10,25 @@
     <section class="table-card">
         <div class="table-card__header">
             <span class="table-card__title">Equipe hoje — {{ hoje|date:"d/m/Y" }}</span>
-            <span class="table-card__count">{{ quadro|length }} servidor{{ quadro|length|pluralize:"es" }}</span>
+            <span class="table-card__count">{{ total_logados }} logado{{ total_logados|pluralize }} agora · {{ quadro|length }} servidor{{ quadro|length|pluralize:"es" }}</span>
         </div>
         <div class="table-scroll table-scroll--compact">
             <table class="table">
                 <thead>
-                    <tr><th>Servidor</th><th>Papel</th><th>Disponibilidade</th></tr>
+                    <tr><th>Servidor</th><th>Papel</th><th>Acesso</th><th>Disponibilidade</th></tr>
                 </thead>
                 <tbody>
                     {% for linha in quadro %}
                     <tr>
                         <td><strong>{{ linha.nome }}</strong></td>
                         <td>{{ linha.papel }}</td>
+                        <td>
+                            {% if linha.logado %}
+                                <span class="badge badge--dot badge--success">Logado</span>
+                            {% else %}
+                                <span class="badge badge--dot">Não logado</span>
+                            {% endif %}
+                        </td>
                         <td>
                             <span class="badge badge--dot {% if linha.disponivel %}badge--success{% else %}badge--warning{% endif %}">
                                 {{ linha.disponibilidade }}

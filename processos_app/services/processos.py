@@ -20,7 +20,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from ..models import Processo
+from ..models import Processo, UrgenciaRecorrente
 from . import cadastros, monitoramento, prazos
 from . import permissions as perm
 from .eventos import registrar_diff, registrar_evento
@@ -208,10 +208,14 @@ def criar_processo(dados, usuario):
 
     processo.secretaria_fk = cadastros.resolver_unidade(processo.secretaria)
 
-    # item 17: a prioridade é da Gestão. Todo processo nasce Normal.
-    processo.prioridade = 'NORMAL'
-    processo.prioridade_fk = cadastros.resolver_prioridade('NORMAL')
-    processo.prazo_dias = prazos.dias_por_prioridade('NORMAL')
+    # item 17: a prioridade é da Gestão. Nasce Normal, salvo quando a
+    # Gestão marcou este número como urgência recorrente.
+    codigo_prioridade = ('URGENTE'
+                         if UrgenciaRecorrente.vale_para(processo.numero_processo)
+                         else 'NORMAL')
+    processo.prioridade = codigo_prioridade
+    processo.prioridade_fk = cadastros.resolver_prioridade(codigo_prioridade)
+    processo.prazo_dias = prazos.dias_por_prioridade(codigo_prioridade)
 
     monitoramento.definir_inicial(processo)
     processo.save()

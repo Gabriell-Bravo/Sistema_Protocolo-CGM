@@ -45,7 +45,7 @@
         </div>
 
         <nav class="sidebar__nav">
-            {% if is_protocolo or is_gestao %}
+            {% if is_protocolo or is_gestao or user.is_superuser %}
                 <div class="sidebar__group-label">Protocolo</div>
 
                 {% if is_protocolo %}
@@ -95,7 +95,7 @@
                 </a>
             {% endif %}
 
-            {% if is_gestao %}
+            {% if is_gestao or user.is_superuser %}
                 <div class="sidebar__group-label">Gestão</div>
                 <a href="{% url 'gestao_dashboard' %}"
                    class="nav-item {% if nav == 'gestao_dashboard' %}is-active{% endif %}"
@@ -103,6 +103,8 @@
                     <span class="material-symbols-rounded">dashboard</span>
                     <span class="nav-item__label">Dashboard</span>
                 </a>
+            {% endif %}
+            {% if is_gestao %}
                 <a href="{% url 'gestao_processos' %}"
                    class="nav-item {% if nav == 'gestao_processos' %}is-active{% endif %}"
                    title="Gestão de Processos">

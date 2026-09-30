@@ -83,6 +83,12 @@ def is_gestao(user):
     return get_papel(user) == GESTAO
 
 
+def eh_administrador(user):
+    """Superusuário do sistema. Não substitui o papel nas análises,
+    mas registra a saída dos processos como o Protocolo."""
+    return bool(user and user.is_authenticated and user.is_superuser)
+
+
 def grupo_do_analista(user):
     """Grupo de atuação do analista, ou None se o usuário não for analista."""
     return PAPEL_PARA_GRUPO.get(get_papel(user))
@@ -92,6 +98,33 @@ def nome_usuario(user):
     if not user:
         return ''
     return user.get_full_name() or user.username
+
+
+def ids_com_sessao_ativa():
+    """Usuários com sessão ainda válida: estão logados neste momento.
+
+    A sessão padrão dura algumas horas e some no logout. Usuário
+    desativado não entra aqui, mesmo que tenha restado uma sessão antiga.
+    """
+    from django.contrib.auth.models import User
+    from django.contrib.sessions.models import Session
+    from django.utils import timezone
+
+    ids = set()
+    agora = timezone.now()
+    for sessao in Session.objects.filter(expire_date__gte=agora).iterator():
+        uid = sessao.get_decoded().get('_auth_user_id')
+        if uid is None:
+            continue
+        try:
+            ids.add(int(uid))
+        except (TypeError, ValueError):
+            continue
+    if not ids:
+        return ids
+    ativos = set(User.objects.filter(id__in=ids, is_active=True)
+                 .values_list('id', flat=True))
+    return ativos
 
 
 def analistas_ativos():
@@ -120,7 +153,7 @@ def is_analista_ativo(user):
 
 def pode_ver_grupo(user, grupo):
     """Visualização. Protocolo e Gestão veem todos os grupos."""
-    if is_protocolo(user) or is_gestao(user):
+    if eh_administrador(user) or is_protocolo(user) or is_gestao(user):
         return True
     if is_analista(user):
         return not grupo or grupo_do_analista(user) == grupo
@@ -137,7 +170,7 @@ def pode_analisar_grupo(user, grupo):
 
 def filtrar_por_grupo(user, queryset, campo='genero'):
     """Restringe um queryset de Processo ao que o usuário pode ver."""
-    if is_protocolo(user) or is_gestao(user):
+    if eh_administrador(user) or is_protocolo(user) or is_gestao(user):
         return queryset
     if is_analista(user):
         return queryset.filter(**{campo: grupo_do_analista(user)})
@@ -195,8 +228,8 @@ def pode_disponibilizar_retirada(user):
 
 
 def pode_registrar_saida(user):
-    """item 15."""
-    return is_protocolo(user)
+    """item 15. O administrador também registra a saída."""
+    return is_protocolo(user) or eh_administrador(user)
 
 
 def pode_alterar_destino(user):
@@ -225,7 +258,7 @@ def pode_criar_pendencia(user, processo):
 
 
 def pode_ver_dashboard(user):
-    return is_gestao(user)
+    return is_gestao(user) or eh_administrador(user)
 
 
 def pode_gerir_pessoas(user):

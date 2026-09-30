@@ -1,0 +1,13 @@
+<div class="grafico__lista">
+    {% for item in itens %}
+        <div class="grafico__linha">
+            <span class="grafico__rotulo" title="{{ item.rotulo }}">{{ item.rotulo }}</span>
+            <span class="grafico__trilha">
+                <span class="grafico__barra grafico__barra--{{ item.cor }}" style="width: {{ item.pct }}%"></span>
+            </span>
+            <span class="grafico__valor">{{ item.texto|default:item.valor }}</span>
+        </div>
+    {% empty %}
+        <p class="cell-muted">Sem dados neste recorte.</p>
+    {% endfor %}
+</div>

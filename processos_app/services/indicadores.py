@@ -30,6 +30,60 @@ def _url(nome, consulta=''):
 # Cards (item 47) — todos clicáveis
 # --------------------------------------------------------------------------
 
+def _com_percentual(linhas):
+    """Largura da barra em relação ao maior valor do próprio gráfico."""
+    maior = max((item['valor'] or 0 for item in linhas), default=0)
+    for item in linhas:
+        valor = item['valor'] or 0
+        item['pct'] = 0 if not valor or not maior else max(6, round(100 * valor / maior))
+    return linhas
+
+
+def panorama(referencia=None):
+    """Recorte de agora: onde o processo está, a prioridade e o prazo."""
+    hoje = referencia or timezone.localdate()
+    ativos = list(tramitacao.ativos().only(
+        'id', 'situacao_tramite', 'prioridade', 'data_entrada'))
+
+    por_situacao = {}
+    por_prioridade = {'NORMAL': 0, 'PRIORITARIO': 0, 'URGENTE': 0}
+    no_prazo = vence_hoje = vencido = 0
+    for processo in ativos:
+        por_situacao[processo.situacao_tramite] = por_situacao.get(processo.situacao_tramite, 0) + 1
+        codigo = processo.prioridade if processo.prioridade in por_prioridade else 'NORMAL'
+        por_prioridade[codigo] += 1
+        dias = prazos.dias_restantes(processo, hoje)
+        if dias is None:
+            continue
+        if dias < 0:
+            vencido += 1
+        elif dias == 0:
+            vence_hoje += 1
+        else:
+            no_prazo += 1
+
+    rotulos = dict(Processo.SITUACAO_TRAMITE_CHOICES)
+    return {
+        'situacao': _com_percentual([
+            {'rotulo': rotulos['DISPONIVEL'], 'valor': por_situacao.get('DISPONIVEL', 0), 'cor': 'ok'},
+            {'rotulo': rotulos['EM_ANALISE'], 'valor': por_situacao.get('EM_ANALISE', 0), 'cor': 'info'},
+            {'rotulo': rotulos['ASSINATURA_DIRECIONADA'], 'valor': por_situacao.get('ASSINATURA_DIRECIONADA', 0), 'cor': 'info'},
+            {'rotulo': rotulos['AGUARDANDO_ASSINATURA'], 'valor': por_situacao.get('AGUARDANDO_ASSINATURA', 0), 'cor': 'alerta'},
+            {'rotulo': rotulos['DISPONIVEL_RETIRADA'], 'valor': por_situacao.get('DISPONIVEL_RETIRADA', 0), 'cor': 'ok'},
+        ]),
+        'prioridade': _com_percentual([
+            {'rotulo': 'Normal', 'valor': por_prioridade['NORMAL'], 'cor': 'ok'},
+            {'rotulo': 'Prioritário', 'valor': por_prioridade['PRIORITARIO'], 'cor': 'alerta'},
+            {'rotulo': 'Urgente', 'valor': por_prioridade['URGENTE'], 'cor': 'perigo'},
+        ]),
+        'prazo': _com_percentual([
+            {'rotulo': 'No prazo', 'valor': no_prazo, 'cor': 'ok'},
+            {'rotulo': 'Vence hoje', 'valor': vence_hoje, 'cor': 'alerta'},
+            {'rotulo': 'Vencido', 'valor': vencido, 'cor': 'perigo'},
+        ]),
+    }
+
+
 def cards(referencia=None):
     hoje = referencia or timezone.localdate()
     ativos = tramitacao.ativos()
@@ -155,6 +209,19 @@ def periodo(inicio, fim, **filtros):
     retornos = recebidos.annotate(ja_passou=Exists(anterior)).filter(ja_passou=True).count()
 
     rotulos = dict(Processo.GENERO_LABELS)
+    por_grupo = _com_percentual([
+        {'rotulo': rotulos.get(l['genero'], l['genero'] or '—'),
+         'valor': l['total'], 'cor': 'info'}
+        for l in recebidos.values('genero').annotate(total=Count('id')).order_by('-total')
+    ])
+    por_secretaria = _com_percentual([
+        {'rotulo': l['secretaria'] or '—', 'valor': l['total'], 'cor': 'info'}
+        for l in recebidos.values('secretaria').annotate(total=Count('id')).order_by('-total', 'secretaria')
+    ])
+    por_especie = _com_percentual([
+        {'rotulo': l['especie'] or '—', 'valor': l['total'], 'cor': 'neutro'}
+        for l in recebidos.values('especie').annotate(total=Count('id')).order_by('-total', 'especie')
+    ])
     return {
         'recebidos': recebidos.count(),
         'liberados_assinatura': liberados.count(),
@@ -162,14 +229,15 @@ def periodo(inicio, fim, **filtros):
         'estoque_inicial': estoque(inicio - timedelta(days=1)),
         'estoque_final': estoque(fim),
         'retornos': retornos,
-        'por_grupo': [
-            {'rotulo': rotulos.get(l['genero'], l['genero'] or '—'), 'total': l['total']}
-            for l in recebidos.values('genero').annotate(total=Count('id')).order_by('-total')
-        ],
-        'por_secretaria': list(recebidos.values('secretaria')
-                               .annotate(total=Count('id')).order_by('-total', 'secretaria')),
-        'por_especie': list(recebidos.values('especie')
-                            .annotate(total=Count('id')).order_by('-total', 'especie')),
+        'por_grupo': por_grupo,
+        'por_secretaria': por_secretaria,
+        'por_especie': por_especie,
+        'movimento': _com_percentual([
+            {'rotulo': 'Recebidos', 'valor': recebidos.count(), 'cor': 'info'},
+            {'rotulo': 'Liberados para assinatura', 'valor': liberados.count(), 'cor': 'alerta'},
+            {'rotulo': 'Saídas concluídas', 'valor': saidas.count(), 'cor': 'ok'},
+            {'rotulo': 'Retornos', 'valor': retornos, 'cor': 'neutro'},
+        ]),
     }
 
 
@@ -202,6 +270,27 @@ def tempos_do_processo(processo):
         'aguardando_retirada': _dias(processo.disponivel_retirada_em, processo.saida_concluida_em),
         'total': _dias(entrada, processo.saida_concluida_em),
     }
+
+
+def barras_tempo(tempos):
+    """Barras do tempo médio. O texto mostra o dia; a barra, a proporção."""
+    etapas = (
+        ('Em fila', 'em_fila', 'info'),
+        ('Análise', 'analise', 'alerta'),
+        ('Pós-análise', 'pos_analise', 'neutro'),
+        ('Aguardando retirada', 'aguardando_retirada', 'info'),
+        ('Total, da entrada à saída', 'total', 'ok'),
+    )
+    linhas = []
+    for rotulo, chave, cor in etapas:
+        valor = tempos.get(chave)
+        linhas.append({
+            'rotulo': rotulo,
+            'valor': valor or 0,
+            'texto': '—' if valor is None else str(valor).replace('.', ','),
+            'cor': cor,
+        })
+    return _com_percentual(linhas)
 
 
 def tempos_medios(inicio, fim, **filtros):

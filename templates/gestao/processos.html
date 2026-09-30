@@ -82,4 +82,13 @@
 
     {% include "analista/_fila_grupo.html" with titulo="Liquidações" grupo_css="liquidacoes" icone="payments" processos=liquidacoes mostrar_contratada=True modo_gestao=True pode_assumir=False %}
 </div>
+
+<div id="balao-urgencia" class="balao" hidden>
+    <p class="balao__texto">Esta urgência vale só agora, ou sempre que o processo <strong data-balao-numero></strong> entrar de novo?</p>
+    <div class="balao__acoes">
+        <button type="button" class="btn btn--primary btn--sm" data-urgencia="sim">Sim, recorrente</button>
+        <button type="button" class="btn btn--outline btn--sm" data-urgencia="nao">Não, só desta vez</button>
+        <button type="button" class="btn btn--ghost btn--sm" data-urgencia="cancelar">Cancelar</button>
+    </div>
+</div>
 {% endblock %}

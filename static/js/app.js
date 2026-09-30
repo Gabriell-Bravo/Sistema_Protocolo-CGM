@@ -291,6 +291,86 @@
         }
     }
 
+    function initUrgencia() {
+        var balao = document.getElementById('balao-urgencia');
+        if (!balao) return;
+
+        var formulario = null;
+        var selectAberto = null;
+        var ignorarClique = false;
+        var numero = balao.querySelector('[data-balao-numero]');
+
+        function fechar(restaurar) {
+            balao.hidden = true;
+            if (restaurar && selectAberto) {
+                selectAberto.value = selectAberto.getAttribute('data-anterior') || selectAberto.value;
+            }
+            formulario = null;
+            selectAberto = null;
+        }
+
+        function abrir(select) {
+            formulario = select.form;
+            selectAberto = select;
+            var celula = select.closest('tr');
+            var rotulo = celula ? celula.querySelector('.col-sticky strong') : null;
+            numero.textContent = rotulo ? rotulo.textContent.trim() : 'deste número';
+            balao.hidden = false;
+
+            var caixa = select.getBoundingClientRect();
+            var largura = balao.offsetWidth;
+            var esquerda = Math.min(
+                Math.max(8, caixa.left),
+                window.innerWidth - largura - 8
+            );
+            var topo = caixa.bottom + 8;
+            if (topo + balao.offsetHeight > window.innerHeight - 8) {
+                topo = Math.max(8, caixa.top - balao.offsetHeight - 8);
+            }
+            balao.style.left = esquerda + 'px';
+            balao.style.top = topo + 'px';
+            ignorarClique = true;
+            window.setTimeout(function () { ignorarClique = false; }, 0);
+        }
+
+        document.addEventListener('change', function (event) {
+            var select = event.target.closest('.prio-form select[name="prioridade"]');
+            if (!select) return;
+            if (select.value === 'URGENTE') {
+                abrir(select);
+                return;
+            }
+            select.setAttribute('data-anterior', select.value);
+            select.form.submit();
+        });
+
+        balao.addEventListener('click', function (event) {
+            var botao = event.target.closest('[data-urgencia]');
+            if (!botao || !formulario) return;
+            var escolha = botao.getAttribute('data-urgencia');
+            if (escolha === 'cancelar') {
+                fechar(true);
+                return;
+            }
+            var campo = formulario.querySelector('input[name="urgencia_recorrente"]');
+            if (campo) campo.value = escolha;
+            var alvo = formulario;
+            fechar(false);
+            alvo.submit();
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && !balao.hidden) fechar(true);
+        });
+
+        document.addEventListener('click', function (event) {
+            if (balao.hidden || ignorarClique) return;
+            if (event.target.closest('#balao-urgencia')) return;
+            if (event.target.closest('.prio-form select[name="prioridade"]')) return;
+            fechar(true);
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         initTheme();
         initSidebar();
@@ -299,5 +379,6 @@
         initColumnPickers();
         initModals();
         initAnexos();
+        initUrgencia();
     });
 })();

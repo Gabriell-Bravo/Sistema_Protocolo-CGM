@@ -185,15 +185,14 @@ def form_alterar_destino(request, process_id):
 @require_POST
 def alterar_prioridade(request, process_id):
     """item 17: a prioridade é gerenciada pela Gestão."""
+    escolha = request.POST.get('urgencia_recorrente')
     erro, processo = _executar(
         request, tramitacao.alterar_prioridade, 'gestao_processos',
-        process_id, request.user, request.POST.get('prioridade'))
+        process_id, request.user, request.POST.get('prioridade'),
+        recorrente=tramitacao.escolher_recorrencia(escolha))
     if erro:
         return erro
-    messages.success(
-        request,
-        f'Prioridade de {processo.numero_processo} atualizada para '
-        f'{processo.get_prioridade_display()}.')
+    messages.success(request, tramitacao.mensagem_de_prioridade(processo, escolha))
     return redirect('gestao_processos')
 
 

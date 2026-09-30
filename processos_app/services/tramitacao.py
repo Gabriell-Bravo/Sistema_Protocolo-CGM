@@ -33,7 +33,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from ..models import Pendencia, Processo, SequenciaRelatorio
+from ..models import Pendencia, Processo, SequenciaRelatorio, UrgenciaRecorrente
 from . import permissions as perm
 from . import prazos
 from .eventos import registrar_evento, registrar_diff, registrar_evento_pendencia
@@ -403,7 +403,7 @@ def registrar_saida(ids, usuario):
     """
     perm.assert_permissao(
         perm.pode_registrar_saida(usuario),
-        'Somente o Protocolo pode registrar saída.')
+        'Somente o Protocolo ou o administrador pode registrar saída.')
 
     ids = [int(i) for i in ids if str(i).strip()]
     if not ids:
@@ -504,8 +504,25 @@ def alterar_destino(processo_id, usuario, novo_destino,
 # Prioridade (item 17) e cancelamento (item 35) — Gestão
 # --------------------------------------------------------------------------
 
+def escolher_recorrencia(valor):
+    """'sim' / 'nao' vindos do balão. Outro valor não altera a preferência."""
+    return {'sim': True, 'nao': False}.get(valor)
+
+
+def mensagem_de_prioridade(processo, escolha):
+    texto = (f'Prioridade de {processo.numero_processo} atualizada para '
+             f'{processo.get_prioridade_display()}.')
+    if processo.prioridade != 'URGENTE':
+        return texto
+    if escolha == 'sim':
+        return texto + ' As próximas entradas deste número já nascem urgentes.'
+    if escolha == 'nao':
+        return texto + ' Vale só nesta entrada.'
+    return texto
+
+
 @transaction.atomic
-def alterar_prioridade(processo_id, usuario, prioridade):
+def alterar_prioridade(processo_id, usuario, prioridade, recorrente=None):
     processo = _travar(processo_id)
 
     perm.assert_permissao(
@@ -528,9 +545,18 @@ def alterar_prioridade(processo_id, usuario, prioridade):
     processo.prazo_dias = cadastro.prazo_dias
     processo.save(update_fields=['prioridade', 'prioridade_fk', 'prazo_dias'])
 
+    if prioridade == 'URGENTE' and recorrente is not None:
+        UrgenciaRecorrente.definir(processo.numero_processo, bool(recorrente), usuario)
+
+    descricao = f'Prioridade alterada para {processo.get_prioridade_display()}.'
+    if prioridade == 'URGENTE' and recorrente is True:
+        descricao += ' As próximas entradas deste número já nascem urgentes.'
+    elif prioridade == 'URGENTE' and recorrente is False:
+        descricao += ' Vale só nesta entrada.'
+
     registrar_evento(
         processo, 'PRIORIDADE_ALTERADA', usuario,
-        descricao=f'Prioridade alterada para {processo.get_prioridade_display()}.',
+        descricao=descricao,
         prioridade_anterior=anterior,
         prioridade_nova=prioridade,
     )
@@ -667,7 +693,7 @@ def registrar_saida_direta(processo_id, usuario):
     """
     processo = _travar(processo_id)
     perm.assert_permissao(perm.pode_registrar_saida(usuario),
-                          'Somente o Protocolo pode registrar saída.')
+                          'Somente o Protocolo ou o administrador pode registrar saída.')
     if processo.esta_cancelado:
         raise TransicaoInvalida('Processo cancelado não recebe saída.')
     if not pode_saida_direta(processo):

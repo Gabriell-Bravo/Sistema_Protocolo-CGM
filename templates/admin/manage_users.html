@@ -18,7 +18,7 @@
 <section class="card">
     <div class="card__header">
         <span class="card__title">Lista de usuários</span>
-        <span class="card__hint">{{ users|length }} cadastrado{{ users|length|pluralize:"s" }}</span>
+        <span class="card__hint">{{ total_logados }} logado{{ total_logados|pluralize }} agora · {{ users|length }} cadastrado{{ users|length|pluralize:"s" }}</span>
     </div>
     <div class="card__body">
         <ul class="user-list">
@@ -29,6 +29,11 @@
                         <div class="user-row__name">
                             {{ u.username }}
                             {% if u.is_superuser %}<span class="badge badge--violet">Super Admin</span>{% endif %}
+                            {% if u.esta_logado %}
+                                <span class="badge badge--dot badge--success">Logado</span>
+                            {% else %}
+                                <span class="badge badge--dot">Não logado</span>
+                            {% endif %}
                             {% if not u.is_active %}<span class="badge">Desativado</span>{% endif %}
                         </div>
                         <div class="user-row__meta">

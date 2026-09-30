@@ -154,8 +154,7 @@ def formatar(dias):
     if dias is None:
         return ''
     if dias < 0:
-        n = abs(dias)
-        return f'Vencido há {n} dia' + ('s' if n > 1 else '')
+        return f'{dias} dia(s)'
     if dias == 0:
         return 'Vence hoje'
     return f'{dias} dia' + ('s' if dias > 1 else '')
@@ -184,7 +183,7 @@ def anotar(processo, referencia=None):
     if dias is None:
         processo.prazo_formatado = '-'
     elif dias < 0:
-        processo.prazo_formatado = f'{abs(dias)} dia(s) atrasado'
+        processo.prazo_formatado = f'{dias} dia(s)'
     elif dias == 0:
         processo.prazo_formatado = 'Vence hoje'
     else:

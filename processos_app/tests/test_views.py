@@ -77,6 +77,59 @@ class TelasPorPapelTest(BaseProcessoTestCase):
         resposta = self._get(self.gestao, 'exportar_finalizados_excel')
         self.assertIn('spreadsheet', resposta['Content-Type'])
 
+    def test_dashboard_mostra_graficos_para_gestao_e_administrador(self):
+        from .base import criar_usuario
+        self.novo_processo()
+        pagina = self._get(self.gestao, 'gestao_dashboard')
+        self.assertContains(pagina, 'Onde estão os processos')
+        self.assertContains(pagina, 'Prioridade')
+        self.assertContains(pagina, 'grafico__barra')
+        self.assertGreaterEqual(pagina.context['panorama']['situacao'][0]['valor'], 1)
+        admin = criar_usuario('admin_dash', 'PROTOCOLO', is_superuser=True)
+        self._get(admin, 'gestao_dashboard')
+
+    def test_administrador_ve_o_botao_de_saida(self):
+        from .base import criar_usuario
+        self.novo_processo()
+        pagina_gestao = self._get(self.gestao, 'listar_processos')
+        self.assertNotContains(pagina_gestao, 'Registrar saída')
+        admin = criar_usuario('admin_lista', 'GESTAO', is_superuser=True, is_staff=True)
+        pagina_admin = self._get(admin, 'listar_processos')
+        self.assertContains(pagina_admin, 'Registrar saída')
+
+    def test_gestao_pergunta_se_a_urgencia_e_recorrente(self):
+        from processos_app.models import UrgenciaRecorrente
+        processo = self.novo_processo(numero_processo='880/2026')
+        pagina = self._get(self.gestao, 'gestao_processos')
+        self.assertContains(pagina, 'balao-urgencia')
+        self.assertContains(pagina, 'só desta vez')
+        self.client.post(reverse('gestao_alterar_prioridade', args=[processo.id]), {
+            'prioridade': 'URGENTE',
+            'urgencia_recorrente': 'sim',
+        })
+        self.assertTrue(UrgenciaRecorrente.vale_para('880/2026'))
+        processo.refresh_from_db()
+        self.assertEqual(processo.prioridade, 'URGENTE')
+
+    def test_gestao_e_admin_veem_quem_esta_logado(self):
+        pessoas = self._get(self.gestao, 'gestao_pessoas')
+        por_nome = {linha['nome']: linha['logado'] for linha in pessoas.context['quadro']}
+        self.assertTrue(por_nome['Gestora'])
+        self.assertFalse(por_nome['Protocolo'])
+        self.assertContains(pessoas, 'Logado')
+        self.assertContains(pessoas, 'Não logado')
+
+        admin = self.gestao
+        admin.is_superuser = True
+        admin.is_staff = True
+        admin.save()
+        usuarios = self._get(admin, 'manage_users')
+        por_id = {u.id: u.esta_logado for u in usuarios.context['users']}
+        self.assertTrue(por_id[admin.id])
+        self.assertFalse(por_id[self.protocolo.id])
+        self.assertContains(usuarios, 'Logado')
+        self.assertContains(usuarios, 'Não logado')
+
 
 @override_settings(**STATIC)
 class AcoesHttpTest(BaseProcessoTestCase):

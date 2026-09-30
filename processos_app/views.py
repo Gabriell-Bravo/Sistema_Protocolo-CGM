@@ -321,7 +321,7 @@ def calcular_prazo(data_entrada, prioridade_value):
 
 def formatar_prazo(dias_restantes):
     if dias_restantes < 0:
-        return f"{abs(dias_restantes)} dia(s) atrasado"
+        return f"{dias_restantes} dia(s)"
     if dias_restantes == 0:
         return "Vence hoje"
     return f"{dias_restantes} dia(s) restante(s)"
@@ -1054,13 +1054,19 @@ def register(request):
 @login_required
 @user_passes_test(lambda u: u.is_superuser or u.is_staff)
 def manage_users(request):
-    users = User.objects.all().order_by('username')
-    users = users.select_related('profile')
+    users = list(User.objects.all().select_related('profile').order_by('username'))
+    logados = perm.ids_com_sessao_ativa()
+    for usuario in users:
+        usuario.esta_logado = usuario.id in logados
 
     # item 3: o que governa o acesso é o papel, não o nível legado.
     user_levels = Profile.PAPEL_CHOICES
 
-    return render(request, 'admin/manage_users.html', {'users': users, 'user_levels': user_levels})
+    return render(request, 'admin/manage_users.html', {
+        'users': users,
+        'user_levels': user_levels,
+        'total_logados': sum(1 for usuario in users if usuario.esta_logado),
+    })
 
 
 @login_required
@@ -1393,18 +1399,17 @@ def gestao_alterar_prioridade(request, process_id):
 
     # Delegado para services/tramitacao.py (itens 17 e 52).
     try:
+        escolha = request.POST.get('urgencia_recorrente')
         processo = tramitacao.alterar_prioridade(
-            process_id, request.user, request.POST.get('prioridade'))
+            process_id, request.user, request.POST.get('prioridade'),
+            recorrente=tramitacao.escolher_recorrencia(escolha))
     except (PermissionDenied, ValidationError) as exc:
         mensagens = getattr(exc, 'messages', [str(exc)])
         messages.error(request, '; '.join(mensagens))
         return redirect('gestao_processos')
 
     messages.success(
-        request,
-        f"Prioridade de {processo.numero_processo} atualizada para "
-        f"{processo.get_prioridade_display()}."
-    )
+        request, tramitacao.mensagem_de_prioridade(processo, escolha))
     return redirect('gestao_processos')
 
 

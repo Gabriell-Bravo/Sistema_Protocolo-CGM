@@ -29,7 +29,8 @@
                         {% if modo_gestao %}
                             <form method="post" action="{% url 'gestao_alterar_prioridade' processo.id %}" class="prio-form">
                                 {% csrf_token %}
-                                <select name="prioridade" class="select select--prio" onchange="this.form.submit()" aria-label="Prioridade">
+                                <input type="hidden" name="urgencia_recorrente" value="">
+                                <select name="prioridade" class="select select--prio" data-anterior="{{ processo.prioridade }}" aria-label="Prioridade">
                                     {% for value, label in prioridades %}
                                         <option value="{{ value }}" {% if processo.prioridade == value %}selected{% endif %}>{{ label }}</option>
                                     {% endfor %}

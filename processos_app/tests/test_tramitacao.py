@@ -242,6 +242,16 @@ class LegadoTest(BaseProcessoTestCase):
         with self.assertRaises(PermissionDenied):
             tramitacao.registrar_saida_direta(processo.id, self.gestao)
 
+    def test_administrador_registra_saida(self):
+        from .base import criar_usuario
+        admin = criar_usuario('admin_saida', 'GESTAO', is_superuser=True)
+        processo = self.novo_processo()
+        tramitacao.registrar_saida_direta(processo.id, admin)
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'SAIDA_CONCLUIDA')
+        self.assertIsNotNone(processo.data_saida)
+        self.assertIsNotNone(processo.hora_saida)
+
 
 class DestinoPrioridadeCancelamentoTest(BaseProcessoTestCase):
 
@@ -254,6 +264,32 @@ class DestinoPrioridadeCancelamentoTest(BaseProcessoTestCase):
         self.assertEqual(processo.destino, 'Outro destino')
         self.assertTrue(EventoProcesso.objects.filter(
             processo=processo, tipo='DESTINO_ALTERADO').exists())
+
+    def test_urgencia_recorrente_nas_proximas_entradas(self):
+        processo = self.novo_processo(numero_processo='777/2026')
+        tramitacao.alterar_prioridade(
+            processo.id, self.gestao, 'URGENTE', recorrente=True)
+        seguinte = self.novo_processo(numero_processo='777/2026', volume='2')
+        self.assertEqual(seguinte.prioridade, 'URGENTE')
+
+    def test_urgencia_so_desta_entrada(self):
+        processo = self.novo_processo(numero_processo='778/2026')
+        tramitacao.alterar_prioridade(
+            processo.id, self.gestao, 'URGENTE', recorrente=False)
+        processo.refresh_from_db()
+        self.assertEqual(processo.prioridade, 'URGENTE')
+        seguinte = self.novo_processo(numero_processo='778/2026', volume='2')
+        self.assertEqual(seguinte.prioridade, 'NORMAL')
+
+    def test_nao_recorrente_desfaz_a_preferencia(self):
+        processo = self.novo_processo(numero_processo='779/2026')
+        tramitacao.alterar_prioridade(
+            processo.id, self.gestao, 'URGENTE', recorrente=True)
+        tramitacao.alterar_prioridade(processo.id, self.gestao, 'NORMAL')
+        tramitacao.alterar_prioridade(
+            processo.id, self.gestao, 'URGENTE', recorrente=False)
+        seguinte = self.novo_processo(numero_processo='779/2026', volume='2')
+        self.assertEqual(seguinte.prioridade, 'NORMAL')
 
     def test_prioridade_do_cadastro(self):
         processo = self.novo_processo()

@@ -879,6 +879,51 @@ class Indisponibilidade(models.Model):
         verbose_name_plural = "Indisponibilidades"
 
 
+class UrgenciaRecorrente(models.Model):
+    """Número de processo que, nas próximas entradas, já nasce urgente.
+
+    Vale para o número, não para um volume. Sem registro, a entrada
+    continua nascendo como Normal.
+    """
+    numero_processo = models.CharField(
+        max_length=255, unique=True, verbose_name="Número do processo")
+    definido_em = models.DateTimeField(auto_now=True, verbose_name="Definido em")
+    definido_por = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='urgencias_recorrentes', verbose_name="Definido por")
+
+    class Meta:
+        db_table = 'urgencias_recorrentes'
+        verbose_name = "Urgência recorrente"
+        verbose_name_plural = "Urgências recorrentes"
+
+    def __str__(self):
+        return self.numero_processo
+
+    @staticmethod
+    def chave(numero):
+        return ' '.join((numero or '').split())
+
+    @classmethod
+    def vale_para(cls, numero):
+        chave = cls.chave(numero)
+        if not chave:
+            return False
+        return cls.objects.filter(numero_processo=chave).exists()
+
+    @classmethod
+    def definir(cls, numero, recorrente, usuario):
+        chave = cls.chave(numero)
+        if not chave:
+            return
+        if recorrente:
+            cls.objects.update_or_create(
+                numero_processo=chave,
+                defaults={'definido_por': usuario})
+        else:
+            cls.objects.filter(numero_processo=chave).delete()
+
+
 # NEW PROFILE MODEL
 
 

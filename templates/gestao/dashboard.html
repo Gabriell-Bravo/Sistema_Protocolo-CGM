@@ -20,6 +20,36 @@
         {% endfor %}
     </section>
 
+    <div class="dashboard-colunas">
+        <section class="card">
+            <div class="card__header">
+                <span class="card__title">Onde estão os processos</span>
+                <span class="card__hint">Agora, ainda na CGM</span>
+            </div>
+            <div class="card__body">
+                {% include "includes/grafico_barras.html" with itens=panorama.situacao %}
+            </div>
+        </section>
+        <section class="card">
+            <div class="card__header">
+                <span class="card__title">Prioridade</span>
+                <span class="card__hint">Do que está na casa</span>
+            </div>
+            <div class="card__body">
+                {% include "includes/grafico_barras.html" with itens=panorama.prioridade %}
+            </div>
+        </section>
+        <section class="card">
+            <div class="card__header">
+                <span class="card__title">Prazo</span>
+                <span class="card__hint">Do que está na casa</span>
+            </div>
+            <div class="card__body">
+                {% include "includes/grafico_barras.html" with itens=panorama.prazo %}
+            </div>
+        </section>
+    </div>
+
     {# filtros do período (item 49) — aplicam-se ao quadro, aos indicadores e aos tempos #}
     <section class="filters">
         <form method="get" class="filters__grid">
@@ -129,6 +159,7 @@
                 <div class="stat"><div><div class="stat__value">{{ periodo.estoque_final }}</div><div class="stat__label">Estoque final</div></div></div>
                 <div class="stat"><div><div class="stat__value">{{ periodo.retornos }}</div><div class="stat__label">Retornos / reanálises</div></div></div>
             </div>
+            {% include "includes/grafico_barras.html" with itens=periodo.movimento %}
         </div>
     </section>
 
@@ -138,27 +169,8 @@
             <span class="table-card__title">Tempo médio do fluxo (dias)</span>
             <span class="table-card__count">{{ tempos.processos }} processo{{ tempos.processos|pluralize:"s" }} com saída no período</span>
         </div>
-        <div class="table-scroll table-scroll--compact">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Em fila<div class="cell-muted">entrada → assumir</div></th>
-                        <th>Análise<div class="cell-muted">assumir → liberar</div></th>
-                        <th>Pós-análise<div class="cell-muted">liberar → retirada</div></th>
-                        <th>Aguardando retirada<div class="cell-muted">retirada → saída</div></th>
-                        <th>Total<div class="cell-muted">entrada → saída</div></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>{{ tempos.em_fila|default_if_none:"—" }}</td>
-                        <td>{{ tempos.analise|default_if_none:"—" }}</td>
-                        <td>{{ tempos.pos_analise|default_if_none:"—" }}</td>
-                        <td>{{ tempos.aguardando_retirada|default_if_none:"—" }}</td>
-                        <td><strong>{{ tempos.total|default_if_none:"—" }}</strong></td>
-                    </tr>
-                </tbody>
-            </table>
+        <div class="card__body">
+            {% include "includes/grafico_barras.html" with itens=tempos_grafico %}
         </div>
         <p class="cell-muted">Calculado a partir dos registros de data e hora da tramitação — nada é digitado.</p>
     </section>
@@ -168,17 +180,8 @@
             <div class="table-card__header">
                 <span class="table-card__title">Volume por grupo</span>
             </div>
-            <div class="table-scroll table-scroll--compact">
-                <table class="table">
-                    <thead><tr><th>Grupo</th><th>Processos recebidos</th></tr></thead>
-                    <tbody>
-                        {% for linha in periodo.por_grupo %}
-                            <tr><td>{{ linha.rotulo }}</td><td>{{ linha.total }}</td></tr>
-                        {% empty %}
-                            <tr><td colspan="2" class="cell-muted">Nenhum processo recebido no período.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <div class="card__body">
+                {% include "includes/grafico_barras.html" with itens=periodo.por_grupo %}
             </div>
         </section>
 
@@ -186,17 +189,8 @@
             <div class="table-card__header">
                 <span class="table-card__title">Volume por Secretaria</span>
             </div>
-            <div class="table-scroll table-scroll--compact">
-                <table class="table">
-                    <thead><tr><th>Secretaria</th><th>Processos recebidos</th></tr></thead>
-                    <tbody>
-                        {% for linha in periodo.por_secretaria %}
-                            <tr><td>{{ linha.secretaria|default:"—" }}</td><td>{{ linha.total }}</td></tr>
-                        {% empty %}
-                            <tr><td colspan="2" class="cell-muted">Nenhum processo recebido no período.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <div class="card__body">
+                {% include "includes/grafico_barras.html" with itens=periodo.por_secretaria %}
             </div>
         </section>
 
@@ -204,17 +198,8 @@
             <div class="table-card__header">
                 <span class="table-card__title">Volume por espécie</span>
             </div>
-            <div class="table-scroll table-scroll--compact">
-                <table class="table">
-                    <thead><tr><th>Espécie</th><th>Processos recebidos</th></tr></thead>
-                    <tbody>
-                        {% for linha in periodo.por_especie %}
-                            <tr><td>{{ linha.especie|default:"—" }}</td><td>{{ linha.total }}</td></tr>
-                        {% empty %}
-                            <tr><td colspan="2" class="cell-muted">Nenhum processo recebido no período.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <div class="card__body">
+                {% include "includes/grafico_barras.html" with itens=periodo.por_especie %}
             </div>
         </section>
     </div>
