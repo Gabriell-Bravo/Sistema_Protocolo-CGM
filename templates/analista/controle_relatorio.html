@@ -2,7 +2,7 @@
 
 {% block title %}Controle de relatório{% endblock %}
 {% block page_title %}Controle de relatório{% endblock %}
-{% block page_subtitle %}{% if pode_definir_ultimo %}Defina o último número já usado. O número é gerado ao encaminhar para assinatura e pode ser corrigido na planilha.{% else %}Planilha dos processos encaminhados. O número é gerado automaticamente e você pode corrigi-lo na tabela.{% endif %}{% endblock %}
+{% block page_subtitle %}{% if pode_definir_ultimo %}Defina o último número já usado e, se preciso, corrija o número de uma análise já encaminhada.{% else %}Planilha dos processos encaminhados para assinatura, com o número gerado nesse momento.{% endif %}{% endblock %}
 
 {% block content %}
 <div class="stack">

@@ -75,7 +75,7 @@ def definir_ultimo_numero(request):
 def alterar_numero(request, process_id):
     perm.assert_permissao(
         perm.pode_editar_numero_relatorio(request.user),
-        'Somente analista e administrador alteram o número de relatório.')
+        'Somente o administrador altera o número de relatório.')
     destino = request.POST.get('next') or ''
     if not destino.startswith('/'):
         destino = reverse('controle_relatorio')
@@ -89,3 +89,4 @@ def alterar_numero(request, process_id):
     except (PermissionDenied, ValidationError) as exc:
         messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
     return redirect(destino)
+

@@ -2,8 +2,8 @@
 """Controle de relatório: sequência numérica e planilha das análises.
 
 O administrador informa o último número já usado. O número só é gerado
-quando o processo é encaminhado para assinatura (Controlador). Analista
-e administrador podem corrigir o número à mão.
+quando o processo é encaminhado para assinatura (Controlador). Depois
+disso, o administrador pode corrigir o número de uma análise já feita.
 
 Declinar desvincula a linha, mas o número não volta a ser usado.
 """
@@ -123,14 +123,17 @@ def _inteiro_atual(processo):
 
 @transaction.atomic
 def alterar_numero(usuario, processo_id, novo):
-    """Analista ou administrador corrige o número de relatório à mão."""
+    """Administrador corrige o número de um relatório já gerado."""
     processo = (Processo.objects.select_for_update()
                 .filter(id=processo_id).first())
     if processo is None:
         raise RelatorioInvalido('Processo não encontrado.')
     perm.assert_permissao(
-        perm.pode_editar_numero_relatorio(usuario, processo),
-        'Somente analista do grupo e administrador alteram o número de relatório.')
+        perm.pode_editar_numero_relatorio(usuario),
+        'Somente o administrador altera o número de relatório.')
+    if not processo.numero_relatorio:
+        raise RelatorioInvalido(
+            'O número só pode ser alterado depois de encaminhar para assinatura.')
     try:
         novo = int(str(novo).strip())
     except (TypeError, ValueError):

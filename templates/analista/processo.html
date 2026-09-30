@@ -95,7 +95,7 @@
         <input type="hidden" name="motivo" value="Encaminhado para a fila sem análise">
     </form>
     {% endif %}
-    {% if pode_editar_numero_relatorio %}
+    {% if pode_editar_numero_relatorio and processo.numero_relatorio %}
     <form id="formNumeroRelatorio" method="post" action="{% url 'controle_relatorio_alterar_numero' processo.id %}" hidden>
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ request.get_full_path }}">
@@ -115,20 +115,19 @@
                 {% if eh_liquidacao %}
                 <div class="field">
                     <label class="field__label" for="numero_relatorio">Número do relatório</label>
-                    {% if pode_editar_numero_relatorio %}
+                    {% if pode_editar_numero_relatorio and processo.numero_relatorio %}
                     <div class="pendencia-add__row">
                         <input type="text" id="numero_relatorio" name="numero_relatorio" form="formNumeroRelatorio"
-                               class="input" inputmode="numeric" value="{{ processo.numero_relatorio|default:'' }}"
-                               placeholder="Gerado ao encaminhar para o Controlador">
+                               class="input" inputmode="numeric" value="{{ processo.numero_relatorio }}">
                         <button type="submit" form="formNumeroRelatorio" class="btn btn--outline">
                             <span class="material-symbols-rounded">save</span>
                             Salvar
                         </button>
                     </div>
-                    <span class="field__hint">O sistema gera o número ao encaminhar para assinatura. Você pode corrigir aqui se precisar.</span>
+                    <span class="field__hint">Gerado ao encaminhar para o Controlador. Somente o administrador altera.</span>
                     {% else %}
                     <input type="text" id="numero_relatorio" class="input" value="{% if processo.numero_relatorio %}Relatório {{ processo.numero_relatorio }}{% endif %}" readonly>
-                    <span class="field__hint">{% if processo.numero_relatorio %}Número gerado no encaminhamento ao Controlador.{% else %}Será gerado ao encaminhar para o Controlador.{% endif %}</span>
+                    <span class="field__hint">{% if processo.numero_relatorio %}Número gerado no encaminhamento ao Controlador.{% else %}Será gerado automaticamente ao encaminhar para o Controlador.{% endif %}</span>
                     {% endif %}
                 </div>
                 {% endif %}

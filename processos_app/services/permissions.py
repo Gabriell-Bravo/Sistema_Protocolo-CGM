@@ -271,15 +271,9 @@ def pode_definir_ultimo_relatorio(user):
     return eh_administrador(user)
 
 
-def pode_editar_numero_relatorio(user, processo=None):
-    """Analista (do grupo) e administrador corrigem o número gerado automaticamente."""
-    if eh_administrador(user):
-        return True
-    if not is_analista(user):
-        return False
-    if processo is None:
-        return True
-    return pode_consultar_processo(user, processo)
+def pode_editar_numero_relatorio(user):
+    """Só o administrador corrige o número de um relatório já gerado."""
+    return eh_administrador(user)
 
 
 def pode_resolver_pendencia(user, pendencia):
