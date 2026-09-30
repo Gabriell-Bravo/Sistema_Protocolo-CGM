@@ -1488,8 +1488,8 @@ def analista_processo(request, process_id):
             return redirect('analista_processo', process_id=processo.id)
 
         if acao == 'concluir':
-            # Liberação passa pelo service: valida completude da análise,
-            # grava liberado_assinatura_por/em e registra o evento.
+            # Liberação passa pelo service: em Licitações exige anexo;
+            # em Liquidações, a análise preenchida. Grava o evento.
             try:
                 tramitacao.liberar_assinatura(processo.id, request.user)
             except (PermissionDenied, ValidationError) as exc:

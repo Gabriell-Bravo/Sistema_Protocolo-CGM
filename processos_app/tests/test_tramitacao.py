@@ -101,10 +101,17 @@ class DeclinarAnaliseTest(BaseProcessoTestCase):
 
 class LiberacaoTest(BaseProcessoTestCase):
 
-    def test_exige_analise_completa(self):
+    def test_licitacao_exige_anexo_e_nao_os_campos(self):
         processo = self.processo_em_analise(completo=False)
         with self.assertRaises(TransicaoInvalida):
             tramitacao.liberar_assinatura(processo.id, self.analista_lic)
+        self.anexar_teste(processo)
+        tramitacao.liberar_assinatura(processo.id, self.analista_lic)
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'AGUARDANDO_ASSINATURA')
+        self.assertEqual(processo.status_analise, 'NAO_APLICAVEL')
+        self.assertFalse(processo.numero_despacho)
+        self.assertFalse(processo.destino)
 
     def test_liberar_fluxo_normal(self):
         processo = self.processo_em_analise()
@@ -123,12 +130,24 @@ class LiberacaoTest(BaseProcessoTestCase):
         processo.refresh_from_db()
         self.assertEqual(processo.situacao_tramite, 'AGUARDANDO_ASSINATURA')
 
-    def test_especie_que_exige_valor(self):
+    def test_especie_que_exige_valor_so_em_liquidacao(self):
+        """Licitações encaminha só com anexo; Liquidações ainda exige valor."""
         self.especie_lic.exige_valor = True
         self.especie_lic.save()
-        processo = self.processo_em_analise()
+        processo = self.processo_em_analise(completo=False)
+        self.anexar_teste(processo)
+        tramitacao.liberar_assinatura(processo.id, self.analista_lic)
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'AGUARDANDO_ASSINATURA')
+
+        self.especie_liq.exige_valor = True
+        self.especie_liq.save()
+        liquidacao = self.novo_processo(self.especie_liq, numero_processo='8/2026')
+        tramitacao.assumir(liquidacao.id, self.analista_liq)
+        liquidacao.refresh_from_db()
+        self.preencher_analise(liquidacao, numero_despacho=None)
         with self.assertRaises(TransicaoInvalida):
-            tramitacao.liberar_assinatura(processo.id, self.analista_lic)
+            tramitacao.liberar_assinatura(liquidacao.id, self.analista_liq)
 
 
 class DirecionamentoTest(BaseProcessoTestCase):
@@ -174,10 +193,16 @@ class DirecionamentoTest(BaseProcessoTestCase):
         with self.assertRaises(TransicaoInvalida):
             tramitacao.direcionar_assinatura(processo.id, self.analista_lic, self.gestao.id)
 
-    def test_direcionar_exige_analise_completa(self):
+    def test_direcionar_licitacao_exige_anexo(self):
         processo = self.processo_em_analise(completo=False)
         with self.assertRaises(TransicaoInvalida):
-            tramitacao.direcionar_assinatura(processo.id, self.analista_lic, self.analista_liq.id)
+            tramitacao.direcionar_assinatura(
+                processo.id, self.analista_lic, self.analista_liq.id)
+        self.anexar_teste(processo)
+        tramitacao.direcionar_assinatura(
+            processo.id, self.analista_lic, self.analista_liq.id)
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'ASSINATURA_DIRECIONADA')
 
 
 class RetiradaESaidaTest(BaseProcessoTestCase):

@@ -209,27 +209,33 @@
                 <div id="encaminharLista" class="encaminhar-lista">
                     {% if campos_faltantes %}
                     <div class="alert alert--warning" style="margin-bottom:4px;">
-                        <span class="material-symbols-rounded">edit_note</span>
-                        <span>Para o Controlador ou outro analista, preencha: <strong>{{ campos_faltantes|join:", " }}</strong>.</span>
+                        <span class="material-symbols-rounded">{% if eh_licitacao %}attach_file{% else %}edit_note{% endif %}</span>
+                        <span>
+                            {% if eh_licitacao %}
+                            Para o Controlador ou outro analista, anexe ao menos um arquivo. Os campos da análise são opcionais.
+                            {% else %}
+                            Para o Controlador ou outro analista, preencha: <strong>{{ campos_faltantes|join:", " }}</strong>.
+                            {% endif %}
+                        </span>
                     </div>
                     {% endif %}
 
                     {% if pode_liberar %}
                     <button type="submit" form="formAnalise" name="acao" value="concluir"
                             class="encaminhamento__opcao"
-                            {% if campos_faltantes %}disabled title="Preencha a análise primeiro."{% endif %}
+                            {% if campos_faltantes %}disabled title="{% if eh_licitacao %}Anexe ao menos um arquivo primeiro.{% else %}Preencha a análise primeiro.{% endif %}"{% endif %}
                             onclick="return confirm('Encaminhar este processo para o Controlador?');">
                         <span class="material-symbols-rounded">draw</span>
                         <div class="encaminhamento__texto">
                             <div class="encaminhamento__titulo">Encaminhar para o Controlador</div>
-                            <div class="encaminhamento__hint">A análise está pronta. Segue para assinatura.</div>
+                            <div class="encaminhamento__hint">{% if eh_licitacao %}O arquivo anexado segue para assinatura.{% else %}A análise está pronta. Segue para assinatura.{% endif %}</div>
                         </div>
                     </button>
                     {% endif %}
 
                     {% if pode_direcionar %}
                     <button type="button" class="encaminhamento__opcao"
-                            {% if campos_faltantes %}disabled title="Preencha a análise primeiro."{% endif %}
+                            {% if campos_faltantes %}disabled title="{% if eh_licitacao %}Anexe ao menos um arquivo primeiro.{% else %}Preencha a análise primeiro.{% endif %}"{% endif %}
                             onclick="mostrarPassoEncaminhar('analista')">
                         <span class="material-symbols-rounded">forward_to_inbox</span>
                         <div class="encaminhamento__texto">

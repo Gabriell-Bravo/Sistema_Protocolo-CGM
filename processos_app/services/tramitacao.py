@@ -48,35 +48,37 @@ class TransicaoInvalida(ValidationError):
 # --------------------------------------------------------------------------
 # Campos que precisam estar preenchidos para o processo sair das mãos do
 # analista. Vale tanto para "Liberar para assinatura" quanto para
-# "Direcionar para outro analista": não se pede assinatura de análise
-# incompleta.
+# "Direcionar para outro analista".
+#
+# Licitações e Contratos não exige esses campos: o registro da análise é
+# o arquivo anexado. Liquidações continua exigindo o relatório na tela.
 #
 # Para mudar a exigência, altere só estas listas.
-#
-# CORREÇÃO: na versão anterior a lista era única e exigia "Número do
-# despacho" também em Liquidações — mas a tela de Liquidações não exibe esse
-# campo (usa o Número do relatório, gerado ao assumir). Nenhum processo de
-# Liquidações conseguiria ser liberado para assinatura.
 CAMPOS_OBRIGATORIOS_LIBERACAO = {
-    'LICITACOES_E_CONTRATOS': [
-        ('status_analise', 'Status da análise'),
-        ('numero_despacho', 'Número do despacho'),
-        ('destino', 'Destino'),
-    ],
+    'LICITACOES_E_CONTRATOS': [],
     'LIQUIDACOES': [
         ('status_analise', 'Status da análise'),
         ('numero_relatorio', 'Número do relatório'),
         ('destino', 'Destino'),
     ],
 }
-CAMPOS_OBRIGATORIOS_PADRAO = CAMPOS_OBRIGATORIOS_LIBERACAO['LICITACOES_E_CONTRATOS']
+CAMPOS_OBRIGATORIOS_PADRAO = CAMPOS_OBRIGATORIOS_LIBERACAO['LIQUIDACOES']
+
+
+def _eh_licitacao(processo):
+    return processo.grupo == perm.GRUPO_LICITACOES
 
 
 def campos_faltantes(processo):
-    """Rótulos dos campos de análise ainda não preenchidos."""
+    """O que ainda falta para encaminhar à assinatura."""
+    if _eh_licitacao(processo):
+        if not processo.anexos.exists():
+            return ['Arquivo anexado']
+        return []
+
     exigidos = list(CAMPOS_OBRIGATORIOS_LIBERACAO.get(
         processo.genero, CAMPOS_OBRIGATORIOS_PADRAO))
-    # item 21: a espécie pode exigir valor.
+    # item 21: a espécie pode exigir valor (não se aplica a Licitações).
     especie = processo.especie_fk if processo.especie_fk_id else None
     if especie is not None and especie.exige_valor:
         exigidos.append(('valor', 'Valor'))
@@ -98,10 +100,14 @@ def analise_completa(processo):
 
 def _exigir_analise_completa(processo, acao):
     faltam = campos_faltantes(processo)
-    if faltam:
+    if not faltam:
+        return
+    if _eh_licitacao(processo):
         raise TransicaoInvalida(
-            f'Preencha a análise antes de {acao}. '
-            f'Faltando: {", ".join(faltam)}.')
+            f'Anexe ao menos um arquivo antes de {acao}.')
+    raise TransicaoInvalida(
+        f'Preencha a análise antes de {acao}. '
+        f'Faltando: {", ".join(faltam)}.')
 
 
 # --------------------------------------------------------------------------

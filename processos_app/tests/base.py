@@ -9,7 +9,7 @@ import datetime
 from django.contrib.auth.models import User
 from django.test import TestCase
 
-from processos_app.models import EspecieProcesso, Processo, UnidadeAdministrativa
+from processos_app.models import AnexoProcesso, EspecieProcesso, Processo, UnidadeAdministrativa
 from processos_app.services import processos as svc_processos
 from processos_app.services import tramitacao
 
@@ -80,6 +80,17 @@ class BaseProcessoTestCase(TestCase):
         processo.refresh_from_db()
         return processo
 
+    def anexar_teste(self, processo, usuario=None):
+        """Anexo mínimo para liberar Licitações, sem gravar arquivo em disco."""
+        usuario = usuario or self.analista_lic
+        return AnexoProcesso.objects.create(
+            processo=processo,
+            arquivo='anexos/teste.pdf',
+            nome_original='parecer.pdf',
+            tamanho=4,
+            enviado_por=usuario,
+        )
+
     def processo_em_analise(self, analista=None, especie=None, completo=True):
         analista = analista or self.analista_lic
         processo = self.novo_processo(especie)
@@ -87,6 +98,8 @@ class BaseProcessoTestCase(TestCase):
         processo.refresh_from_db()
         if completo:
             self.preencher_analise(processo)
+            if processo.grupo == LIC:
+                self.anexar_teste(processo, analista)
         return processo
 
     def processo_disponivel_retirada(self):

@@ -121,6 +121,38 @@ class AnexoProcessoTest(BaseProcessoTestCase):
         tramitacao.declinar_analise(self.processo.id, self.analista_lic, 'Teste')
         self.assertTrue(AnexoProcesso.objects.filter(processo=self.processo).exists())
 
+    def test_encaminha_para_assinatura_so_com_anexo(self):
+        tramitacao.assumir(self.processo.id, self.analista_lic)
+        self._post_anexo(self.analista_lic, self.processo, _pdf())
+        self.client.force_login(self.analista_lic)
+        pagina = self.client.get(reverse('analista_processo', args=[self.processo.id]))
+        self.assertContains(pagina, 'O arquivo anexado segue para assinatura.')
+        self.assertNotContains(pagina, 'anexe ao menos um arquivo')
+
+        resposta = self.client.post(
+            reverse('analista_processo', args=[self.processo.id]),
+            {'acao': 'concluir'},
+        )
+        self.assertRedirects(resposta, reverse('area_analista'))
+        self.processo.refresh_from_db()
+        self.assertEqual(self.processo.situacao_tramite, 'AGUARDANDO_ASSINATURA')
+        self.assertEqual(self.processo.status_analise, 'NAO_APLICAVEL')
+        self.assertFalse(self.processo.numero_despacho)
+        self.assertFalse(self.processo.destino)
+
+    def test_sem_anexo_nao_encaminha_licitacao(self):
+        tramitacao.assumir(self.processo.id, self.analista_lic)
+        self.client.force_login(self.analista_lic)
+        pagina = self.client.get(reverse('analista_processo', args=[self.processo.id]))
+        self.assertContains(pagina, 'anexe ao menos um arquivo')
+        resposta = self.client.post(
+            reverse('analista_processo', args=[self.processo.id]),
+            {'acao': 'concluir'},
+        )
+        self.assertEqual(resposta.status_code, 302)
+        self.processo.refresh_from_db()
+        self.assertEqual(self.processo.situacao_tramite, 'EM_ANALISE')
+
     def test_remover(self):
         self._post_anexo(self.analista_lic, self.processo, _pdf())
         anexo = AnexoProcesso.objects.get()
