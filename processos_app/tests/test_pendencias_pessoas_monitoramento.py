@@ -1,6 +1,7 @@
 import datetime
 
 from django.core.exceptions import PermissionDenied
+from django.urls import reverse
 
 from processos_app.models import Pendencia, Processo, TipoIndisponibilidade
 from processos_app.services import gestao_pessoas, monitoramento, pendencias, prazos
@@ -48,6 +49,44 @@ class PendenciasTest(BaseProcessoTestCase):
             pendencias.cancelar(p.id, self.gestao, '')
         pendencias.cancelar(p.id, self.gestao, 'Lançada por engano')
         self.assertEqual(Pendencia.objects.get(id=p.id).status, 'CANCELADA')
+
+    def test_adicionar_pendencia_grava_analise_ja_preenchida(self):
+        processo = self.processo_em_analise(completo=False)
+        self.client.force_login(self.analista_lic)
+        resposta = self.client.post(
+            reverse('adicionar_pendencia', args=[processo.id]),
+            {
+                'descricao': 'Falta certidão',
+                'valor': '1500',
+                'destino': 'Secretaria Nova',
+                'periodo': 'Jan/2026',
+                'observacao': 'Obs da análise',
+                'status_analise': 'PROSSEGUIMENTO_COM_RESSALVA',
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        processo.refresh_from_db()
+        self.assertEqual(processo.valor, '1500')
+        self.assertEqual(processo.destino, 'Secretaria Nova')
+        self.assertEqual(processo.periodo, 'Jan/2026')
+        self.assertEqual(processo.observacao, 'Obs da análise')
+        self.assertEqual(processo.status_analise, 'PROSSEGUIMENTO_COM_RESSALVA')
+        self.assertTrue(
+            processo.pendencias.filter(descricao='Falta certidão').exists())
+
+    def test_adicionar_pendencia_sem_campos_de_analise_nao_apaga_o_que_ja_estava(self):
+        processo = self.processo_em_analise()
+        destino = processo.destino
+        status = processo.status_analise
+        self.client.force_login(self.analista_lic)
+        self.client.post(
+            reverse('adicionar_pendencia', args=[processo.id]),
+            {'descricao': 'Falta nota'},
+        )
+        processo.refresh_from_db()
+        self.assertEqual(processo.destino, destino)
+        self.assertEqual(processo.status_analise, status)
+        self.assertTrue(processo.pendencias.filter(descricao='Falta nota').exists())
 
     def test_fila_de_diligencias(self):
         processo = self.processo_em_analise()

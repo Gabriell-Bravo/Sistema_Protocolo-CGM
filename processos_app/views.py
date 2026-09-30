@@ -1611,7 +1611,13 @@ def adicionar_pendencia(request, process_id):
     # Regras em services/pendencias.py: nasce AGUARDANDO_ATENDIMENTO com o
     # responsável técnico fixado (itens 25 e 27). O campo legado
     # tem_pendencia deixa de ser alimentado à mão (item 31).
+    # A análise preenchida em cima viaja no mesmo POST para não se perder
+    # quando a tela recarrega.
     try:
+        if (svc_processos.campos_editaveis(request.user, processo)
+                and any(campo in request.POST
+                        for campo in svc_processos.CAMPOS_ANALISTA)):
+            svc_processos.aplicar_analise(processo, request.POST, request.user)
         svc_pendencias.criar(
             processo.id, request.user, request.POST.get('descricao'))
         messages.success(request, "Pendência adicionada.")

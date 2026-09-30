@@ -382,17 +382,19 @@
         {% endif %}
 
         {% if pode_editar %}
-        <form action="{% url 'adicionar_pendencia' processo.id %}" method="post" class="pendencia-add" id="formPendencia">
-            {% csrf_token %}
+        <div class="pendencia-add" id="formPendencia">
             <label class="field__label" for="descricaoPendencia">Nova pendência</label>
             <div class="pendencia-add__row">
-                <textarea id="descricaoPendencia" name="descricao" class="textarea" rows="2" placeholder="Descreva a pendência…" required></textarea>
-                <button type="submit" class="btn btn--primary">
+                <textarea id="descricaoPendencia" name="descricao" form="formAnalise"
+                          class="textarea" rows="2" placeholder="Descreva a pendência…"></textarea>
+                <button type="submit" form="formAnalise"
+                        formaction="{% url 'adicionar_pendencia' processo.id %}"
+                        class="btn btn--primary">
                     <span class="material-symbols-rounded">add</span>
                     Adicionar
                 </button>
             </div>
-        </form>
+        </div>
         {% endif %}
     </section>
 
@@ -482,6 +484,11 @@
     document.addEventListener('click', function (event) {
         if (event.target.closest('[data-modal-open="modalEncaminhar"]')) {
             mostrarPassoEncaminhar('lista');
+        }
+        var descricao = document.getElementById('descricaoPendencia');
+        if (descricao) {
+            descricao.required = Boolean(
+                event.target.closest('#formPendencia button[type="submit"]'));
         }
     });
 </script>
