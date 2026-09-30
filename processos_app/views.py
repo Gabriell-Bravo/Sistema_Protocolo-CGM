@@ -652,9 +652,6 @@ def listar_finalizados(request):
     no filtro; nada é gravado. Para persistir, usar o comando agendado
     `python manage.py atualizar_status_monitoramento`.
     """
-    if is_analista(request.user):
-        return redirect('area_analista')
-
     data_inicial_filtro = request.GET.get('data_inicial', '').strip()
     data_final_filtro = request.GET.get('data_final', '').strip()
     prioridade_filtro = request.GET.get('prioridade', 'todas')
@@ -794,7 +791,7 @@ def listar_finalizados(request):
         'can_edit': perm.is_protocolo(request.user),
         'campos_editaveis': sorted(svc_processos.campos_editaveis(request.user)),
         'can_delete': perm.pode_cancelar_processo(request.user),
-        'can_concluir_monitoramento': perm.is_analista(request.user) or perm.is_gestao(request.user),
+        'can_concluir_monitoramento': perm.is_gestao(request.user),
         'dados_formulario': svc_cadastros.dados_para_formulario(),
     })
 

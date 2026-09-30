@@ -2,7 +2,7 @@
 
 {% block title %}Diligências{% endblock %}
 {% block page_title %}Diligências{% endblock %}
-{% block page_subtitle %}Pendências levantadas pelos analistas, aguardando atendimento da Secretaria.{% endblock %}
+{% block page_subtitle %}{% if is_analista %}Consulta das pendências do seu grupo. A indicação de atendimento é da Gestão.{% else %}Pendências levantadas pelos analistas, aguardando atendimento da Secretaria.{% endif %}{% endblock %}
 
 {% block content %}
 <div class="stack">
@@ -53,7 +53,7 @@
                             <div class="cell-muted">desde {{ pendencia.criada_em|date:"d/m/Y" }}</div>
                         </td>
                         <td class="col-actions">
-                            {% if pendencia.status == 'AGUARDANDO_ATENDIMENTO' %}
+                            {% if pode_indicar_atendimento and pendencia.status == 'AGUARDANDO_ATENDIMENTO' %}
                             <form method="post" action="{% url 'pend_indicar_atendimento' pendencia.id %}">
                                 {% csrf_token %}
                                 <button type="submit" class="btn btn--primary btn--sm"
@@ -87,10 +87,14 @@
         </div>
     </section>
 
+    {% if pode_indicar_atendimento %}
     <p class="cell-muted">
         Telefonemas, e-mails e cobranças intermediárias não são registrados
         aqui. Quando a Secretaria atender o suficiente para nova análise,
         use “Indicar atendimento” — quem conclui tecnicamente é o analista.
     </p>
+    {% else %}
+    <p class="cell-muted">Consulta. A indicação de atendimento é da Gestão.</p>
+    {% endif %}
 </div>
 {% endblock %}

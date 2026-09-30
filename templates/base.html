@@ -93,6 +93,23 @@
                     <span class="material-symbols-rounded">assignment_turned_in</span>
                     <span class="nav-item__label">Atendimentos indicados</span>
                 </a>
+                <a href="{% url 'listar_finalizados' %}"
+                   class="nav-item {% if nav == 'listar_finalizados' %}is-active{% endif %}" title="Finalizados">
+                    <span class="material-symbols-rounded">task_alt</span>
+                    <span class="nav-item__label">Finalizados</span>
+                </a>
+                <a href="{% url 'gestao_liberados_assinatura' %}"
+                   class="nav-item {% if nav == 'gestao_liberados_assinatura' %}is-active{% endif %}"
+                   title="Liberados para assinatura">
+                    <span class="material-symbols-rounded">draw</span>
+                    <span class="nav-item__label">Para assinar</span>
+                </a>
+                <a href="{% url 'gestao_diligencias' %}"
+                   class="nav-item {% if nav == 'gestao_diligencias' %}is-active{% endif %}"
+                   title="Diligências">
+                    <span class="material-symbols-rounded">campaign</span>
+                    <span class="nav-item__label">Diligências</span>
+                </a>
             {% endif %}
 
             {% if is_gestao or user.is_superuser %}

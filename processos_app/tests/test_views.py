@@ -43,6 +43,9 @@ class TelasPorPapelTest(BaseProcessoTestCase):
         self._get(self.analista_lic, 'area_analista', query='?filtro=disponiveis')
         self._get(self.analista_lic, 'analista_processo', self.processo.id)
         self._get(self.analista_lic, 'meus_atendimentos')
+        self._get(self.analista_lic, 'listar_finalizados')
+        self._get(self.analista_lic, 'gestao_liberados_assinatura')
+        self._get(self.analista_lic, 'gestao_diligencias')
 
     def test_gestao(self):
         for nome in ('gestao_dashboard', 'gestao_processos', 'gestao_diligencias',
@@ -62,6 +65,55 @@ class TelasPorPapelTest(BaseProcessoTestCase):
         self._get(self.gestao, 'cadastrar_processo', esperado=403)
         # analista de outro grupo não abre o processo
         self._get(self.analista_liq, 'analista_processo', self.processo.id, esperado=403)
+        self._get(self.protocolo, 'gestao_diligencias', esperado=403)
+        self._get(self.protocolo, 'gestao_liberados_assinatura', esperado=403)
+
+    def test_analista_consulta_finalizados_assinatura_e_diligencias_sem_editar(self):
+        from processos_app.services import pendencias
+
+        finalizado = self.processo_disponivel_retirada()
+        tramitacao.registrar_saida([finalizado.id], self.protocolo)
+        aguardando = self.processo_em_analise()
+        aguardando.numero_processo = '2002/2026'
+        aguardando.save(update_fields=['numero_processo'])
+        tramitacao.liberar_assinatura(aguardando.id, self.analista_lic)
+        liquidacao = self.novo_processo(
+            self.especie_liq, numero_processo='2003/2026')
+        tramitacao.assumir(liquidacao.id, self.analista_liq)
+        liquidacao.refresh_from_db()
+        self.preencher_analise(liquidacao, numero_despacho=None)
+        tramitacao.liberar_assinatura(liquidacao.id, self.analista_liq)
+
+        pagina = self._get(self.analista_lic, 'listar_finalizados')
+        self.assertContains(pagina, 'Finalizados')
+        self.assertContains(pagina, 'Fila de análise')
+        self.assertNotContains(pagina, 'Exportar Excel')
+        self.assertFalse(pagina.context['can_edit'])
+        self.assertFalse(pagina.context['can_delete'])
+        self.assertFalse(pagina.context['can_concluir_monitoramento'])
+        self.assertFalse(pagina.context['can_export'])
+        self.assertContains(pagina, finalizado.numero_processo)
+
+        assinar = self._get(self.analista_lic, 'gestao_liberados_assinatura')
+        self.assertContains(assinar, '2002/2026')
+        self.assertNotContains(assinar, '2003/2026')
+
+        processo_pend = self.processo_em_analise()
+        processo_pend.numero_processo = '2004/2026'
+        processo_pend.save(update_fields=['numero_processo'])
+        pendencia = pendencias.criar(
+            processo_pend.id, self.analista_lic, 'Falta documento')
+        dilig = self._get(self.analista_lic, 'gestao_diligencias')
+        self.assertContains(dilig, 'Falta documento')
+        self.assertNotContains(dilig, 'Indicar atendimento')
+        self.assertContains(dilig, 'Consulta. A indicação de atendimento é da Gestão.')
+
+        self.client.force_login(self.analista_lic)
+        resposta = self.client.post(
+            reverse('pend_indicar_atendimento', args=[pendencia.id]))
+        self.assertEqual(resposta.status_code, 302)
+        pendencia.refresh_from_db()
+        self.assertEqual(pendencia.status, 'AGUARDANDO_ATENDIMENTO')
 
     def test_get_nao_grava(self):
         antes = (ProcessHistory.objects.count(), EventoProcesso.objects.count(),

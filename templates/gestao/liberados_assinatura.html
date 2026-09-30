@@ -2,7 +2,7 @@
 
 {% block title %}Liberados para Assinatura{% endblock %}
 {% block page_title %}Liberados para assinatura — {{ total }}{% endblock %}
-{% block page_subtitle %}Processos prontos para coleta e assinatura do Controlador.{% endblock %}
+{% block page_subtitle %}{% if is_analista %}Consulta dos processos do seu grupo prontos para coleta e assinatura do Controlador.{% else %}Processos prontos para coleta e assinatura do Controlador.{% endif %}{% endblock %}
 
 {% block content %}
 <div class="stack">

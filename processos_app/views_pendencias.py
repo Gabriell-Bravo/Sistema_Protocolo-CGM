@@ -31,8 +31,14 @@ def _voltar_para_processo(pendencia_id):
 # Gestão — Diligências (itens 28 e 29)
 # --------------------------------------------------------------------------
 
+def _diligencias_visiveis(usuario, status):
+    return perm.filtrar_por_grupo(
+        usuario, svc.fila_diligencias(status), campo='processo__genero')
+
+
 @login_required
-@perm.exige(perm.is_gestao, 'Área exclusiva da Gestão.')
+@perm.exige(perm.pode_consultar_assinatura_e_diligencias,
+            'Área da Gestão e consulta dos analistas.')
 def diligencias(request):
     """Lista prioritariamente as pendências em AGUARDANDO_ATENDIMENTO.
 
@@ -41,21 +47,22 @@ def diligencias(request):
 
     Não há botão para registrar telefonema, e-mail ou cobrança: esses atos
     são operacionais e não entram no sistema (item 25).
+    O analista consulta o próprio grupo; indicar atendimento continua da Gestão.
     """
     status = request.GET.get('status', 'AGUARDANDO_ATENDIMENTO')
     if status not in dict(Pendencia.STATUS_CHOICES) and status != 'ABERTAS':
         status = 'AGUARDANDO_ATENDIMENTO'
 
-    lista = svc.fila_diligencias(status)
+    lista = _diligencias_visiveis(request.user, status)
     return render(request, 'gestao/diligencias.html', {
         'pendencias': lista,
         'total': lista.count(),
         'status_atual': status,
         'status_choices': Pendencia.STATUS_CHOICES,
-        'total_aguardando': svc.fila_diligencias(
-            'AGUARDANDO_ATENDIMENTO').count(),
-        'total_indicados': svc.fila_diligencias(
-            'ATENDIMENTO_INDICADO').count(),
+        'total_aguardando': _diligencias_visiveis(
+            request.user, 'AGUARDANDO_ATENDIMENTO').count(),
+        'total_indicados': _diligencias_visiveis(
+            request.user, 'ATENDIMENTO_INDICADO').count(),
         **perm.contexto_de_permissoes(request.user),
     })
 

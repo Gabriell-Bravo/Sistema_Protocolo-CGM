@@ -11,10 +11,17 @@
             Exportar Excel
         </button>
     {% endif %}
+    {% if is_analista %}
+    <a href="{% url 'area_analista' %}" class="btn btn--outline">
+        <span class="material-symbols-rounded">arrow_back</span>
+        Fila de análise
+    </a>
+    {% else %}
     <a href="{% url 'listar_processos' %}" class="btn btn--outline">
         <span class="material-symbols-rounded">arrow_back</span>
         Processos Ativos
     </a>
+    {% endif %}
 {% endblock %}
 
 {% block content %}

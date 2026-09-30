@@ -208,14 +208,17 @@ def cancelar_processo(request, process_id):
 
 
 @login_required
-@perm.exige(perm.is_gestao, 'Área exclusiva da Gestão.')
+@perm.exige(perm.pode_consultar_assinatura_e_diligencias,
+            'Área da Gestão e consulta dos analistas.')
 def liberados_para_assinatura(request):
     """item 12: o que a Gestão precisa coletar para assinatura física.
 
     Sem "Confirmar assinatura", sem "Assinado", sem "Encaminhar ao
     Protocolo" — essas etapas não são registradas no sistema.
+    O analista consulta só o próprio grupo, sem ação.
     """
-    processos = tramitacao.liberados_para_assinatura()
+    processos = perm.filtrar_por_grupo(
+        request.user, tramitacao.liberados_para_assinatura())
     return render(request, 'gestao/liberados_assinatura.html', {
         'processos': processos,
         'total': processos.count(),

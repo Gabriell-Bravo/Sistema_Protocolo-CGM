@@ -247,6 +247,16 @@ def pode_indicar_atendimento(user):
     return is_gestao(user)
 
 
+def pode_consultar_finalizados(user):
+    """Protocolo, Gestão e analista consultam. Só o Protocolo edita."""
+    return is_protocolo(user) or is_gestao(user) or is_analista(user) or eh_administrador(user)
+
+
+def pode_consultar_assinatura_e_diligencias(user):
+    """Gestão age nessas filas; o analista só consulta o próprio grupo."""
+    return is_gestao(user) or is_analista(user)
+
+
 def pode_resolver_pendencia(user, pendencia):
     """item 30: quem conclui tecnicamente é o responsável técnico."""
     return is_analista(user) and pendencia.responsavel_tecnico_id == user.id
