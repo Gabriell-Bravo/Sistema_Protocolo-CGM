@@ -52,7 +52,7 @@ class TransicaoInvalida(ValidationError):
 #
 # Licitações e Contratos não exige esses campos: o registro da análise é
 # o arquivo anexado. Liquidações exige status e destino; o número do
-# relatório é gerado ao encaminhar para o Controlador.
+# relatório é gerado ao salvar a análise.
 #
 # Para mudar a exigência, altere só estas listas.
 CAMPOS_OBRIGATORIOS_LIBERACAO = {
@@ -491,16 +491,12 @@ def liberar_assinatura(processo_id, usuario):
 
     _exigir_analise_completa(processo, 'liberar para assinatura')
 
-    from .relatorios import atribuir_se_preciso
-    atribuir_se_preciso(processo)
-
     processo.situacao_tramite = 'AGUARDANDO_ASSINATURA'
     processo.liberado_assinatura_por = usuario
     processo.liberado_assinatura_em = timezone.now()
     processo.save(update_fields=['situacao_tramite',
                                  'liberado_assinatura_por',
-                                 'liberado_assinatura_em',
-                                 'numero_relatorio'])
+                                 'liberado_assinatura_em'])
 
     substitutiva = usuario.id != processo.analista_responsavel_id
     registrar_evento(

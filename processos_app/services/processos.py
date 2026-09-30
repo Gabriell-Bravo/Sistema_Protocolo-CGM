@@ -318,11 +318,12 @@ def aplicar_analise(processo, dados, usuario):
         alteracoes += 1
         if campo == 'destino':
             processo.destino_fk = cadastros.resolver_unidade(novo)
+    from .relatorios import atribuir_se_preciso, registrar as registrar_relatorio
     if alteracoes:
         processo.save()
-        from .relatorios import registrar as registrar_relatorio
-        registrar_relatorio(processo)
+    if campos_editaveis(usuario, processo) and atribuir_se_preciso(processo):
+        processo.save(update_fields=['numero_relatorio'])
+        alteracoes += 1
     elif processo.numero_relatorio:
-        from .relatorios import registrar as registrar_relatorio
         registrar_relatorio(processo)
     return alteracoes

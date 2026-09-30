@@ -1,6 +1,7 @@
 from django.core.exceptions import PermissionDenied
 
 from processos_app.models import EventoProcesso, Prioridade, Processo
+from processos_app.services import processos as svc_processos
 from processos_app.services import tramitacao
 from processos_app.services.tramitacao import TransicaoInvalida
 
@@ -40,25 +41,37 @@ class AssumirTest(BaseProcessoTestCase):
             with self.assertRaises(PermissionDenied):
                 tramitacao.assumir(processo.id, usuario)
 
-    def test_liquidacao_gera_numero_relatorio_ao_encaminhar(self):
+    def test_liquidacao_gera_numero_relatorio_ao_salvar(self):
         processo = self.novo_processo(self.especie_liq)
         tramitacao.assumir(processo.id, self.analista_liq)
         processo.refresh_from_db()
         self.assertFalse(processo.numero_relatorio)
-        self.preencher_analise(processo, numero_despacho=None)
-        tramitacao.liberar_assinatura(processo.id, self.analista_liq)
+        svc_processos.aplicar_analise(processo, {
+            'destino': 'Unidade de Teste',
+            'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+        }, self.analista_liq)
         processo.refresh_from_db()
         self.assertTrue(processo.numero_relatorio)
+        numero = processo.numero_relatorio
+        tramitacao.liberar_assinatura(processo.id, self.analista_liq)
+        processo.refresh_from_db()
+        self.assertEqual(processo.numero_relatorio, numero)
 
     def test_numeros_de_relatorio_nao_repetem(self):
         p1 = self.novo_processo(self.especie_liq, numero_processo='1/2026')
         p2 = self.novo_processo(self.especie_liq, numero_processo='2/2026')
         tramitacao.assumir(p1.id, self.analista_liq)
         tramitacao.assumir(p2.id, self.analista_liq)
-        self.preencher_analise(p1, numero_despacho=None)
-        self.preencher_analise(p2, numero_despacho=None)
-        tramitacao.liberar_assinatura(p1.id, self.analista_liq)
-        tramitacao.liberar_assinatura(p2.id, self.analista_liq)
+        p1.refresh_from_db()
+        p2.refresh_from_db()
+        svc_processos.aplicar_analise(p1, {
+            'destino': 'Unidade de Teste',
+            'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+        }, self.analista_liq)
+        svc_processos.aplicar_analise(p2, {
+            'destino': 'Unidade de Teste',
+            'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+        }, self.analista_liq)
         p1.refresh_from_db()
         p2.refresh_from_db()
         self.assertNotEqual(p1.numero_relatorio, p2.numero_relatorio)

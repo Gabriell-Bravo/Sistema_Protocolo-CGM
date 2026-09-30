@@ -2,7 +2,7 @@
 
 {% block title %}Controle de relatório{% endblock %}
 {% block page_title %}Controle de relatório{% endblock %}
-{% block page_subtitle %}{% if pode_definir_ultimo %}Defina o último número já usado e, se preciso, corrija o número de uma análise já encaminhada.{% else %}Planilha dos processos encaminhados para assinatura, com o número gerado nesse momento.{% endif %}{% endblock %}
+{% block page_subtitle %}{% if pode_definir_ultimo %}Defina o último número já usado e, se preciso, corrija o número de uma análise já salva.{% else %}Planilha das análises salvas, com o número gerado nesse momento.{% endif %}{% endblock %}
 
 {% block content %}
 <div class="stack">
@@ -20,7 +20,7 @@
                     <label class="field__label" for="ultimo_numero">Último número já usado</label>
                     <input type="number" min="0" id="ultimo_numero" name="ultimo_numero"
                            class="input" value="{{ sequencia.ultimo }}" required>
-                    <span class="field__hint">O próximo encaminhado para assinatura receberá o nº {{ sequencia.proximo }}.</span>
+                    <span class="field__hint">O próximo relatório salvo receberá o nº {{ sequencia.proximo }}.</span>
                 </div>
             </div>
             <div class="form-actions" style="margin-top:14px;">
@@ -115,7 +115,7 @@
                             <div class="empty empty--compact">
                                 <span class="material-symbols-rounded">table_chart</span>
                                 <div class="empty__title">Nenhuma linha registrada</div>
-                                <div>Quando um processo que gera relatório for encaminhado ao Controlador, a linha aparece aqui.</div>
+                                <div>Quando o analista salvar a análise de um processo que gera relatório, a linha aparece aqui.</div>
                             </div>
                         </td>
                     </tr>

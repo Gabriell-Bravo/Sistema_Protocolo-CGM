@@ -709,7 +709,7 @@ class SequenciaRelatorio(models.Model):
 
 
 class LinhaControleRelatorio(models.Model):
-    """Linha da planilha Controle de relatório, gravada ao encaminhar à assinatura."""
+    """Linha da planilha Controle de relatório, gravada ao salvar a análise."""
 
     processo = models.OneToOneField(
         Processo, on_delete=models.SET_NULL, null=True, blank=True,
@@ -745,12 +745,6 @@ class LinhaControleRelatorio(models.Model):
         ordering = ['-data_relatorio', '-id']
         verbose_name = "Linha de Controle de Relatório"
         verbose_name_plural = "Controle de Relatório"
-        constraints = [
-            models.UniqueConstraint(
-                fields=['grupo', 'numero_relatorio'],
-                name='uniq_controle_relatorio_grupo_numero',
-            ),
-        ]
 
 
 # ---------------------------------------------------------------------------

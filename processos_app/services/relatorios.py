@@ -1,15 +1,16 @@
 # processos_app/services/relatorios.py
 """Controle de relatório: sequência numérica e planilha das análises.
 
-O administrador informa o último número já usado. O número só é gerado
-quando o processo é encaminhado para assinatura (Controlador). Depois
-disso, o administrador pode corrigir o número de uma análise já feita.
+O administrador informa o último número já usado. O número é gerado
+quando o analista salva a análise. Depois disso, o administrador pode
+corrigir o número mesmo que ele já tenha sido emitido.
 
-Declinar desvincula a linha, mas o número não volta a ser usado.
+A geração automática continua sem repetir. Declinar desvincula a linha,
+mas o número não volta a ser usado no próximo salvamento.
 """
 
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
+from django.db import transaction
 from django.utils import timezone
 
 from ..models import LinhaControleRelatorio, Processo, SequenciaRelatorio
@@ -84,7 +85,7 @@ def definir_ultimo_numero(usuario, ultimo, grupo=GRUPO_PADRAO):
 
 
 def proximo_numero(grupo):
-    """Trava a sequência para dois encaminhamentos não saírem iguais."""
+    """Trava a sequência para dois salvamentos não saírem iguais."""
     SequenciaRelatorio.objects.get_or_create(
         grupo=grupo, defaults={'proximo_numero': 1540})
     seq = SequenciaRelatorio.objects.select_for_update().get(grupo=grupo)
@@ -123,7 +124,7 @@ def _inteiro_atual(processo):
 
 @transaction.atomic
 def alterar_numero(usuario, processo_id, novo):
-    """Administrador corrige o número de um relatório já gerado."""
+    """Administrador grava o número que quiser numa análise já feita."""
     processo = (Processo.objects.select_for_update()
                 .filter(id=processo_id).first())
     if processo is None:
@@ -133,7 +134,7 @@ def alterar_numero(usuario, processo_id, novo):
         'Somente o administrador altera o número de relatório.')
     if not processo.numero_relatorio:
         raise RelatorioInvalido(
-            'O número só pode ser alterado depois de encaminhar para assinatura.')
+            'O número só pode ser alterado depois de salvar a análise.')
     try:
         novo = int(str(novo).strip())
     except (TypeError, ValueError):
@@ -145,17 +146,10 @@ def alterar_numero(usuario, processo_id, novo):
     if atual == novo:
         return processo
 
-    ignorar = {atual} if atual is not None else set()
-    if novo in numeros_usados(processo.genero, ignorar=ignorar):
-        raise RelatorioInvalido(f'O número {novo} já está em uso.')
-
     anterior = processo.numero_relatorio or ''
     processo.numero_relatorio = str(novo)
     processo.save(update_fields=['numero_relatorio'])
-    try:
-        registrar(processo)
-    except IntegrityError:
-        raise RelatorioInvalido(f'O número {novo} já está em uso.')
+    registrar(processo)
 
     seq, _ = SequenciaRelatorio.objects.select_for_update().get_or_create(
         grupo=processo.genero or GRUPO_PADRAO,

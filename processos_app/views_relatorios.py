@@ -66,7 +66,7 @@ def definir_ultimo_numero(request):
     messages.success(
         request,
         f'Último relatório definido como {estado["ultimo"]}. '
-        f'O próximo encaminhado para assinatura receberá o nº {estado["proximo"]}.')
+        f'O próximo relatório salvo receberá o nº {estado["proximo"]}.')
     return redirect('controle_relatorio')
 
 

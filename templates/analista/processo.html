@@ -124,10 +124,10 @@
                             Salvar
                         </button>
                     </div>
-                    <span class="field__hint">Gerado ao encaminhar para o Controlador. Somente o administrador altera.</span>
+                    <span class="field__hint">Gerado ao salvar a análise. Somente o administrador altera.</span>
                     {% else %}
                     <input type="text" id="numero_relatorio" class="input" value="{% if processo.numero_relatorio %}Relatório {{ processo.numero_relatorio }}{% endif %}" readonly>
-                    <span class="field__hint">{% if processo.numero_relatorio %}Número gerado no encaminhamento ao Controlador.{% else %}Será gerado automaticamente ao encaminhar para o Controlador.{% endif %}</span>
+                    <span class="field__hint">{% if processo.numero_relatorio %}Número gerado ao salvar a análise.{% else %}Será gerado automaticamente ao salvar a análise.{% endif %}</span>
                     {% endif %}
                 </div>
                 {% endif %}
