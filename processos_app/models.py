@@ -742,7 +742,7 @@ class LinhaControleRelatorio(models.Model):
 
     class Meta:
         db_table = 'controle_relatorio'
-        ordering = ['-data_relatorio', '-id']
+        ordering = ['numero_relatorio', '-id']
         verbose_name = "Linha de Controle de Relatório"
         verbose_name_plural = "Controle de Relatório"
 

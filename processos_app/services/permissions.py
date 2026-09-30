@@ -276,6 +276,17 @@ def pode_editar_numero_relatorio(user):
     return eh_administrador(user)
 
 
+def pode_editar_linha_relatorio(user, processo=None):
+    """Analista do grupo e administrador editam a planilha Controle de relatório."""
+    if eh_administrador(user):
+        return True
+    if not is_analista(user):
+        return False
+    if processo is None:
+        return True
+    return pode_consultar_processo(user, processo)
+
+
 def pode_resolver_pendencia(user, pendencia):
     """item 30: quem conclui tecnicamente é o responsável técnico."""
     return is_analista(user) and pendencia.responsavel_tecnico_id == user.id
@@ -395,6 +406,7 @@ def contexto_de_permissoes(user):
         'pode_consultar_controle_relatorio': pode_consultar_controle_relatorio(user),
         'pode_definir_ultimo_relatorio': pode_definir_ultimo_relatorio(user),
         'pode_editar_numero_relatorio': pode_editar_numero_relatorio(user),
+        'pode_editar_linha_relatorio': pode_editar_linha_relatorio(user),
         'pode_desfazer_tramite': pode_desfazer_tramite(user),
         'pode_acessar_fila_gestao': pode_acessar_fila_gestao(user),
     }
@@ -421,6 +433,7 @@ def contexto_processor(request):
             'pode_consultar_controle_relatorio': False,
             'pode_definir_ultimo_relatorio': False,
             'pode_editar_numero_relatorio': False,
+            'pode_editar_linha_relatorio': False,
             'pode_desfazer_tramite': False,
             'pode_acessar_fila_gestao': False,
         }

@@ -2724,3 +2724,22 @@ tr.is-inativo td {
     flex-wrap: wrap;
     gap: 8px;
 }
+
+.input--sheet,
+.select--sheet {
+    min-width: 6.5rem;
+    max-width: 12rem;
+    height: 32px;
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.textarea--sheet {
+    min-width: 8rem;
+    max-width: 14rem;
+    min-height: 48px;
+    padding: 4px 8px;
+    font-size: 12px;
+    resize: vertical;
+}
+

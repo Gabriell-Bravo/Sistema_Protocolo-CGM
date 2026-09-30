@@ -129,6 +129,7 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertNotContains(pagina, 'Último número já usado')
         self.assertContains(pagina, processo.numero_relatorio)
         self.assertContains(pagina, '12/2026')
+        self.assertContains(pagina, 'name="valor"')
         self.assertNotContains(pagina, 'name="numero_relatorio"')
 
         admin = criar_usuario('admin_rel2', 'GESTAO', is_superuser=True)
@@ -137,6 +138,54 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertContains(pagina, 'Último número já usado')
         self.assertContains(pagina, '12/2026')
         self.assertContains(pagina, 'name="numero_relatorio"')
+        self.assertContains(pagina, 'name="valor"')
+
+    def test_analista_edita_linha_da_planilha(self):
+        processo = self.novo_processo(self.especie_liq, numero_processo='18/2026')
+        self._salvar_liquidacao(processo)
+        relatorios.alterar_linha(self.analista_liq, processo.id, {
+            'destino': 'Secretaria Nova',
+            'valor': '2500',
+            'periodo': 'Jan/2026',
+            'observacao': 'Corrigido na planilha',
+            'status_analise': 'PROSSEGUIMENTO_COM_RESSALVA',
+            'contratada': 'Empresa Y',
+            'volume': '2',
+            'secretaria': 'Comunicação Social',
+            'objeto': 'Objeto atualizado',
+            'data_relatorio': '2026-09-15',
+        })
+        processo.refresh_from_db()
+        self.assertEqual(processo.destino, 'Secretaria Nova')
+        self.assertEqual(processo.valor, '2500')
+        self.assertEqual(processo.periodo, 'Jan/2026')
+        self.assertEqual(processo.observacao, 'Corrigido na planilha')
+        self.assertEqual(processo.status_analise, 'PROSSEGUIMENTO_COM_RESSALVA')
+        linha = LinhaControleRelatorio.objects.get(processo=processo)
+        self.assertEqual(linha.destino, 'Secretaria Nova')
+        self.assertEqual(linha.valor, '2500')
+        self.assertEqual(linha.observacao, 'Corrigido na planilha')
+        self.assertEqual(str(linha.data_relatorio), '2026-09-15')
+
+        with self.assertRaises(PermissionDenied):
+            relatorios.alterar_linha(self.analista_lic, processo.id, {
+                'destino': 'Outro',
+            })
+        with self.assertRaises(PermissionDenied):
+            relatorios.alterar_linha(self.protocolo, processo.id, {
+                'destino': 'Outro',
+            })
+
+    def test_planilha_ordena_por_numero_de_relatorio(self):
+        admin = criar_usuario('admin_ord', 'GESTAO', is_superuser=True)
+        primeiro = self.novo_processo(self.especie_liq, numero_processo='20/2026')
+        segundo = self.novo_processo(self.especie_liq, numero_processo='21/2026')
+        self._salvar_liquidacao(primeiro)
+        self._salvar_liquidacao(segundo)
+        relatorios.alterar_numero(admin, primeiro.id, 1895)
+        relatorios.alterar_numero(admin, segundo.id, 1893)
+        numeros = [linha.numero_relatorio for linha in relatorios.listar(self.analista_liq)]
+        self.assertEqual(numeros, ['1893', '1895'])
 
     def test_protocolo_nao_acessa(self):
         self.client.force_login(self.protocolo)
