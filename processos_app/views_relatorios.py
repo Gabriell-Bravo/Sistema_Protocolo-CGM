@@ -10,7 +10,6 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from .models import Processo
 from .services import permissions as perm
 from .services import relatorios as svc
 
@@ -48,7 +47,6 @@ def controle_relatorio(request):
         'termo': termo,
         'querystring': _querystring_sem_page(request),
         'pode_definir_ultimo': perm.pode_definir_ultimo_relatorio(request.user),
-        'status_analise_choices': Processo.STATUS_ANALISE_CHOICES,
         **perm.contexto_de_permissoes(request.user),
     })
 
@@ -88,24 +86,6 @@ def alterar_numero(request, process_id):
             request,
             f'Número do relatório de {processo.numero_processo} '
             f'atualizado para {processo.numero_relatorio}.')
-    except (PermissionDenied, ValidationError) as exc:
-        messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
-    return redirect(destino)
-
-
-@login_required
-@require_POST
-def alterar_linha(request, process_id):
-    perm.assert_permissao(
-        perm.pode_editar_linha_relatorio(request.user),
-        'Somente analista e administrador editam a planilha.')
-    destino = request.POST.get('next') or ''
-    if not destino.startswith('/'):
-        destino = reverse('controle_relatorio')
-    try:
-        processo = svc.alterar_linha(request.user, process_id, request.POST)
-        messages.success(
-            request, f'Planilha de {processo.numero_processo} atualizada.')
     except (PermissionDenied, ValidationError) as exc:
         messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
     return redirect(destino)

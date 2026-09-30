@@ -2,8 +2,9 @@
 """Controle de relatório: sequência numérica e planilha das análises.
 
 O administrador informa o último número já usado. O número é gerado
-quando o analista salva a análise. O analista do grupo edita a planilha
-nessa tela. O administrador também corrige o número, mesmo já emitido.
+quando o analista salva a análise. Correções da análise saem pelo lápis
+da planilha, na tela do processo. O administrador também corrige o
+número, mesmo já emitido.
 
 A geração automática continua sem repetir. Declinar desvincula a linha,
 mas o número não volta a ser usado no próximo salvamento.
@@ -161,87 +162,6 @@ def alterar_numero(usuario, processo_id, novo):
         seq.save(update_fields=['proximo_numero'])
 
     registrar_diff(processo, 'numero_relatorio', anterior, str(novo), usuario)
-    return processo
-
-
-CAMPOS_TEXTO_LINHA = (
-    'volume', 'secretaria', 'contratada', 'objeto',
-    'valor', 'periodo', 'destino', 'observacao',
-)
-
-
-@transaction.atomic
-def alterar_linha(usuario, processo_id, dados):
-    """Analista ou administrador corrige os dados da planilha e do processo."""
-    from . import cadastros
-    from .processos import converter_data, texto
-
-    processo = (Processo.objects.select_for_update()
-                .filter(id=processo_id).first())
-    if processo is None:
-        raise RelatorioInvalido('Processo não encontrado.')
-    perm.assert_permissao(
-        perm.pode_editar_linha_relatorio(usuario, processo),
-        'Somente analista do grupo e administrador editam a planilha.')
-    if not processo.numero_relatorio:
-        raise RelatorioInvalido('Salve a análise antes de editar a planilha.')
-
-    dados = dados or {}
-    campos_save = []
-
-    for campo in CAMPOS_TEXTO_LINHA:
-        if campo not in dados:
-            continue
-        novo = texto(dados.get(campo)) or None
-        if campo in ('volume', 'secretaria') and not novo:
-            continue
-        atual = getattr(processo, campo)
-        if (atual or '') == (novo or ''):
-            continue
-        setattr(processo, campo, novo)
-        if campo == 'secretaria':
-            processo.secretaria_fk = cadastros.resolver_unidade(novo)
-            campos_save.append('secretaria_fk')
-        if campo == 'destino':
-            processo.destino_fk = cadastros.resolver_unidade(novo)
-            campos_save.append('destino_fk')
-        registrar_diff(processo, campo, atual or '', novo or '', usuario)
-        campos_save.append(campo)
-
-    if 'status_analise' in dados:
-        novo = texto(dados.get('status_analise')) or 'NAO_APLICAVEL'
-        if novo not in dict(Processo.STATUS_ANALISE_CHOICES):
-            raise RelatorioInvalido('Status da análise inválido.')
-        if processo.status_analise != novo:
-            anterior = processo.status_analise
-            processo.status_analise = novo
-            registrar_diff(processo, 'status_analise', anterior, novo, usuario)
-            campos_save.append('status_analise')
-
-    if 'data_relatorio' in dados:
-        try:
-            novo = converter_data(dados.get('data_relatorio'))
-        except ValidationError as exc:
-            raise RelatorioInvalido('; '.join(exc.messages))
-        if novo is None:
-            novo = processo.data_analise or timezone.localdate()
-        if processo.data_analise != novo:
-            anterior = processo.data_analise
-            processo.data_analise = novo
-            registrar_diff(
-                processo, 'data_analise',
-                anterior.isoformat() if anterior else '',
-                novo.isoformat(), usuario)
-            campos_save.append('data_analise')
-
-    if campos_save:
-        processo.save(update_fields=list(dict.fromkeys(campos_save)))
-
-    if perm.pode_editar_numero_relatorio(usuario) and 'numero_relatorio' in dados:
-        alterar_numero(usuario, processo.id, dados.get('numero_relatorio'))
-        processo.refresh_from_db()
-
-    registrar(processo)
     return processo
 
 

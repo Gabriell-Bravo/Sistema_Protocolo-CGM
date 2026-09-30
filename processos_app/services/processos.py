@@ -69,6 +69,9 @@ def campos_editaveis(usuario, processo=None):
         if (processo.situacao_tramite == 'EM_ANALISE'
                 and processo.analista_responsavel_id == usuario.id):
             return set(CAMPOS_ANALISTA)
+        if (processo.numero_relatorio
+                and perm.pode_editar_linha_relatorio(usuario, processo)):
+            return set(CAMPOS_ANALISTA)
         return set()
     if perm.is_gestao(usuario):
         return set(CAMPOS_GESTAO)
@@ -294,8 +297,8 @@ def aplicar_edicao(processo, dados, usuario):
 def aplicar_analise(processo, dados, usuario):
     """Grava os campos de análise enviados. Devolve quantos mudaram.
 
-    Só o analista responsável, com o processo EM_ANALISE (whitelist).
-    Campo ausente na requisição é ignorado; campo vazio limpa o valor.
+    Só o analista responsável (em análise) ou o analista do grupo
+    corrigindo um relatório já gerado.
     """
     permitidos, _ = filtrar_payload(
         usuario, processo, {k: dados.get(k) for k in CAMPOS_ANALISTA if k in dados})

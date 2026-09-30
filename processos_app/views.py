@@ -3,6 +3,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponse
+from django.urls import reverse
 from .models import (
     Processo, ProcessHistory, MonitoramentoRecord, Profile, Pendencia,
     SequenciaRelatorio, EventoProcesso,
@@ -1453,8 +1454,10 @@ def analista_processo(request, process_id):
 
     anotar_situacao_fila([processo], request.user)
     eh_responsavel = processo.analista_responsavel_id == request.user.id
-    pode_editar = (
-        processo.situacao_tramite == 'EM_ANALISE' and eh_responsavel
+    pode_editar = perm.is_analista(request.user) and (
+        (processo.situacao_tramite == 'EM_ANALISE' and eh_responsavel)
+        or (bool(processo.numero_relatorio)
+            and perm.pode_editar_linha_relatorio(request.user, processo))
     )
     # itens 8, 10 e 11
     pode_direcionar = perm.pode_direcionar_assinatura(request.user, processo) and (
@@ -1467,6 +1470,11 @@ def analista_processo(request, process_id):
         (processo.situacao_tramite == 'EM_ANALISE' and eh_responsavel)
         or assinatura_para_mim
     )
+
+    next_controle = ''
+    destino_next = request.POST.get('next') or request.GET.get('next') or ''
+    if destino_next == reverse('controle_relatorio'):
+        next_controle = destino_next
 
     if request.method == 'POST':
         acao = request.POST.get('acao', 'salvar')
@@ -1487,6 +1495,10 @@ def analista_processo(request, process_id):
             alteracoes = registrar_analise(request, processo) if pode_editar else 0
         except ValidationError as exc:
             messages.error(request, '; '.join(exc.messages))
+            if next_controle:
+                return redirect(
+                    f"{reverse('analista_processo', args=[processo.id])}"
+                    f"?next={next_controle}")
             return redirect('analista_processo', process_id=processo.id)
 
         if acao == 'concluir':
@@ -1517,6 +1529,9 @@ def analista_processo(request, process_id):
                 request, f"Análise salva. {alteracoes} campo(s) atualizado(s).")
         else:
             messages.info(request, "Nenhuma alteração para salvar.")
+        destino = request.POST.get('next') or ''
+        if destino.startswith('/') and not destino.startswith('//'):
+            return redirect(destino)
         return redirect('analista_processo', process_id=processo.id)
 
     prazo_obj = calcular_prazo(processo.data_entrada, processo.prioridade)
@@ -1559,6 +1574,8 @@ def analista_processo(request, process_id):
         'desfazer': (processo.acao_desfazer
                      if perm.pode_desfazer_tramite(request.user)
                      else None),
+        'voltar_controle': bool(next_controle),
+        'next_controle': next_controle,
     })
 
 

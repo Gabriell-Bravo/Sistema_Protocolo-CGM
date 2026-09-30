@@ -277,7 +277,7 @@ def pode_editar_numero_relatorio(user):
 
 
 def pode_editar_linha_relatorio(user, processo=None):
-    """Analista do grupo e administrador editam a planilha Controle de relatório."""
+    """Analista do grupo corrige a análise já numerada; administrador consulta."""
     if eh_administrador(user):
         return True
     if not is_analista(user):

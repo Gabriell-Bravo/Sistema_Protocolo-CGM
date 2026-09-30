@@ -129,7 +129,12 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertNotContains(pagina, 'Último número já usado')
         self.assertContains(pagina, processo.numero_relatorio)
         self.assertContains(pagina, '12/2026')
-        self.assertContains(pagina, 'name="valor"')
+        self.assertContains(pagina, 'Editar análise')
+        self.assertContains(
+            pagina,
+            f"{reverse('analista_processo', args=[processo.id])}"
+            f"?next={reverse('controle_relatorio')}")
+        self.assertNotContains(pagina, 'name="valor"')
         self.assertNotContains(pagina, 'name="numero_relatorio"')
 
         admin = criar_usuario('admin_rel2', 'GESTAO', is_superuser=True)
@@ -137,44 +142,46 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         pagina = self.client.get(reverse('controle_relatorio'))
         self.assertContains(pagina, 'Último número já usado')
         self.assertContains(pagina, '12/2026')
-        self.assertContains(pagina, 'name="numero_relatorio"')
-        self.assertContains(pagina, 'name="valor"')
+        self.assertContains(pagina, 'Editar análise')
+        self.assertNotContains(pagina, 'name="numero_relatorio"')
+        self.assertNotContains(pagina, 'name="valor"')
 
-    def test_analista_edita_linha_da_planilha(self):
+    def test_analista_corrige_pela_tela_da_analise(self):
         processo = self.novo_processo(self.especie_liq, numero_processo='18/2026')
         self._salvar_liquidacao(processo)
-        relatorios.alterar_linha(self.analista_liq, processo.id, {
+        tramitacao.liberar_assinatura(processo.id, self.analista_liq)
+        processo.refresh_from_db()
+
+        self.client.force_login(self.analista_liq)
+        url = reverse('analista_processo', args=[processo.id])
+        tela = self.client.get(f'{url}?next={reverse("controle_relatorio")}')
+        self.assertEqual(tela.status_code, 200)
+        self.assertContains(tela, 'Salvar análise')
+        self.assertContains(tela, 'Voltar ao Controle de relatório')
+
+        resposta = self.client.post(url, {
+            'acao': 'salvar',
+            'next': reverse('controle_relatorio'),
             'destino': 'Secretaria Nova',
             'valor': '2500',
             'periodo': 'Jan/2026',
-            'observacao': 'Corrigido na planilha',
+            'observacao': 'Corrigido na tela da análise',
             'status_analise': 'PROSSEGUIMENTO_COM_RESSALVA',
-            'contratada': 'Empresa Y',
-            'volume': '2',
-            'secretaria': 'Comunicação Social',
-            'objeto': 'Objeto atualizado',
-            'data_relatorio': '2026-09-15',
         })
+        self.assertRedirects(resposta, reverse('controle_relatorio'))
         processo.refresh_from_db()
         self.assertEqual(processo.destino, 'Secretaria Nova')
         self.assertEqual(processo.valor, '2500')
         self.assertEqual(processo.periodo, 'Jan/2026')
-        self.assertEqual(processo.observacao, 'Corrigido na planilha')
+        self.assertEqual(processo.observacao, 'Corrigido na tela da análise')
         self.assertEqual(processo.status_analise, 'PROSSEGUIMENTO_COM_RESSALVA')
         linha = LinhaControleRelatorio.objects.get(processo=processo)
         self.assertEqual(linha.destino, 'Secretaria Nova')
         self.assertEqual(linha.valor, '2500')
-        self.assertEqual(linha.observacao, 'Corrigido na planilha')
-        self.assertEqual(str(linha.data_relatorio), '2026-09-15')
+        self.assertEqual(linha.observacao, 'Corrigido na tela da análise')
 
-        with self.assertRaises(PermissionDenied):
-            relatorios.alterar_linha(self.analista_lic, processo.id, {
-                'destino': 'Outro',
-            })
-        with self.assertRaises(PermissionDenied):
-            relatorios.alterar_linha(self.protocolo, processo.id, {
-                'destino': 'Outro',
-            })
+        self.assertEqual(
+            svc_processos.campos_editaveis(self.analista_lic, processo), set())
 
     def test_planilha_ordena_por_numero_de_relatorio(self):
         admin = criar_usuario('admin_ord', 'GESTAO', is_superuser=True)

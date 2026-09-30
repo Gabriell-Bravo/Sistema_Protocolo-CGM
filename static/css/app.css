@@ -1453,6 +1453,7 @@ button.encaminhamento__opcao:disabled {
     border-radius: var(--radius-sm);
     background: transparent;
     color: var(--text-muted);
+    text-decoration: none;
     cursor: pointer;
     transition: background .13s ease, color .13s ease;
 }
@@ -2723,23 +2724,5 @@ tr.is-inativo td {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-}
-
-.input--sheet,
-.select--sheet {
-    min-width: 6.5rem;
-    max-width: 12rem;
-    height: 32px;
-    padding: 4px 8px;
-    font-size: 12px;
-}
-
-.textarea--sheet {
-    min-width: 8rem;
-    max-width: 14rem;
-    min-height: 48px;
-    padding: 4px 8px;
-    font-size: 12px;
-    resize: vertical;
 }
 

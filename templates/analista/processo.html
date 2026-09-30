@@ -6,10 +6,17 @@
 {% block content_class %}content--analysis{% endblock %}
 
 {% block topbar_actions %}
+    {% if voltar_controle %}
+    <a href="{% url 'controle_relatorio' %}" class="btn btn--outline">
+        <span class="material-symbols-rounded">arrow_back</span>
+        Voltar ao Controle de relatório
+    </a>
+    {% else %}
     <a href="{% if is_gestao or user.is_superuser %}{% url 'gestao_processos' %}{% else %}{% url 'area_analista' %}{% endif %}" class="btn btn--outline">
         <span class="material-symbols-rounded">arrow_back</span>
         Voltar à fila
     </a>
+    {% endif %}
 {% endblock %}
 
 {% block content %}
@@ -103,6 +110,9 @@
     {% endif %}
     <form method="post" id="formAnalise">
         {% csrf_token %}
+        {% if next_controle %}
+        <input type="hidden" name="next" value="{{ next_controle }}">
+        {% endif %}
         <div class="form-section">
             <div class="form-section__title">
                 <span class="material-symbols-rounded">edit_note</span>

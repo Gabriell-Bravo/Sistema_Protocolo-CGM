@@ -2,7 +2,7 @@
 
 {% block title %}Controle de relatório{% endblock %}
 {% block page_title %}Controle de relatório{% endblock %}
-{% block page_subtitle %}{% if pode_definir_ultimo %}Defina o último número já usado e edite a planilha das análises já salvas.{% else %}Planilha das análises salvas. Você pode corrigir as informações aqui.{% endif %}{% endblock %}
+{% block page_subtitle %}{% if pode_definir_ultimo %}Defina o último número já usado. Para corrigir uma análise, use o lápis.{% else %}Planilha das análises salvas. O lápis abre a tela da análise para você alterar e salvar.{% endif %}{% endblock %}
 
 {% block content %}
 <div class="stack">
@@ -47,17 +47,6 @@
         </div>
     </section>
 
-    {% if pode_editar_linha_relatorio %}
-    {% for linha in linhas %}
-    {% if linha.processo_id %}
-    <form id="formLinha{{ linha.id }}" method="post" action="{% url 'controle_relatorio_alterar_linha' linha.processo_id %}" hidden>
-        {% csrf_token %}
-        <input type="hidden" name="next" value="{{ request.get_full_path }}">
-    </form>
-    {% endif %}
-    {% endfor %}
-    {% endif %}
-
     <section class="table-card">
         <div class="table-card__header">
             <span class="table-card__title">Planilha de relatórios</span>
@@ -80,31 +69,14 @@
                         <th>Analista</th>
                         <th>Status da análise</th>
                         <th>Observação</th>
-                        {% if pode_editar_linha_relatorio %}<th class="col-actions">Ações</th>{% endif %}
+                        <th class="col-actions">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for linha in linhas %}
                     <tr>
-                        <td>
-                            {% if pode_editar_numero_relatorio and linha.processo_id %}
-                            <input type="text" name="numero_relatorio" form="formLinha{{ linha.id }}"
-                                   class="input input--sheet" inputmode="numeric"
-                                   value="{{ linha.numero_relatorio }}" aria-label="Número do relatório"
-                                   style="width:7rem;font-weight:700;">
-                            {% else %}
-                            <strong>{{ linha.numero_relatorio }}</strong>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if pode_editar_linha_relatorio and linha.processo_id %}
-                            <input type="date" name="data_relatorio" form="formLinha{{ linha.id }}"
-                                   class="input input--sheet" value="{{ linha.data_relatorio|date:'Y-m-d' }}"
-                                   aria-label="Data do relatório">
-                            {% else %}
-                            {{ linha.data_relatorio|date:"d/m/Y" }}
-                            {% endif %}
-                        </td>
+                        <td><strong>{{ linha.numero_relatorio }}</strong></td>
+                        <td>{{ linha.data_relatorio|date:"d/m/Y" }}</td>
                         <td class="col-sticky">
                             {% if linha.processo_id %}
                             <a href="{% url 'analista_processo' linha.processo_id %}">{{ linha.numero_processo }}</a>
@@ -112,96 +84,28 @@
                             {{ linha.numero_processo }}
                             {% endif %}
                         </td>
-                        <td>
-                            {% if pode_editar_linha_relatorio and linha.processo_id %}
-                            <input type="text" name="volume" form="formLinha{{ linha.id }}"
-                                   class="input input--sheet" value="{{ linha.volume }}" aria-label="Volume">
-                            {% else %}
-                            {{ linha.volume|default:"—" }}
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if pode_editar_linha_relatorio and linha.processo_id %}
-                            <input type="text" name="secretaria" form="formLinha{{ linha.id }}"
-                                   class="input input--sheet" value="{{ linha.secretaria }}" aria-label="Secretaria">
-                            {% else %}
-                            {{ linha.secretaria|default:"—" }}
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if pode_editar_linha_relatorio and linha.processo_id %}
-                            <input type="text" name="contratada" form="formLinha{{ linha.id }}"
-                                   class="input input--sheet" value="{{ linha.contratada }}" aria-label="Contratada">
-                            {% else %}
-                            {{ linha.contratada|default:"—" }}
-                            {% endif %}
-                        </td>
-                        <td class="cell-wrap">
-                            {% if pode_editar_linha_relatorio and linha.processo_id %}
-                            <textarea name="objeto" form="formLinha{{ linha.id }}"
-                                      class="textarea textarea--sheet" rows="2" aria-label="Objeto">{{ linha.objeto }}</textarea>
-                            {% else %}
-                            {{ linha.objeto|truncatechars:80|default:"—" }}
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if pode_editar_linha_relatorio and linha.processo_id %}
-                            <input type="text" name="valor" form="formLinha{{ linha.id }}"
-                                   class="input input--sheet" value="{{ linha.valor }}" aria-label="Valor">
-                            {% else %}
-                            {{ linha.valor|default:"—" }}
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if pode_editar_linha_relatorio and linha.processo_id %}
-                            <input type="text" name="periodo" form="formLinha{{ linha.id }}"
-                                   class="input input--sheet" value="{{ linha.periodo }}" aria-label="Período">
-                            {% else %}
-                            {{ linha.periodo|default:"—" }}
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if pode_editar_linha_relatorio and linha.processo_id %}
-                            <input type="text" name="destino" form="formLinha{{ linha.id }}"
-                                   class="input input--sheet" value="{{ linha.destino }}" aria-label="Destino">
-                            {% else %}
-                            {{ linha.destino|default:"—" }}
-                            {% endif %}
-                        </td>
+                        <td>{{ linha.volume|default:"—" }}</td>
+                        <td>{{ linha.secretaria|default:"—" }}</td>
+                        <td>{{ linha.contratada|default:"—" }}</td>
+                        <td class="cell-wrap">{{ linha.objeto|truncatechars:80|default:"—" }}</td>
+                        <td>{{ linha.valor|default:"—" }}</td>
+                        <td>{{ linha.periodo|default:"—" }}</td>
+                        <td>{{ linha.destino|default:"—" }}</td>
                         <td>{{ linha.analista|default:"—" }}</td>
-                        <td>
-                            {% if pode_editar_linha_relatorio and linha.processo_id %}
-                            <select name="status_analise" form="formLinha{{ linha.id }}"
-                                    class="select select--sheet" aria-label="Status da análise">
-                                {% for value, label in status_analise_choices %}
-                                <option value="{{ value }}" {% if linha.status_analise == value %}selected{% endif %}>{{ label }}</option>
-                                {% endfor %}
-                            </select>
-                            {% else %}
-                            {{ linha.status_analise_display }}
-                            {% endif %}
-                        </td>
-                        <td class="cell-wrap">
-                            {% if pode_editar_linha_relatorio and linha.processo_id %}
-                            <textarea name="observacao" form="formLinha{{ linha.id }}"
-                                      class="textarea textarea--sheet" rows="2" aria-label="Observação">{{ linha.observacao }}</textarea>
-                            {% else %}
-                            {{ linha.observacao|truncatechars:60|default:"—" }}
-                            {% endif %}
-                        </td>
-                        {% if pode_editar_linha_relatorio %}
+                        <td>{{ linha.status_analise_display }}</td>
+                        <td class="cell-wrap">{{ linha.observacao|truncatechars:60|default:"—" }}</td>
                         <td class="col-actions">
                             {% if linha.processo_id %}
-                            <button type="submit" form="formLinha{{ linha.id }}" class="icon-btn icon-btn--primary" title="Salvar linha">
-                                <span class="material-symbols-rounded">save</span>
-                            </button>
+                            <a href="{% url 'analista_processo' linha.processo_id %}?next={% url 'controle_relatorio' %}"
+                               class="icon-btn icon-btn--primary" title="Editar análise">
+                                <span class="material-symbols-rounded">edit</span>
+                            </a>
                             {% endif %}
                         </td>
-                        {% endif %}
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="{% if pode_editar_linha_relatorio %}14{% else %}13{% endif %}">
+                        <td colspan="14">
                             <div class="empty empty--compact">
                                 <span class="material-symbols-rounded">table_chart</span>
                                 <div class="empty__title">Nenhuma linha registrada</div>
