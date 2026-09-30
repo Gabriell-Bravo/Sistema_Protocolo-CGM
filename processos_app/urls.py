@@ -7,6 +7,7 @@ from . import views
 from . import views_anexos as anexos
 from . import views_gestao as gest
 from . import views_pendencias as pend
+from . import views_relatorios as rel
 from . import views_tramitacao as tram
 
 urlpatterns = [
@@ -122,4 +123,8 @@ urlpatterns = [
     # Bloco D — dashboard e indicadores (itens 47 a 50)
     # ------------------------------------------------------------------
     path('gestao/dashboard/', gest.dashboard, name='gestao_dashboard'),
+    path('controle-relatorio/',
+         rel.controle_relatorio, name='controle_relatorio'),
+    path('controle-relatorio/ultimo-numero/',
+         rel.definir_ultimo_numero, name='controle_relatorio_ultimo'),
 ]

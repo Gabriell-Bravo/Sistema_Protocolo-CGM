@@ -675,6 +675,51 @@ class SequenciaRelatorio(models.Model):
         verbose_name_plural = "Sequências de Relatório"
 
 
+class LinhaControleRelatorio(models.Model):
+    """Linha da planilha Controle de relatório, gravada ao assumir Liquidações."""
+
+    processo = models.OneToOneField(
+        Processo, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='linha_relatorio', verbose_name="Processo")
+    numero_processo = models.CharField(max_length=255, verbose_name="Nº do processo")
+    volume = models.CharField(max_length=255, blank=True, verbose_name="Volume")
+    numero_relatorio = models.CharField(max_length=50, verbose_name="Nº do relatório")
+    data_relatorio = models.DateField(verbose_name="Data do relatório")
+    secretaria = models.CharField(max_length=255, blank=True, verbose_name="Secretaria")
+    contratada = models.CharField(max_length=255, blank=True, verbose_name="Contratada")
+    objeto = models.TextField(blank=True, verbose_name="Objeto")
+    valor = models.CharField(max_length=255, blank=True, verbose_name="Valor")
+    periodo = models.CharField(max_length=255, blank=True, verbose_name="Período")
+    destino = models.CharField(max_length=255, blank=True, verbose_name="Destino")
+    analista = models.CharField(max_length=255, blank=True, verbose_name="Analista")
+    status_analise = models.CharField(
+        max_length=50, blank=True, verbose_name="Status da análise")
+    observacao = models.TextField(blank=True, verbose_name="Observação")
+    grupo = models.CharField(max_length=50, blank=True, db_index=True, verbose_name="Grupo")
+    registrado_em = models.DateTimeField(auto_now_add=True, verbose_name="Registrado em")
+    atualizado_em = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
+
+    def __str__(self):
+        return f"{self.numero_relatorio} · {self.numero_processo}"
+
+    @property
+    def status_analise_display(self):
+        return dict(Processo.STATUS_ANALISE_CHOICES).get(
+            self.status_analise, self.status_analise or '—')
+
+    class Meta:
+        db_table = 'controle_relatorio'
+        ordering = ['-data_relatorio', '-id']
+        verbose_name = "Linha de Controle de Relatório"
+        verbose_name_plural = "Controle de Relatório"
+        constraints = [
+            models.UniqueConstraint(
+                fields=['grupo', 'numero_relatorio'],
+                name='uniq_controle_relatorio_grupo_numero',
+            ),
+        ]
+
+
 # ---------------------------------------------------------------------------
 # Cadastros parametrizáveis (itens 19 a 22)
 # ---------------------------------------------------------------------------

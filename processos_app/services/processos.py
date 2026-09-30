@@ -320,4 +320,9 @@ def aplicar_analise(processo, dados, usuario):
             processo.destino_fk = cadastros.resolver_unidade(novo)
     if alteracoes:
         processo.save()
+        from .relatorios import registrar as registrar_relatorio
+        registrar_relatorio(processo)
+    elif processo.numero_relatorio:
+        from .relatorios import registrar as registrar_relatorio
+        registrar_relatorio(processo)
     return alteracoes

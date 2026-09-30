@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Controle de relatório{% endblock %}
+{% block page_title %}Controle de relatório{% endblock %}
+{% block page_subtitle %}{% if pode_definir_ultimo %}Defina o último número já usado. A planilha registra cada processo assumido com relatório.{% else %}Planilha dos processos analisados com número de relatório.{% endif %}{% endblock %}
+
+{% block content %}
+<div class="stack">
+
+    {% if pode_definir_ultimo %}
+    <section class="card">
+        <div class="card__header">
+            <span class="card__title">Último número de relatório</span>
+            <span class="card__hint">Somente o administrador altera</span>
+        </div>
+        <form method="post" action="{% url 'controle_relatorio_ultimo' %}" class="card__body">
+            {% csrf_token %}
+            <div class="form-grid">
+                <div class="field">
+                    <label class="field__label" for="ultimo_numero">Último número já usado</label>
+                    <input type="number" min="0" id="ultimo_numero" name="ultimo_numero"
+                           class="input" value="{{ sequencia.ultimo }}" required>
+                    <span class="field__hint">O próximo processo assumido receberá o nº {{ sequencia.proximo }}.</span>
+                </div>
+            </div>
+            <div class="form-actions" style="margin-top:14px;">
+                <button type="submit" class="btn btn--primary">
+                    <span class="material-symbols-rounded">save</span>
+                    Salvar número
+                </button>
+            </div>
+        </form>
+    </section>
+    {% endif %}
+
+    <section class="filters">
+        <div class="filters__bar">
+            <form method="get" class="search">
+                <div class="search__field">
+                    <span class="material-symbols-rounded search__icon">search</span>
+                    <input type="text" name="termo" class="input"
+                           placeholder="Buscar por processo, relatório, secretaria, analista…"
+                           value="{{ termo|default:'' }}">
+                </div>
+                <button type="submit" class="btn btn--primary">Buscar</button>
+            </form>
+        </div>
+    </section>
+
+    <section class="table-card">
+        <div class="table-card__header">
+            <span class="table-card__title">Planilha de relatórios</span>
+            <span class="table-card__count">{{ total }} linha{{ total|pluralize:"s" }}</span>
+        </div>
+        <div class="table-scroll">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Nº relatório</th>
+                        <th>Data do relatório</th>
+                        <th class="col-sticky">Nº processo</th>
+                        <th>Volume</th>
+                        <th>Secretaria</th>
+                        <th>Contratada / Favorecido</th>
+                        <th>Objeto</th>
+                        <th>Valor</th>
+                        <th>Período</th>
+                        <th>Destino</th>
+                        <th>Analista</th>
+                        <th>Status da análise</th>
+                        <th>Observação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for linha in linhas %}
+                    <tr>
+                        <td><strong>{{ linha.numero_relatorio }}</strong></td>
+                        <td>{{ linha.data_relatorio|date:"d/m/Y" }}</td>
+                        <td class="col-sticky">
+                            {% if linha.processo_id %}
+                            <a href="{% url 'analista_processo' linha.processo_id %}">{{ linha.numero_processo }}</a>
+                            {% else %}
+                            {{ linha.numero_processo }}
+                            {% endif %}
+                        </td>
+                        <td>{{ linha.volume|default:"—" }}</td>
+                        <td>{{ linha.secretaria|default:"—" }}</td>
+                        <td>{{ linha.contratada|default:"—" }}</td>
+                        <td class="cell-wrap">{{ linha.objeto|truncatechars:80|default:"—" }}</td>
+                        <td>{{ linha.valor|default:"—" }}</td>
+                        <td>{{ linha.periodo|default:"—" }}</td>
+                        <td>{{ linha.destino|default:"—" }}</td>
+                        <td>{{ linha.analista|default:"—" }}</td>
+                        <td>{{ linha.status_analise_display }}</td>
+                        <td class="cell-wrap">{{ linha.observacao|truncatechars:60|default:"—" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="13">
+                            <div class="empty empty--compact">
+                                <span class="material-symbols-rounded">table_chart</span>
+                                <div class="empty__title">Nenhuma linha registrada</div>
+                                <div>Quando um analista assumir um processo que gera relatório, a linha aparece aqui.</div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% include "includes/paginacao.html" with pagina=pagina %}
+    </section>
+</div>
+{% endblock %}

@@ -257,6 +257,16 @@ def pode_consultar_assinatura_e_diligencias(user):
     return is_gestao(user) or is_analista(user)
 
 
+def pode_consultar_controle_relatorio(user):
+    """Planilha de relatórios: analista e administrador."""
+    return is_analista(user) or eh_administrador(user)
+
+
+def pode_definir_ultimo_relatorio(user):
+    """Só o administrador informa o último número já usado."""
+    return eh_administrador(user)
+
+
 def pode_resolver_pendencia(user, pendencia):
     """item 30: quem conclui tecnicamente é o responsável técnico."""
     return is_analista(user) and pendencia.responsavel_tecnico_id == user.id
@@ -366,6 +376,8 @@ def contexto_de_permissoes(user):
         'pode_gerir_pessoas': pode_gerir_pessoas(user),
         'pode_editar_cadastros': pode_editar_cadastros(user),
         'pode_cancelar_processo': pode_cancelar_processo(user),
+        'pode_consultar_controle_relatorio': pode_consultar_controle_relatorio(user),
+        'pode_definir_ultimo_relatorio': pode_definir_ultimo_relatorio(user),
     }
 
 
@@ -387,5 +399,7 @@ def contexto_processor(request):
             'pode_gerir_pessoas': False,
             'pode_editar_cadastros': False,
             'pode_cancelar_processo': False,
+            'pode_consultar_controle_relatorio': False,
+            'pode_definir_ultimo_relatorio': False,
         }
     return contexto_de_permissoes(user)

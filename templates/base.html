@@ -110,6 +110,12 @@
                     <span class="material-symbols-rounded">campaign</span>
                     <span class="nav-item__label">Diligências</span>
                 </a>
+                <a href="{% url 'controle_relatorio' %}"
+                   class="nav-item {% if nav == 'controle_relatorio' %}is-active{% endif %}"
+                   title="Controle de relatório">
+                    <span class="material-symbols-rounded">table_chart</span>
+                    <span class="nav-item__label">Controle de relatório</span>
+                </a>
             {% endif %}
 
             {% if is_gestao or user.is_superuser %}
@@ -161,6 +167,14 @@
                     <span class="material-symbols-rounded">group</span>
                     <span class="nav-item__label">Usuários</span>
                 </a>
+                {% if user.is_superuser and not is_analista %}
+                <a href="{% url 'controle_relatorio' %}"
+                   class="nav-item {% if nav == 'controle_relatorio' %}is-active{% endif %}"
+                   title="Controle de relatório">
+                    <span class="material-symbols-rounded">table_chart</span>
+                    <span class="nav-item__label">Controle de relatório</span>
+                </a>
+                {% endif %}
             {% endif %}
 
             <div class="sidebar__group-label">Ajuda</div>

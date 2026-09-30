@@ -33,7 +33,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from ..models import Pendencia, Processo, SequenciaRelatorio, UrgenciaRecorrente
+from ..models import LinhaControleRelatorio, Pendencia, Processo, SequenciaRelatorio, UrgenciaRecorrente
 from . import permissions as perm
 from . import prazos
 from .eventos import registrar_evento, registrar_diff, registrar_evento_pendencia
@@ -154,6 +154,10 @@ def assumir(processo_id, usuario):
         processo.numero_relatorio = _proximo_numero_relatorio(processo.genero)
     processo.save()
 
+    if processo.numero_relatorio:
+        from .relatorios import registrar as registrar_relatorio
+        registrar_relatorio(processo)
+
     registrar_evento(
         processo, 'PROCESSO_ASSUMIDO', usuario,
         descricao=f'Análise assumida por {perm.nome_usuario(usuario)}.')
@@ -214,6 +218,9 @@ def declinar_analise(processo_id, usuario, motivo):
     processo.status_analise = 'NAO_APLICAVEL'
     processo.situacao_tramite = 'DISPONIVEL'
     processo.save(update_fields=CAMPOS_ANALISE_AO_DECLINAR)
+
+    from .relatorios import remover_do_processo
+    remover_do_processo(processo)
 
     motivo_pendencia = f'Análise declinada: {motivo}'
     abertas = list(processo.pendencias.select_for_update().filter(
@@ -748,20 +755,38 @@ def _travar(processo_id):
     return processo
 
 
+def _numeros_relatorio_usados(grupo):
+    """Números já emitidos: no processo ou na planilha (mesmo após declinar)."""
+    usados = set()
+    fontes = (
+        Processo.objects.filter(genero=grupo)
+            .exclude(numero_relatorio__isnull=True)
+            .exclude(numero_relatorio='')
+            .values_list('numero_relatorio', flat=True),
+        LinhaControleRelatorio.objects.filter(grupo=grupo)
+            .exclude(numero_relatorio='')
+            .values_list('numero_relatorio', flat=True),
+    )
+    for lista in fontes:
+        for bruto in lista:
+            try:
+                usados.add(int(str(bruto).strip()))
+            except (TypeError, ValueError):
+                continue
+    return usados
+
+
 def _proximo_numero_relatorio(grupo):
-    """item 55: preserva o controle concorrente existente."""
-    seq, _ = SequenciaRelatorio.objects.select_for_update().get_or_create(
+    """Um número por assunção. Trava a sequência para dois analistas não saírem iguais."""
+    SequenciaRelatorio.objects.get_or_create(
         grupo=grupo, defaults={'proximo_numero': 1540})
-    maior = seq.proximo_numero - 1
-    for bruto in (Processo.objects.filter(genero=grupo)
-                  .exclude(numero_relatorio__isnull=True)
-                  .exclude(numero_relatorio='')
-                  .values_list('numero_relatorio', flat=True)):
-        try:
-            maior = max(maior, int(str(bruto).strip()))
-        except (TypeError, ValueError):
-            continue
-    numero = max(seq.proximo_numero, maior + 1)
+    seq = SequenciaRelatorio.objects.select_for_update().get(grupo=grupo)
+    usados = _numeros_relatorio_usados(grupo)
+    numero = int(seq.proximo_numero or 1)
+    if numero < 1:
+        numero = 1
+    while numero in usados:
+        numero += 1
     seq.proximo_numero = numero + 1
     seq.save(update_fields=['proximo_numero'])
     return str(numero)
