@@ -6,8 +6,8 @@ quando o analista salva a análise. Correções da análise saem pelo lápis
 da planilha, na tela do processo. O administrador também corrige o
 número, mesmo já emitido.
 
-A geração automática continua sem repetir. Declinar desvincula a linha,
-mas o número não volta a ser usado no próximo salvamento.
+A geração automática não repete um número que ainda está numa análise.
+Declinar devolve o número: o próximo salvamento usa esse, não o seguinte.
 """
 
 from django.core.exceptions import ValidationError
@@ -45,8 +45,15 @@ def especie_gera_relatorio(processo):
     return processo.genero == perm.GRUPO_LIQUIDACOES
 
 
+def _inteiro(bruto):
+    try:
+        return int(str(bruto).strip())
+    except (TypeError, ValueError):
+        return None
+
+
 def numeros_usados(grupo, ignorar=None):
-    """Números já emitidos: no processo ou na planilha (mesmo após declinar)."""
+    """Números ainda presos a uma análise. Linha desvinculada está livre."""
     ignorar = set(ignorar or ())
     usados = set()
     fontes = (
@@ -54,17 +61,29 @@ def numeros_usados(grupo, ignorar=None):
             .exclude(numero_relatorio__isnull=True)
             .exclude(numero_relatorio='')
             .values_list('numero_relatorio', flat=True),
-        LinhaControleRelatorio.objects.filter(grupo=grupo)
+        LinhaControleRelatorio.objects.filter(grupo=grupo, processo__isnull=False)
             .exclude(numero_relatorio='')
             .values_list('numero_relatorio', flat=True),
     )
     for lista in fontes:
         for bruto in lista:
-            try:
-                usados.add(int(str(bruto).strip()))
-            except (TypeError, ValueError):
-                continue
+            numero = _inteiro(bruto)
+            if numero:
+                usados.add(numero)
     return usados - ignorar
+
+
+def _numeros_devolvidos(grupo, usados):
+    """Números de análises desistidas, ainda não reaproveitados."""
+    livres = []
+    for bruto in (LinhaControleRelatorio.objects
+                  .filter(grupo=grupo, processo__isnull=True)
+                  .exclude(numero_relatorio='')
+                  .values_list('numero_relatorio', flat=True)):
+        numero = _inteiro(bruto)
+        if numero and numero not in usados:
+            livres.append(numero)
+    return livres
 
 
 @transaction.atomic
@@ -84,6 +103,8 @@ def definir_ultimo_numero(usuario, ultimo, grupo=GRUPO_PADRAO):
         grupo=grupo, defaults={'proximo_numero': ultimo + 1})
     seq.proximo_numero = ultimo + 1
     seq.save(update_fields=['proximo_numero'])
+    LinhaControleRelatorio.objects.filter(
+        grupo=grupo, processo__isnull=True).delete()
     return estado_sequencia(grupo)
 
 
@@ -93,6 +114,14 @@ def proximo_numero(grupo):
         grupo=grupo, defaults={'proximo_numero': 1540})
     seq = SequenciaRelatorio.objects.select_for_update().get(grupo=grupo)
     usados = numeros_usados(grupo)
+    livres = _numeros_devolvidos(grupo, usados)
+    if livres:
+        numero = min(livres)
+        LinhaControleRelatorio.objects.filter(
+            grupo=grupo, processo__isnull=True, numero_relatorio=str(numero)
+        ).delete()
+        return str(numero)
+
     numero = int(seq.proximo_numero or 1)
     if numero < 1:
         numero = 1
@@ -176,7 +205,7 @@ def registrar(processo):
 
 
 def remover_do_processo(processo):
-    """Desvincula a linha. O número permanece reservado e não é reemitido."""
+    """Desvincula a linha. O número volta a ser o próximo a ser gerado."""
     LinhaControleRelatorio.objects.filter(processo=processo).update(processo=None)
 
 

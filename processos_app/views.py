@@ -1579,6 +1579,8 @@ def analista_processo(request, process_id):
             processo),
         'somente_leitura': not perm.is_analista(request.user),
         'all_status_analise': Processo.STATUS_ANALISE_CHOICES,
+        'secretarias': [u.nome for u in svc_cadastros.unidades_ativas()],
+        'valor_exibicao': svc_processos.formatar_valor(processo.valor),
         'passagens': montar_passagens(processo),
         'pode_editar': pode_editar,
         'eh_liquidacao': processo.genero == 'LIQUIDACOES',

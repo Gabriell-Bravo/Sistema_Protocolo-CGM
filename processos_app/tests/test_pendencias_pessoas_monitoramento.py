@@ -66,7 +66,7 @@ class PendenciasTest(BaseProcessoTestCase):
         )
         self.assertEqual(resposta.status_code, 302)
         processo.refresh_from_db()
-        self.assertEqual(processo.valor, '1500')
+        self.assertEqual(processo.valor, 'R$ 1.500,00')
         self.assertEqual(processo.destino, 'Secretaria Nova')
         self.assertEqual(processo.periodo, 'Jan/2026')
         self.assertEqual(processo.observacao, 'Obs da análise')

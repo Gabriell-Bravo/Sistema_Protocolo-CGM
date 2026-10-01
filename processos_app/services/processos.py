@@ -98,6 +98,29 @@ def texto(valor):
     return '' if valor is None else str(valor).strip()
 
 
+def formatar_valor(bruto):
+    """Valor em real: R$ 40.000.000,00. Vazio continua vazio."""
+    limpo = texto(bruto).replace('R$', '').replace(' ', '')
+    if not limpo:
+        return ''
+    if ',' in limpo:
+        inteiro, _, decimal = limpo.partition(',')
+        inteiro = inteiro.replace('.', '')
+        decimal = ''.join(c for c in decimal if c.isdigit())[:2].ljust(2, '0')
+    elif limpo.count('.') == 1 and len(limpo.rsplit('.', 1)[-1]) in (1, 2):
+        inteiro, decimal = limpo.split('.')
+        decimal = ''.join(c for c in decimal if c.isdigit()).ljust(2, '0')
+    else:
+        inteiro = limpo.replace('.', '')
+        decimal = '00'
+    inteiro = ''.join(c for c in inteiro if c.isdigit()).lstrip('0') or '0'
+    grupos = []
+    while inteiro:
+        grupos.append(inteiro[-3:])
+        inteiro = inteiro[:-3]
+    return 'R$ ' + '.'.join(reversed(grupos)) + ',' + decimal
+
+
 def converter_data(valor):
     if isinstance(valor, date):
         return valor
@@ -310,6 +333,8 @@ def aplicar_analise(processo, dados, usuario):
             novo = texto(bruto) or 'NAO_APLICAVEL'
             if novo not in dict(Processo.STATUS_ANALISE_CHOICES):
                 raise DadosInvalidos('Status da análise inválido.')
+        elif campo == 'valor':
+            novo = formatar_valor(bruto) or None
         else:
             novo = texto(bruto) or None
         atual = getattr(processo, campo)

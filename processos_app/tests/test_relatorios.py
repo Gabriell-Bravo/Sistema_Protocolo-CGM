@@ -61,26 +61,46 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertTrue(processo.numero_relatorio)
         linha = LinhaControleRelatorio.objects.get(processo=processo)
         self.assertEqual(linha.destino, 'Unidade de Teste')
-        self.assertEqual(linha.valor, '1000')
+        self.assertEqual(linha.valor, 'R$ 1.000,00')
         self.assertEqual(linha.status_analise, 'PROSSEGUIMENTO_SEM_RESSALVA')
         numero = processo.numero_relatorio
         tramitacao.liberar_assinatura(processo.id, self.analista_liq)
         processo.refresh_from_db()
         self.assertEqual(processo.numero_relatorio, numero)
 
-    def test_declinar_nao_reutiliza_numero(self):
+    def test_declinar_devolve_o_numero_ao_proximo_analista(self):
         admin = criar_usuario('admin_gasto', 'GESTAO', is_superuser=True)
         relatorios.definir_ultimo_numero(admin, 2000)
         primeiro = self.novo_processo(self.especie_liq, numero_processo='11/2026')
         self._salvar_liquidacao(primeiro)
         self.assertEqual(primeiro.numero_relatorio, '2001')
         tramitacao.declinar_analise(primeiro.id, self.analista_liq, 'Teste')
+        primeiro.refresh_from_db()
+        self.assertFalse(primeiro.numero_relatorio)
         self.assertFalse(LinhaControleRelatorio.objects.filter(
             processo=primeiro).exists())
 
         segundo = self.novo_processo(self.especie_liq, numero_processo='11b/2026')
         self._salvar_liquidacao(segundo)
-        self.assertNotEqual(segundo.numero_relatorio, '2001')
+        self.assertEqual(segundo.numero_relatorio, '2001')
+
+    def test_declinar_no_meio_devolve_so_o_numero_livre(self):
+        admin = criar_usuario('admin_meio', 'GESTAO', is_superuser=True)
+        relatorios.definir_ultimo_numero(admin, 2000)
+        primeiro = self.novo_processo(self.especie_liq, numero_processo='11c/2026')
+        segundo = self.novo_processo(self.especie_liq, numero_processo='11d/2026')
+        self._salvar_liquidacao(primeiro)
+        self._salvar_liquidacao(segundo)
+        self.assertEqual(primeiro.numero_relatorio, '2001')
+        self.assertEqual(segundo.numero_relatorio, '2002')
+        tramitacao.declinar_analise(primeiro.id, self.analista_liq, 'Teste')
+
+        terceiro = self.novo_processo(self.especie_liq, numero_processo='11e/2026')
+        self._salvar_liquidacao(terceiro)
+        self.assertEqual(terceiro.numero_relatorio, '2001')
+        quarto = self.novo_processo(self.especie_liq, numero_processo='11f/2026')
+        self._salvar_liquidacao(quarto)
+        self.assertEqual(quarto.numero_relatorio, '2003')
 
     def test_dois_analistas_nao_recebem_o_mesmo_numero(self):
         outro = criar_usuario('dana_liq', 'ANALISTA_LIQUIDACOES')
@@ -171,13 +191,13 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertRedirects(resposta, reverse('controle_relatorio'))
         processo.refresh_from_db()
         self.assertEqual(processo.destino, 'Secretaria Nova')
-        self.assertEqual(processo.valor, '2500')
+        self.assertEqual(processo.valor, 'R$ 2.500,00')
         self.assertEqual(processo.periodo, 'Jan/2026')
         self.assertEqual(processo.observacao, 'Corrigido na tela da análise')
         self.assertEqual(processo.status_analise, 'PROSSEGUIMENTO_COM_RESSALVA')
         linha = LinhaControleRelatorio.objects.get(processo=processo)
         self.assertEqual(linha.destino, 'Secretaria Nova')
-        self.assertEqual(linha.valor, '2500')
+        self.assertEqual(linha.valor, 'R$ 2.500,00')
         self.assertEqual(linha.observacao, 'Corrigido na tela da análise')
 
         self.assertEqual(
@@ -193,6 +213,21 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         relatorios.alterar_numero(admin, segundo.id, 1893)
         numeros = [linha.numero_relatorio for linha in relatorios.listar(self.analista_liq)]
         self.assertEqual(numeros, ['1893', '1895'])
+
+    def test_tela_formata_valor_e_destino_e_lista_de_secretarias(self):
+        self.assertEqual(svc_processos.formatar_valor('40000000'), 'R$ 40.000.000,00')
+        self.assertEqual(svc_processos.formatar_valor('R$ 40.000.000,00'), 'R$ 40.000.000,00')
+        processo = self.novo_processo(self.especie_liq, numero_processo='30/2026')
+        tramitacao.assumir(processo.id, self.analista_liq)
+        processo.valor = '40000000'
+        processo.destino = 'Unidade de Teste'
+        processo.save(update_fields=['valor', 'destino'])
+        self.client.force_login(self.analista_liq)
+        pagina = self.client.get(reverse('analista_processo', args=[processo.id]))
+        self.assertContains(pagina, 'R$ 40.000.000,00')
+        self.assertContains(pagina, 'name="destino"')
+        self.assertContains(pagina, 'Selecione a secretaria')
+        self.assertContains(pagina, 'Unidade de Teste')
 
     def test_protocolo_nao_acessa(self):
         self.client.force_login(self.protocolo)

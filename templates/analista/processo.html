@@ -143,11 +143,20 @@
                 {% endif %}
                 <div class="field">
                     <label class="field__label" for="valor">{% if eh_liquidacao %}Valor analisado{% else %}Valor{% endif %}</label>
-                    <input type="text" id="valor" name="valor" class="input" value="{{ processo.valor|default:'' }}" placeholder="R$ 0,00" {% if not pode_editar %}readonly{% endif %}>
+                    <input type="text" id="valor" name="valor" class="input" inputmode="decimal" autocomplete="off"
+                           value="{{ valor_exibicao }}" placeholder="R$ 0,00" {% if not pode_editar %}readonly{% endif %}>
                 </div>
                 <div class="field">
                     <label class="field__label" for="destino">Destino</label>
-                    <input type="text" id="destino" name="destino" class="input" value="{{ processo.destino|default:'' }}" placeholder="Órgão de destino do processo" {% if not pode_editar %}readonly{% endif %}>
+                    <select id="destino" name="destino" class="select" {% if not pode_editar %}disabled{% endif %}>
+                        <option value="">Selecione a secretaria</option>
+                        {% for nome in secretarias %}
+                            <option value="{{ nome }}" {% if processo.destino == nome %}selected{% endif %}>{{ nome }}</option>
+                        {% endfor %}
+                        {% if processo.destino and processo.destino not in secretarias %}
+                            <option value="{{ processo.destino }}" selected>{{ processo.destino }}</option>
+                        {% endif %}
+                    </select>
                 </div>
                 <div class="field">
                     <label class="field__label" for="periodo">Período</label>
@@ -479,6 +488,25 @@
         var analista = document.getElementById('encaminharAnalista');
         if (lista) lista.hidden = passo !== 'lista';
         if (analista) analista.hidden = passo !== 'analista';
+    }
+
+    function formatarMoeda(input) {
+        var digitos = input.value.replace(/\D/g, '');
+        if (!digitos) {
+            input.value = '';
+            return;
+        }
+        digitos = digitos.replace(/^0+/, '') || '0';
+        while (digitos.length < 3) digitos = '0' + digitos;
+        var centavos = digitos.slice(-2);
+        var inteiro = digitos.slice(0, -2).replace(/^0+/, '') || '0';
+        inteiro = inteiro.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        input.value = 'R$ ' + inteiro + ',' + centavos;
+    }
+
+    var campoValor = document.getElementById('valor');
+    if (campoValor && !campoValor.readOnly) {
+        campoValor.addEventListener('input', function () { formatarMoeda(campoValor); });
     }
 
     document.addEventListener('click', function (event) {
