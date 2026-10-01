@@ -57,11 +57,20 @@
                 {% endif %}
 
                 <a href="{% url 'listar_processos' %}"
-                   class="nav-item {% if nav == 'listar_processos' or nav == 'index' or nav == 'ver_historico_processo' %}is-active{% endif %}"
+                   class="nav-item {% if nav == 'listar_processos' and request.GET.aba != 'cgm' or nav == 'index' or nav == 'ver_historico_processo' %}is-active{% endif %}"
                    title="Processos Ativos">
                     <span class="material-symbols-rounded">inbox</span>
                     <span class="nav-item__label">Processos Ativos</span>
                 </a>
+
+                {% if pode_ver_processos_cgm %}
+                <a href="{% url 'listar_processos' %}?aba=cgm"
+                   class="nav-item {% if nav == 'listar_processos' and request.GET.aba == 'cgm' %}is-active{% endif %}"
+                   title="Processos CGM">
+                    <span class="material-symbols-rounded">account_balance</span>
+                    <span class="nav-item__label">Processos CGM</span>
+                </a>
+                {% endif %}
 
                 {% if is_protocolo %}
                     <a href="{% url 'processos_para_retirada' %}"

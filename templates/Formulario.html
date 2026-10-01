@@ -155,6 +155,11 @@
                     </select>
                     <span class="field__hint">Define o prazo e o destaque na fila. A Gestão ainda pode alterar depois.</span>
                 </div>
+                <div class="field field--wide">
+                    <label class="field__label" for="observacao_protocolo">Observação</label>
+                    <textarea id="observacao_protocolo" name="observacao_protocolo" class="textarea" rows="3"
+                              placeholder="Opcional — anotações do Protocolo na entrada"></textarea>
+                </div>
             </div>
             <div class="alert alert--info">
                 <span class="material-symbols-rounded">info</span>
@@ -341,7 +346,8 @@
             objeto: document.getElementById('objeto').value.trim(),
             contratada: contratadaInput.value.trim() || null,
             recorrente: document.getElementById('recorrente').value,
-            prioridade: document.getElementById('prioridade').value || 'NORMAL'
+            prioridade: document.getElementById('prioridade').value || 'NORMAL',
+            observacao_protocolo: document.getElementById('observacao_protocolo').value.trim()
         };
 
         const e = especieSelecionada();

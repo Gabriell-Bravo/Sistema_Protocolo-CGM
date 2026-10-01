@@ -365,8 +365,19 @@ def salvar_processo(request):
 
 @login_required
 def listar_processos(request):
-    """Processos ativos (item 58): não saíram e não foram cancelados."""
-    if is_analista(request.user):
+    """Processos ativos (item 58): não saíram e não foram cancelados.
+
+    Com ?aba=cgm, lista só os da Controladoria Geral do Município
+    e os da espécie Contabilidade (Protocolo e Gestão).
+    """
+    from .services import secretaria_cgm as svc_cgm
+
+    aba_cgm = request.GET.get('aba') == 'cgm'
+    if aba_cgm:
+        perm.assert_permissao(
+            svc_cgm.pode_ver_processos_cgm(request.user),
+            'Somente Protocolo e Gestão veem Processos CGM.')
+    elif is_analista(request.user):
         return redirect('area_analista')
 
     termo_pesquisa = request.GET.get('termo', '').strip()
@@ -375,9 +386,14 @@ def listar_processos(request):
     especie_filtro = request.GET.get('especie', 'todas')
     situacao_filtro = request.GET.get('situacao', 'todas')
 
-    processos_query = filter_processes_by_user_level(
-        request.user, tramitacao.ativos()).select_related(
-            'analista_responsavel', 'prioridade_fk')
+    if aba_cgm:
+        processos_query = (svc_cgm.apenas_processos_cgm(tramitacao.ativos())
+                           .select_related('analista_responsavel', 'prioridade_fk',
+                                           'secretaria_fk'))
+    else:
+        processos_query = filter_processes_by_user_level(
+            request.user, tramitacao.ativos()).select_related(
+                'analista_responsavel', 'prioridade_fk')
 
     if termo_pesquisa:
         processos_query = processos_query.filter(
@@ -466,6 +482,9 @@ def listar_processos(request):
         'can_create_process': perm.pode_cadastrar_processo(request.user),
         'pode_desfazer': perm.pode_desfazer_tramite(request.user),
         'dados_formulario': svc_cadastros.dados_para_formulario(),
+        'aba_cgm': aba_cgm,
+        'pode_ver_processos_cgm': svc_cgm.pode_ver_processos_cgm(request.user),
+        'secretaria_cgm': svc_cgm.SECRETARIA_CGM,
     })
 
 
@@ -838,6 +857,11 @@ def exportar_finalizados_excel(request):
     except ValueError:
         return HttpResponse('{"success": false, "message": "Formato de data inválido. Use AAAA-MM-DD."}',
                             content_type='application/json', status=400)
+
+    if data_inicial > data_final:
+        return HttpResponse(
+            '{"success": false, "message": "A data inicial não pode ser maior que a data final."}',
+            content_type='application/json', status=400)
 
     # Cancelados ficam fora (item 35): o registro existe, mas não é saída.
     processes = tramitacao.finalizados().filter(

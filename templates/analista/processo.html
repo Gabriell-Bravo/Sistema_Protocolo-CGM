@@ -70,6 +70,12 @@
             <span class="meta-item__label">Objeto</span>
             <span class="meta-item__value">{{ processo.objeto }}</span>
         </div>
+        {% if processo.observacao_protocolo %}
+        <div class="meta-item meta-item--wide">
+            <span class="meta-item__label">Observação do Protocolo</span>
+            <span class="meta-item__value">{{ processo.observacao_protocolo }}</span>
+        </div>
+        {% endif %}
     </section>
 
     {% if aviso_devolucao %}

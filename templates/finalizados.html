@@ -155,7 +155,7 @@
             </div>
             {% if can_export %}
                 <p class="field__hint" style="margin-top:14px;">
-                    Para exportar para Excel é obrigatório informar as datas inicial e final de saída.
+                    Ao clicar em Exportar Excel, informe o período de data de saída desejado.
                 </p>
             {% endif %}
         </div>
@@ -307,6 +307,46 @@
         </div>
     </div>
 </div>
+
+{% if can_export %}
+<div class="modal" id="modalExportarExcel" role="dialog" aria-labelledby="tituloExportarExcel">
+    <div class="modal__dialog modal__dialog--sm">
+        <div class="modal__header">
+            <span class="modal__title" id="tituloExportarExcel">Exportar planilha</span>
+            <button type="button" class="icon-btn" data-modal-close="modalExportarExcel" aria-label="Fechar">
+                <span class="material-symbols-rounded">close</span>
+            </button>
+        </div>
+        <div class="modal__body">
+            <p class="field__hint" style="margin:0 0 14px;">
+                Informe de qual data de saída até qual data deseja a planilha.
+            </p>
+            <div class="filters__grid">
+                <div class="field field--required">
+                    <label class="field__label" for="exportDataInicial">Data de saída — de</label>
+                    <input type="date" id="exportDataInicial" class="input" required>
+                    <div class="field__error" id="exportDataInicialError">Informe a data inicial</div>
+                </div>
+                <div class="field field--required">
+                    <label class="field__label" for="exportDataFinal">Data de saída — até</label>
+                    <input type="date" id="exportDataFinal" class="input" required>
+                    <div class="field__error" id="exportDataFinalError">Informe a data final</div>
+                </div>
+            </div>
+            <p class="field__error" id="exportPeriodoError" style="display:none;margin-top:10px;">
+                A data inicial não pode ser maior que a data final.
+            </p>
+            <div class="form-actions" style="margin-top:16px;">
+                <button type="button" class="btn btn--outline" data-modal-close="modalExportarExcel">Cancelar</button>
+                <button type="button" id="btnConfirmarExportExcel" class="btn btn--success">
+                    <span class="material-symbols-rounded">download</span>
+                    Gerar Excel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -378,12 +418,14 @@
             } else if (field === 'genero') {
                 inputElement = document.createElement('select');
                 inputElement.className = 'edit-field';
-                const generoOptions = ['LIQUIDACOES', 'LICITACOES_E_CONTRATOS', 'OUTROS_GENERO'];
+                const generoOptions = ['LIQUIDACOES', 'LICITACOES_E_CONTRATOS', 'CONTABILIDADE', 'OUTROS_GENERO'];
                 let isCustomGenero = !generoOptions.includes(value);
                 generoOptions.forEach(optionText => {
                     const option = document.createElement('option');
                     option.value = optionText;
-                    option.textContent = optionText === 'OUTROS_GENERO' ? 'Outros' : optionText.replace(/_/g, ' ');
+                    option.textContent = optionText === 'OUTROS_GENERO' ? 'Outros'
+                        : optionText === 'CONTABILIDADE' ? 'Contabilidade'
+                        : optionText.replace(/_/g, ' ');
                     if ((isCustomGenero && optionText === 'OUTROS_GENERO') || (!isCustomGenero && optionText === value)) {
                         option.selected = true;
                     }
@@ -833,51 +875,73 @@
     });
 
     const btnExportExcel = document.getElementById('btnExportExcel');
-    if (btnExportExcel) {
-        btnExportExcel.addEventListener('click', function() {
-            const dataInicial = document.getElementById('filtroDataInicial').value;
-            const dataFinal = document.getElementById('filtroDataFinal').value;
-            const prioridade = document.getElementById('filtroPrioridade').value;
-            const termo = document.getElementById('inputPesquisa').value.trim();
-            const statusMonitoramento = document.getElementById('filtroStatusMonitoramento').value;
-            const genero = document.getElementById('filtroGenero').value;
-            const especie = document.getElementById('filtroEspecie').value;
-            const statusAnalise = document.getElementById('filtroStatusAnalise').value;
+    const modalExportar = document.getElementById('modalExportarExcel');
+    const btnConfirmarExport = document.getElementById('btnConfirmarExportExcel');
 
-            if (!dataInicial || !dataFinal) {
-                alert('Por favor, selecione uma Data Inicial e uma Data Final para exportar os processos por período.');
-                document.querySelector('[data-filters]').classList.add('is-open');
-                document.getElementById('filtroDataInicial').focus();
-                return;
-            }
+    function limparErrosExport() {
+        ['exportDataInicialError', 'exportDataFinalError', 'exportPeriodoError'].forEach(function (id) {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+    }
 
-            let exportUrl = '{% url "exportar_finalizados_excel" %}';
-            const params = new URLSearchParams();
+    function montarUrlExportacao(dataInicial, dataFinal) {
+        const prioridade = document.getElementById('filtroPrioridade').value;
+        const termo = document.getElementById('inputPesquisa').value.trim();
+        const statusMonitoramento = document.getElementById('filtroStatusMonitoramento').value;
+        const genero = document.getElementById('filtroGenero').value;
+        const especie = document.getElementById('filtroEspecie').value;
+        const statusAnalise = document.getElementById('filtroStatusAnalise').value;
 
-            params.append('data_inicial', dataInicial);
-            params.append('data_final', dataFinal);
+        const params = new URLSearchParams();
+        params.append('data_inicial', dataInicial);
+        params.append('data_final', dataFinal);
 
-            if (prioridade !== 'todas') {
-                params.append('prioridade', prioridade);
-            }
-            if (termo) {
-                params.append('termo', termo);
-            }
-            if (statusMonitoramento !== 'todas') {
-                params.append('status_monitoramento', statusMonitoramento);
-            }
-            if (genero !== 'todas') {
-                params.append('genero', genero);
-            }
-            if (especie !== 'todas') {
-                params.append('especie', especie);
-            }
-            if (statusAnalise !== 'todas') {
-                params.append('status_analise', statusAnalise);
-            }
+        if (prioridade !== 'todas') params.append('prioridade', prioridade);
+        if (termo) params.append('termo', termo);
+        if (statusMonitoramento !== 'todas') params.append('status_monitoramento', statusMonitoramento);
+        if (genero !== 'todas') params.append('genero', genero);
+        if (especie !== 'todas') params.append('especie', especie);
+        if (statusAnalise !== 'todas') params.append('status_analise', statusAnalise);
 
-            exportUrl += '?' + params.toString();
-            window.location.href = exportUrl;
+        return '{% url "exportar_finalizados_excel" %}?' + params.toString();
+    }
+
+    if (btnExportExcel && modalExportar) {
+        btnExportExcel.addEventListener('click', function () {
+            limparErrosExport();
+            const filtroDe = document.getElementById('filtroDataInicial').value;
+            const filtroAte = document.getElementById('filtroDataFinal').value;
+            document.getElementById('exportDataInicial').value = filtroDe || '';
+            document.getElementById('exportDataFinal').value = filtroAte || '';
+            modalExportar.classList.add('is-open');
+            document.getElementById('exportDataInicial').focus();
+        });
+    }
+
+    if (btnConfirmarExport && modalExportar) {
+        btnConfirmarExport.addEventListener('click', function () {
+            limparErrosExport();
+            const dataInicial = document.getElementById('exportDataInicial').value;
+            const dataFinal = document.getElementById('exportDataFinal').value;
+            let valido = true;
+
+            if (!dataInicial) {
+                document.getElementById('exportDataInicialError').style.display = 'block';
+                valido = false;
+            }
+            if (!dataFinal) {
+                document.getElementById('exportDataFinalError').style.display = 'block';
+                valido = false;
+            }
+            if (dataInicial && dataFinal && dataInicial > dataFinal) {
+                document.getElementById('exportPeriodoError').style.display = 'block';
+                valido = false;
+            }
+            if (!valido) return;
+
+            modalExportar.classList.remove('is-open');
+            window.location.href = montarUrlExportacao(dataInicial, dataFinal);
         });
     }
 

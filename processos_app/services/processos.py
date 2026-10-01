@@ -34,6 +34,7 @@ from .eventos import registrar_diff, registrar_evento
 CAMPOS_PROTOCOLO = (
     'numero_processo', 'volume', 'secretaria', 'data_entrada', 'hora_entrada',
     'genero', 'especie', 'objeto', 'contratada', 'recorrente', 'prioridade',
+    'observacao_protocolo',
 )
 
 # Dados da análise: o que o analista responsável alimenta.
@@ -192,9 +193,9 @@ def _definir_especie(processo, nome, grupo_enviado, especie_id=None):
 def criar_processo(dados, usuario):
     """Única porta de criação de Processo.
 
-    A entrada registra informação de protocolo, inclusive a prioridade.
-    Técnico, despacho, observação e dados de saída NÃO são aceitos aqui,
-    mesmo que venham na requisição.
+    A entrada registra informação de protocolo, inclusive a prioridade e
+    a observação do Protocolo. Técnico, despacho, observação da análise e
+    dados de saída NÃO são aceitos aqui, mesmo que venham na requisição.
     """
     perm.assert_permissao(perm.pode_cadastrar_processo(usuario),
                           'Somente o Protocolo cadastra processos.')
@@ -208,6 +209,7 @@ def criar_processo(dados, usuario):
         objeto=texto(dados.get('objeto')),
         contratada=texto(dados.get('contratada')) or None,
         recorrente=normalizar_recorrente(dados.get('recorrente')),
+        observacao_protocolo=texto(dados.get('observacao_protocolo')),
         situacao_tramite='DISPONIVEL',
         status_analise='NAO_APLICAVEL',
         destino=None,

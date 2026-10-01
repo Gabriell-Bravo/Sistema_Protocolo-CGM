@@ -169,11 +169,18 @@ def pode_analisar_grupo(user, grupo):
 
 
 def filtrar_por_grupo(user, queryset, campo='genero'):
-    """Restringe um queryset de Processo ao que o usuário pode ver."""
+    """Restringe um queryset de Processo ao que o usuário pode ver.
+
+    Processos da CGM ficam de fora das listas comuns; a aba própria usa
+    `apenas_processos_cgm`.
+    """
+    from .secretaria_cgm import excluir_processos_cgm
+
     if eh_administrador(user) or is_protocolo(user) or is_gestao(user):
-        return queryset
+        return excluir_processos_cgm(queryset)
     if is_analista(user):
-        return queryset.filter(**{campo: grupo_do_analista(user)})
+        return excluir_processos_cgm(
+            queryset.filter(**{campo: grupo_do_analista(user)}))
     return queryset.none()
 
 
@@ -189,7 +196,23 @@ def pode_cadastrar_processo(user):
 def pode_assumir_processo(user, processo):
     """Checa papel e grupo. Estado atual e trava de concorrência ficam em
     services/tramitacao.py, dentro da transação (item 39)."""
+    from .secretaria_cgm import processo_e_da_cgm
+    if processo_e_da_cgm(processo):
+        return False
     return pode_analisar_grupo(user, processo.genero)
+
+
+def pode_consultar_processo(user, processo):
+    """Leitura da tela do processo: analista do grupo, Gestão e administrador.
+
+    Processos da CGM: só Protocolo, Gestão e administrador.
+    """
+    from .secretaria_cgm import pode_ver_processos_cgm, processo_e_da_cgm
+    if processo_e_da_cgm(processo):
+        return pode_ver_processos_cgm(user)
+    if eh_administrador(user) or is_gestao(user):
+        return True
+    return is_analista(user) and pode_ver_grupo(user, processo.genero)
 
 
 def pode_declinar_analise(user, processo):
@@ -341,13 +364,6 @@ def pode_editar_cadastros(user):
     return is_gestao(user)
 
 
-def pode_consultar_processo(user, processo):
-    """Leitura da tela do processo: analista do grupo, Gestão e administrador."""
-    if eh_administrador(user) or is_gestao(user):
-        return True
-    return is_analista(user) and pode_ver_grupo(user, processo.genero)
-
-
 def pode_acessar_fila_gestao(user):
     """Fila da Gestão de Processos: Gestão e administrador (para desfazer)."""
     return is_gestao(user) or eh_administrador(user)
@@ -414,6 +430,7 @@ def contexto_de_permissoes(user):
     Serve para exibir/ocultar controles. A decisão real é sempre refeita no
     backend, dentro do service da operação (item 4).
     """
+    from .secretaria_cgm import pode_ver_processos_cgm
     return {
         'is_protocolo': is_protocolo(user),
         'is_analista': is_analista(user),
@@ -436,6 +453,7 @@ def contexto_de_permissoes(user):
         'pode_desfazer_tramite': pode_desfazer_tramite(user),
         'pode_devolver_da_assinatura': pode_devolver_da_assinatura(user),
         'pode_acessar_fila_gestao': pode_acessar_fila_gestao(user),
+        'pode_ver_processos_cgm': pode_ver_processos_cgm(user),
     }
 
 
@@ -465,5 +483,6 @@ def contexto_processor(request):
             'pode_desfazer_tramite': False,
             'pode_devolver_da_assinatura': False,
             'pode_acessar_fila_gestao': False,
+            'pode_ver_processos_cgm': False,
         }
     return contexto_de_permissoes(user)

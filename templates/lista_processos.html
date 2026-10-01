@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 
-{% block title %}Processos Ativos{% endblock %}
-{% block page_title %}Processos Ativos{% endblock %}
-{% block page_subtitle %}Processos em tramitação, sem data de saída registrada{% endblock %}
+{% block title %}{% if aba_cgm %}Processos CGM{% else %}Processos Ativos{% endif %}{% endblock %}
+{% block page_title %}{% if aba_cgm %}Processos CGM{% else %}Processos Ativos{% endif %}{% endblock %}
+{% block page_subtitle %}{% if aba_cgm %}Processos da {{ secretaria_cgm }} e da espécie Contabilidade — só Protocolo e Gestão{% else %}Processos em tramitação, sem data de saída registrada{% endif %}{% endblock %}
 
 {% block topbar_actions %}
     {% if can_create_process %}
@@ -15,6 +15,21 @@
 
 {% block content %}
 <div class="stack">
+
+    {% if pode_ver_processos_cgm %}
+    <section class="filters">
+        <div class="filters__chips">
+            <a href="{% url 'listar_processos' %}"
+               class="chip {% if not aba_cgm %}chip--ativo{% endif %}">
+                Processos Ativos
+            </a>
+            <a href="{% url 'listar_processos' %}?aba=cgm"
+               class="chip {% if aba_cgm %}chip--ativo{% endif %}">
+                Processos CGM
+            </a>
+        </div>
+    </section>
+    {% endif %}
 
     <section class="stats">
         <div class="stat stat--primary">
@@ -362,11 +377,13 @@
             } else if (field === 'genero') {
                 inputElement = document.createElement('select');
                 inputElement.className = 'edit-field';
-                const generoOptions = ['LIQUIDACOES', 'LICITACOES_E_CONTRATOS', 'OUTROS_GENERO'];
+                const generoOptions = ['LIQUIDACOES', 'LICITACOES_E_CONTRATOS', 'CONTABILIDADE', 'OUTROS_GENERO'];
                 generoOptions.forEach(optionText => {
                     const option = document.createElement('option');
                     option.value = optionText;
-                    option.textContent = optionText === 'OUTROS_GENERO' ? 'Outros' : optionText.replace(/_/g, ' ');
+                    option.textContent = optionText === 'OUTROS_GENERO' ? 'Outros'
+                        : optionText === 'CONTABILIDADE' ? 'Contabilidade'
+                        : optionText.replace(/_/g, ' ');
                     if (optionText === value) {
                         option.selected = true;
                     }
@@ -724,6 +741,9 @@
 
         let url = '{% url "listar_processos" %}';
         const params = new URLSearchParams();
+        {% if aba_cgm %}
+        params.append('aba', 'cgm');
+        {% endif %}
         if (prioridade !== 'todas') {
             params.append('prioridade', prioridade);
         }
@@ -751,7 +771,7 @@
     });
 
     document.getElementById('btnLimparPesquisa').addEventListener('click', function() {
-        window.location.href = '{% url "listar_processos" %}';
+        window.location.href = '{% if aba_cgm %}{% url "listar_processos" %}?aba=cgm{% else %}{% url "listar_processos" %}{% endif %}';
     });
 
     document.addEventListener('DOMContentLoaded', function() {

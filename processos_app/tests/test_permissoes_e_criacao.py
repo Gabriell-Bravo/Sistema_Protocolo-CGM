@@ -51,6 +51,13 @@ class CriacaoTest(BaseProcessoTestCase):
             with self.assertRaises(PermissionDenied):
                 svc_processos.criar_processo(self.dados_protocolo(), usuario)
 
+    def test_protocolo_pode_informar_observacao_na_entrada(self):
+        processo = self.novo_processo(
+            observacao_protocolo='Chegou sem anexo',
+            numero_processo='obs-1/2026')
+        self.assertEqual(processo.observacao_protocolo, 'Chegou sem anexo')
+        self.assertFalse(processo.observacao)
+
     def test_criacao_ignora_campos_de_analise(self):
         processo = self.novo_processo(
             tecnico='Fulano', numero_despacho='99', observacao='x',
@@ -61,6 +68,7 @@ class CriacaoTest(BaseProcessoTestCase):
         self.assertFalse(processo.numero_despacho)
         self.assertIsNone(processo.data_saida)
         self.assertIsNone(processo.destino)
+        self.assertFalse(processo.observacao)
 
     def test_protocolo_define_prioridade_na_entrada(self):
         urgente = self.novo_processo(

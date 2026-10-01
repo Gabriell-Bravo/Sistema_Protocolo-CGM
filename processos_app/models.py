@@ -218,6 +218,9 @@ class Processo(models.Model):
         null=True, blank=True, max_length=255, verbose_name="Controle do N° de Despacho")
     observacao = models.TextField(
         null=True, blank=True, verbose_name="Observação")
+    observacao_protocolo = models.TextField(
+        blank=True, default='',
+        verbose_name="Observação do Protocolo")
     aviso_enviado = models.IntegerField(
         default=0, verbose_name="Aviso Enviado")
 
@@ -263,6 +266,7 @@ class Processo(models.Model):
     GENERO_LABELS = {
         'LICITACOES_E_CONTRATOS': 'Licitações e Contratos',
         'LIQUIDACOES': 'Liquidações',
+        'CONTABILIDADE': 'Contabilidade',
         'OUTROS_GENERO': 'Outros',
     }
 
@@ -812,6 +816,7 @@ class EspecieProcesso(models.Model):
     GRUPO_CHOICES = [
         ('LICITACOES_E_CONTRATOS', 'Licitações e Contratos'),
         ('LIQUIDACOES', 'Liquidações'),
+        ('CONTABILIDADE', 'Contabilidade'),
     ]
 
     TIPO_MONITORAMENTO_CHOICES = [

@@ -126,8 +126,24 @@ class TelasPorPapelTest(BaseProcessoTestCase):
         self.assertEqual(antes, depois)
 
     def test_exportar_excel(self):
-        resposta = self._get(self.gestao, 'exportar_finalizados_excel')
+        finalizado = self.processo_disponivel_retirada()
+        tramitacao.registrar_saida([finalizado.id], self.protocolo)
+        finalizado.refresh_from_db()
+        data = finalizado.data_saida.isoformat()
+        sem_periodo = self._get(
+            self.protocolo, 'exportar_finalizados_excel', esperado=400)
+        self.assertEqual(sem_periodo['Content-Type'], 'application/json')
+
+        resposta = self._get(
+            self.protocolo, 'exportar_finalizados_excel',
+            query=f'?data_inicial={data}&data_final={data}')
         self.assertIn('spreadsheet', resposta['Content-Type'])
+
+        pagina = self._get(self.protocolo, 'listar_finalizados')
+        self.assertContains(pagina, 'Exportar Excel')
+        self.assertContains(pagina, 'modalExportarExcel')
+        self.assertContains(pagina, 'Data de saída — de')
+        self.assertContains(pagina, 'Data de saída — até')
 
     def test_dashboard_mostra_graficos_para_gestao_e_administrador(self):
         from .base import criar_usuario
