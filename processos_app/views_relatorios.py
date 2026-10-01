@@ -21,10 +21,22 @@ def _querystring_sem_page(request):
     return f'{consulta}&' if consulta else ''
 
 
+def _voltar_controle(aba='analises'):
+    if aba == 'destinados':
+        return f"{reverse('controle_relatorio')}?aba=destinados"
+    return reverse('controle_relatorio')
+
+
 @login_required
 @perm.exige(perm.pode_consultar_controle_relatorio,
             'Área do analista e do administrador.')
 def controle_relatorio(request):
+    pode_destinar = perm.pode_destinar_numeros_relatorio(request.user)
+    aba = request.GET.get('aba', 'analises')
+    if aba not in ('analises', 'destinados') or (
+            aba == 'destinados' and not pode_destinar):
+        aba = 'analises'
+
     sequencia = svc.estado_sequencia()
     linhas = svc.listar(request.user)
     termo = request.GET.get('termo', '').strip()
@@ -40,6 +52,7 @@ def controle_relatorio(request):
     total = linhas.count()
     pagina = Paginator(linhas, 50).get_page(request.GET.get('page'))
     return render(request, 'analista/controle_relatorio.html', {
+        'aba': aba,
         'sequencia': sequencia,
         'pagina': pagina,
         'linhas': pagina,
@@ -47,7 +60,7 @@ def controle_relatorio(request):
         'termo': termo,
         'querystring': _querystring_sem_page(request),
         'pode_definir_ultimo': perm.pode_definir_ultimo_relatorio(request.user),
-        'pode_destinar_numeros': perm.pode_destinar_numeros_relatorio(request.user),
+        'pode_destinar_numeros': pode_destinar,
         'reservas': svc.reservas_abertas(),
         **perm.contexto_de_permissoes(request.user),
     })
@@ -63,13 +76,13 @@ def definir_ultimo_numero(request):
         svc.definir_ultimo_numero(request.user, request.POST.get('ultimo_numero'))
     except (PermissionDenied, ValidationError) as exc:
         messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
-        return redirect('controle_relatorio')
+        return redirect(_voltar_controle('analises'))
     estado = svc.estado_sequencia()
     messages.success(
         request,
         f'Último relatório definido como {estado["ultimo"]}. '
         f'O próximo relatório salvo receberá o nº {estado["proximo"]}.')
-    return redirect('controle_relatorio')
+    return redirect(_voltar_controle('analises'))
 
 
 @login_required
@@ -77,7 +90,7 @@ def definir_ultimo_numero(request):
 def alterar_numero(request, process_id):
     destino = request.POST.get('next') or ''
     if not destino.startswith('/'):
-        destino = reverse('controle_relatorio')
+        destino = _voltar_controle('analises')
     try:
         processo = svc.alterar_numero(
             request.user, process_id,
@@ -111,7 +124,7 @@ def destinar_numeros(request):
             f'{"s" if quantidade != 1 else ""} para uso posterior.')
     except (PermissionDenied, ValidationError) as exc:
         messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
-    return redirect('controle_relatorio')
+    return redirect(_voltar_controle('destinados'))
 
 
 @login_required
@@ -125,6 +138,6 @@ def cancelar_destino(request, reserva_id):
         messages.success(request, f'Destino do nº {numero} cancelado.')
     except (PermissionDenied, ValidationError) as exc:
         messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
-    return redirect('controle_relatorio')
+    return redirect(_voltar_controle('destinados'))
 
 

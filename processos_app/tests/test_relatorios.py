@@ -209,7 +209,9 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertEqual(pagina.status_code, 200)
         self.assertContains(pagina, 'Planilha de relatórios')
         self.assertNotContains(pagina, 'Último número já usado')
-        self.assertContains(pagina, 'Destinar números')
+        self.assertContains(pagina, 'Números destinados')
+        self.assertContains(pagina, 'Análises')
+        self.assertNotContains(pagina, 'Do número')
         self.assertContains(pagina, processo.numero_relatorio)
         self.assertContains(pagina, '12/2026')
         self.assertContains(pagina, 'Editar análise')
@@ -295,9 +297,11 @@ class ControleRelatorioTest(BaseProcessoTestCase):
                 self.analista_lic, 6000, 6001, '2026-06-21')
 
         self.client.force_login(self.analista_liq)
-        pagina = self.client.get(reverse('controle_relatorio'))
+        pagina = self.client.get(reverse('controle_relatorio') + '?aba=destinados')
         self.assertContains(pagina, '5001')
         self.assertContains(pagina, '20/06/2026')
+        self.assertContains(pagina, 'Destinar números')
+        self.assertNotContains(pagina, 'Planilha de relatórios')
         tela = self.client.get(reverse('analista_processo', args=[processo.id]))
         self.assertContains(tela, '"5001": "2026-06-20"')
 
