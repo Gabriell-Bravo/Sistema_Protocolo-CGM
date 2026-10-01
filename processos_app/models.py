@@ -579,6 +579,7 @@ class EventoProcesso(models.Model):
         ('PRIORIDADE_ALTERADA', 'Prioridade alterada'),
         ('PROCESSO_CANCELADO', 'Processo cancelado'),
         ('TRAMITE_DESFEITO', 'Tramitação desfeita'),
+        ('DEVOLVIDO_PELA_GESTAO', 'Devolvido pela Gestão'),
         ('ARQUIVO_ANEXADO', 'Arquivo anexado'),
         ('ARQUIVO_REMOVIDO', 'Arquivo removido'),
     ]

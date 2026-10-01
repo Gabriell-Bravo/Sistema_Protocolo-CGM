@@ -204,6 +204,11 @@ def pode_desfazer_tramite(user):
     return eh_administrador(user)
 
 
+def pode_devolver_da_assinatura(user):
+    """Gestão devolve o que está com o Controlador, para corrigir a análise."""
+    return is_gestao(user) or eh_administrador(user)
+
+
 def pode_analisar_processo(user, processo):
     """Editar a análise: só o analista que assumiu."""
     return (is_analista(user)
@@ -408,6 +413,7 @@ def contexto_de_permissoes(user):
         'pode_editar_numero_relatorio': pode_editar_numero_relatorio(user),
         'pode_editar_linha_relatorio': pode_editar_linha_relatorio(user),
         'pode_desfazer_tramite': pode_desfazer_tramite(user),
+        'pode_devolver_da_assinatura': pode_devolver_da_assinatura(user),
         'pode_acessar_fila_gestao': pode_acessar_fila_gestao(user),
     }
 
@@ -435,6 +441,7 @@ def contexto_processor(request):
             'pode_editar_numero_relatorio': False,
             'pode_editar_linha_relatorio': False,
             'pode_desfazer_tramite': False,
+            'pode_devolver_da_assinatura': False,
             'pode_acessar_fila_gestao': False,
         }
     return contexto_de_permissoes(user)

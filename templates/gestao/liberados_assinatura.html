@@ -17,7 +17,9 @@
                     <th>Analisado por</th>
                     <th>Liberado por</th>
                     <th>Liberado em</th>
-                    {% if pode_desfazer_tramite %}<th class="col-actions">Ações</th>{% endif %}
+                    {% if pode_devolver_da_assinatura or pode_desfazer_tramite %}
+                        <th class="col-actions">Ações</th>
+                    {% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -29,9 +31,19 @@
                     <td>{{ processo.nome_analista|default:"—" }}</td>
                     <td>{{ processo.liberado_assinatura_por|default:"—" }}</td>
                     <td>{{ processo.liberado_assinatura_em|date:"d/m/Y H:i"|default:"—" }}</td>
-                    {% if pode_desfazer_tramite %}
+                    {% if pode_devolver_da_assinatura or pode_desfazer_tramite %}
                     <td class="col-actions">
                         <div class="actions">
+                            {% if pode_devolver_da_assinatura %}
+                            <button type="button" class="btn btn--outline btn--sm"
+                                    data-modal-open="modalDevolver"
+                                    data-devolver="{{ processo.id }}"
+                                    data-numero="{{ processo.numero_processo }}"
+                                    data-grupo="{{ processo.genero }}">
+                                <span class="material-symbols-rounded">undo</span>
+                                Devolver
+                            </button>
+                            {% endif %}
                             {% include "includes/botao_desfazer.html" %}
                         </div>
                     </td>
@@ -45,4 +57,55 @@
         {% endif %}
     </section>
 </div>
+
+{% if pode_devolver_da_assinatura %}
+<div class="modal" id="modalDevolver" role="dialog" aria-labelledby="tituloDevolver">
+    <div class="modal__dialog modal__dialog--sm">
+        <div class="modal__header">
+            <span class="modal__title" id="tituloDevolver">Devolver <span data-devolver-numero></span></span>
+            <button type="button" class="icon-btn" data-modal-close="modalDevolver" aria-label="Fechar">
+                <span class="material-symbols-rounded">close</span>
+            </button>
+        </div>
+        <div class="modal__body">
+            <form method="post" id="formDevolver" data-acao="{% url 'tram_devolver_assinatura' 0 %}">
+                {% csrf_token %}
+                <div class="field">
+                    <label class="field__label" for="motivoDevolverLista">Motivo</label>
+                    <textarea id="motivoDevolverLista" name="motivo" class="textarea" rows="3" required placeholder="Por que o processo volta para a análise?"></textarea>
+                </div>
+                <div class="field" style="margin-top:12px;">
+                    <label class="field__label" for="analistaDevolverLista">Encaminhar para</label>
+                    <select id="analistaDevolverLista" name="destinatario" class="select">
+                        <option value="">Fila do grupo</option>
+                        {% for a in analistas %}
+                            <option value="{{ a.id }}" data-grupo="{{ a.grupo }}">{{ a.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-actions" style="margin-top:14px;">
+                    <button type="submit" class="btn btn--primary">Devolver</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+    document.addEventListener('click', function (event) {
+        var botao = event.target.closest('[data-devolver]');
+        if (!botao) return;
+        var form = document.getElementById('formDevolver');
+        form.action = form.getAttribute('data-acao').replace('/0/', '/' + botao.getAttribute('data-devolver') + '/');
+        var numero = document.querySelector('[data-devolver-numero]');
+        if (numero) numero.textContent = botao.getAttribute('data-numero');
+        var grupo = botao.getAttribute('data-grupo');
+        var opcoes = form.querySelectorAll('option[data-grupo]');
+        for (var i = 0; i < opcoes.length; i++) {
+            opcoes[i].hidden = opcoes[i].getAttribute('data-grupo') !== grupo;
+        }
+        form.querySelector('[name="destinatario"]').value = '';
+        form.querySelector('[name="motivo"]').value = '';
+    });
+</script>
+{% endif %}
 {% endblock %}

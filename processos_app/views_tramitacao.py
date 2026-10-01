@@ -231,6 +231,29 @@ def cancelar_processo(request, process_id):
 
 
 @login_required
+@require_POST
+def devolver_assinatura(request, process_id):
+    """Gestão tira o processo do Controlador e devolve com motivo."""
+    erro, processo = _executar(
+        request, tramitacao.devolver_da_assinatura, 'gestao_liberados_assinatura',
+        process_id, request.user, request.POST.get('motivo'),
+        request.POST.get('destinatario') or None)
+    if erro:
+        return erro
+    if processo.situacao_tramite == 'EM_ANALISE':
+        messages.success(
+            request,
+            f'Processo devolvido para {processo.nome_analista}. '
+            'A análise foi mantida e o motivo aparece na tela dele.')
+    else:
+        messages.success(
+            request,
+            'Processo devolvido à fila. A análise foi mantida e o motivo '
+            'aparece para quem assumir.')
+    return redirect('gestao_liberados_assinatura')
+
+
+@login_required
 @perm.exige(perm.pode_consultar_assinatura_e_diligencias,
             'Área da Gestão e consulta dos analistas.')
 def liberados_para_assinatura(request):
@@ -245,6 +268,7 @@ def liberados_para_assinatura(request):
     return render(request, 'gestao/liberados_assinatura.html', {
         'processos': processos,
         'total': processos.count(),
+        'analistas': opcoes_de_analistas(),
         **perm.contexto_de_permissoes(request.user),
     })
 

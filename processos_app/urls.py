@@ -75,6 +75,8 @@ urlpatterns = [
          tram.direcionar_assinatura, name='tram_direcionar_assinatura'),
     path('tramitacao/<int:process_id>/liberar-assinatura/',
          tram.liberar_assinatura, name='tram_liberar_assinatura'),
+    path('tramitacao/<int:process_id>/devolver-assinatura/',
+         tram.devolver_assinatura, name='tram_devolver_assinatura'),
     path('tramitacao/<int:process_id>/disponibilizar-retirada/',
          tram.disponibilizar_retirada, name='tram_disponibilizar_retirada'),
     path('tramitacao/<int:process_id>/alterar-destino/',

@@ -1595,6 +1595,10 @@ def analista_processo(request, process_id):
         'analistas': views_tramitacao.opcoes_de_analistas(request.user),
         'pode_declinar': perm.pode_declinar_analise(request.user, processo)
                          and processo.situacao_tramite == 'EM_ANALISE',
+        'pode_devolver_assinatura': (
+            perm.pode_devolver_da_assinatura(request.user)
+            and processo.situacao_tramite == 'AGUARDANDO_ASSINATURA'),
+        'aviso_devolucao': tramitacao.aviso_devolucao_gestao(processo),
         'desfazer': (processo.acao_desfazer
                      if perm.pode_desfazer_tramite(request.user)
                      else None),

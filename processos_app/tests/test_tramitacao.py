@@ -1,4 +1,5 @@
 from django.core.exceptions import PermissionDenied
+from django.urls import reverse
 
 from processos_app.models import EventoProcesso, Prioridade, Processo
 from processos_app.services import processos as svc_processos
@@ -413,3 +414,62 @@ class DestinoPrioridadeCancelamentoTest(BaseProcessoTestCase):
         self.assertTrue(Processo.objects.filter(id=processo.id).exists())
         self.assertFalse(tramitacao.ativos().filter(id=processo.id).exists())
         self.assertFalse(tramitacao.finalizados().filter(id=processo.id).exists())
+
+
+class DevolverAssinaturaGestaoTest(BaseProcessoTestCase):
+
+    def _no_controlador(self):
+        processo = self.processo_em_analise()
+        processo.valor = 'R$ 10,00'
+        processo.destino = 'Unidade de Teste'
+        processo.save(update_fields=['valor', 'destino'])
+        tramitacao.liberar_assinatura(processo.id, self.analista_lic)
+        processo.refresh_from_db()
+        return processo
+
+    def test_gestao_devolve_a_fila_e_mantem_a_analise(self):
+        processo = self._no_controlador()
+        tramitacao.devolver_da_assinatura(
+            processo.id, self.gestao, 'Destino errado')
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'DISPONIVEL')
+        self.assertEqual(processo.destino, 'Unidade de Teste')
+        self.assertEqual(processo.valor, 'R$ 10,00')
+        self.assertIsNone(processo.analista_responsavel)
+        tramitacao.assumir(processo.id, self.analista_lic)
+        self.client.force_login(self.analista_lic)
+        pagina = self.client.get(reverse('analista_processo', args=[processo.id]))
+        self.assertContains(pagina, 'Destino errado')
+        self.assertContains(pagina, 'A Gestão devolveu este processo')
+        tramitacao.liberar_assinatura(processo.id, self.analista_lic)
+        self.assertIsNone(tramitacao.aviso_devolucao_gestao(processo))
+
+    def test_gestao_devolve_para_um_analista(self):
+        processo = self._no_controlador()
+        tramitacao.devolver_da_assinatura(
+            processo.id, self.gestao, 'Ajustar o destino', self.analista_lic2.id)
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'EM_ANALISE')
+        self.assertEqual(processo.analista_responsavel, self.analista_lic2)
+        self.assertEqual(processo.destino, 'Unidade de Teste')
+        self.client.force_login(self.analista_lic2)
+        pagina = self.client.get(reverse('analista_processo', args=[processo.id]))
+        self.assertContains(pagina, 'Ajustar o destino')
+
+    def test_analista_nao_devolve_do_controlador(self):
+        processo = self._no_controlador()
+        with self.assertRaises(PermissionDenied):
+            tramitacao.devolver_da_assinatura(
+                processo.id, self.analista_lic, 'Não')
+        with self.assertRaises(TransicaoInvalida):
+            tramitacao.devolver_da_assinatura(processo.id, self.gestao, '  ')
+
+    def test_tela_para_assinar_mostra_devolver_para_gestao(self):
+        self._no_controlador()
+        self.client.force_login(self.gestao)
+        pagina = self.client.get(reverse('gestao_liberados_assinatura'))
+        self.assertContains(pagina, 'Devolver')
+        self.assertContains(pagina, 'Fila do grupo')
+        self.client.force_login(self.analista_lic)
+        consulta = self.client.get(reverse('gestao_liberados_assinatura'))
+        self.assertNotContains(consulta, 'modalDevolver')

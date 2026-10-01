@@ -72,6 +72,58 @@
         </div>
     </section>
 
+    {% if aviso_devolucao %}
+        <div class="alert alert--warning">
+            <span class="material-symbols-rounded">undo</span>
+            <span>
+                <strong>A Gestão devolveu este processo para correção.</strong>
+                {{ aviso_devolucao.dados.motivo }}
+                {% if aviso_devolucao.dados.destinatario %}
+                    Encaminhado para {{ aviso_devolucao.dados.destinatario }}.
+                {% else %}
+                    Devolvido à fila.
+                {% endif %}
+            </span>
+        </div>
+    {% endif %}
+
+    {% if pode_devolver_assinatura %}
+        <section class="card">
+            <div class="card__header">
+                <span class="card__title">Devolver para correção</span>
+                <span class="card__hint">A análise preenchida é mantida</span>
+            </div>
+            <div class="card__body">
+                <form method="post" action="{% url 'tram_devolver_assinatura' processo.id %}">
+                    {% csrf_token %}
+                    <div class="form-grid">
+                        <div class="field field--wide">
+                            <label class="field__label" for="motivoDevolucao">Motivo</label>
+                            <textarea id="motivoDevolucao" name="motivo" class="textarea" rows="3" required placeholder="Por que o processo volta para a análise?"></textarea>
+                        </div>
+                        <div class="field">
+                            <label class="field__label" for="analistaDevolucao">Encaminhar para</label>
+                            <select id="analistaDevolucao" name="destinatario" class="select">
+                                <option value="">Fila do grupo</option>
+                                {% for a in analistas %}
+                                    {% if a.grupo == processo.genero %}
+                                        <option value="{{ a.id }}">{{ a.nome }}</option>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-actions" style="margin-top:14px;">
+                        <button type="submit" class="btn btn--primary">
+                            <span class="material-symbols-rounded">undo</span>
+                            Devolver
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+    {% endif %}
+
     {% if somente_leitura %}
         <div class="alert alert--info">
             <span class="material-symbols-rounded">visibility</span>

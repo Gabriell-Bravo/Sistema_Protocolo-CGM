@@ -314,6 +314,89 @@ def _desfazer_direcionamento(processo, usuario, motivo):
         f'Em análise por {processo.nome_analista or "—"}')
 
 
+def aviso_devolucao_gestao(processo):
+    """Motivo mais recente da Gestão, enquanto o processo não voltou a ser liberado."""
+    ultimo = (processo.eventos
+              .filter(tipo__in=('DEVOLVIDO_PELA_GESTAO', 'LIBERADO_ASSINATURA'))
+              .order_by('-criado_em', '-id')
+              .first())
+    if ultimo and ultimo.tipo == 'DEVOLVIDO_PELA_GESTAO':
+        return ultimo
+    return None
+
+
+@transaction.atomic
+def devolver_da_assinatura(processo_id, usuario, motivo, destinatario_id=None):
+    """AGUARDANDO_ASSINATURA volta para a fila ou para um analista.
+
+    A análise já preenchida permanece. O motivo fica visível na tela
+    de quem for analisar de novo.
+    """
+    processo = _travar(processo_id)
+    perm.assert_permissao(
+        perm.pode_devolver_da_assinatura(usuario),
+        'Somente a Gestão pode devolver um processo que está para assinar.')
+    if processo.situacao_tramite != 'AGUARDANDO_ASSINATURA':
+        raise TransicaoInvalida(
+            'Só é possível devolver um processo que está com o Controlador.')
+
+    motivo = (motivo or '').strip()
+    if not motivo:
+        raise TransicaoInvalida('Informe o motivo da devolução.')
+
+    destinatario = None
+    if destinatario_id:
+        try:
+            destinatario_id = int(destinatario_id)
+        except (TypeError, ValueError):
+            raise TransicaoInvalida('Escolha um analista ou devolva à fila.')
+        destinatario = User.objects.filter(id=destinatario_id).first()
+        if not perm.is_analista_ativo(destinatario):
+            raise TransicaoInvalida('Escolha um analista ativo.')
+        if perm.grupo_do_analista(destinatario) != processo.genero:
+            raise TransicaoInvalida(
+                'Escolha um analista do mesmo grupo do processo.')
+
+    processo.liberado_assinatura_por = None
+    processo.liberado_assinatura_em = None
+    processo.assinatura_direcionada_para = None
+    processo.assinatura_direcionada_em = None
+    campos = [
+        'liberado_assinatura_por', 'liberado_assinatura_em',
+        'assinatura_direcionada_para', 'assinatura_direcionada_em',
+        'analista_responsavel', 'data_hora_assumido', 'situacao_tramite',
+    ]
+    if destinatario:
+        processo.analista_responsavel = destinatario
+        processo.tecnico = perm.nome_usuario(destinatario)
+        processo.data_hora_assumido = timezone.now()
+        processo.situacao_tramite = 'EM_ANALISE'
+        campos.append('tecnico')
+        para = f'Em análise por {processo.tecnico}'
+    else:
+        processo.analista_responsavel = None
+        processo.data_hora_assumido = None
+        processo.situacao_tramite = 'DISPONIVEL'
+        para = 'Disponível para análise'
+    processo.save(update_fields=campos)
+
+    if processo.numero_relatorio:
+        from .relatorios import registrar as registrar_relatorio
+        registrar_relatorio(processo)
+
+    registrar_evento(
+        processo, 'DEVOLVIDO_PELA_GESTAO', usuario,
+        descricao=(
+            f'{perm.nome_usuario(usuario)} devolveu o processo para correção. '
+            f'Motivo: {motivo}'),
+        motivo=motivo,
+        destinatario=perm.nome_usuario(destinatario),
+        para_fila=destinatario is None,
+    )
+    registrar_diff(processo, 'situacao_tramite', 'Com o Controlador', para, usuario)
+    return processo
+
+
 def _desfazer_liberacao(processo, usuario, motivo):
     processo.liberado_assinatura_por = None
     processo.liberado_assinatura_em = None
