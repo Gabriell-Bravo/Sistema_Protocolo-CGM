@@ -37,8 +37,10 @@ from .services import pendencias as svc_pendencias
 from .services import processos as svc_processos
 from .services import permissions as perm
 from .services import prazos as prazos_service
+from .services import relatorios as svc_relatorios
 from .services import tramitacao
 from .services.eventos import registrar_evento
+import json
 
 
 # ---------------------------------------------------------------------
@@ -1629,6 +1631,10 @@ def analista_processo(request, process_id):
         'next_controle': next_controle,
         'pode_editar_numero_relatorio': perm.pode_editar_numero_relatorio(
             request.user, processo),
+        'reservas_numero_mapa': json.dumps(
+            svc_relatorios.reservas_abertas_mapa(processo.genero)
+            if processo.genero == 'LIQUIDACOES' else {}
+        ),
     })
 
 

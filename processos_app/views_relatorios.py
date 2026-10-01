@@ -47,6 +47,8 @@ def controle_relatorio(request):
         'termo': termo,
         'querystring': _querystring_sem_page(request),
         'pode_definir_ultimo': perm.pode_definir_ultimo_relatorio(request.user),
+        'pode_destinar_numeros': perm.pode_destinar_numeros_relatorio(request.user),
+        'reservas': svc.reservas_abertas(),
         **perm.contexto_de_permissoes(request.user),
     })
 
@@ -88,4 +90,41 @@ def alterar_numero(request, process_id):
     except (PermissionDenied, ValidationError) as exc:
         messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
     return redirect(destino)
+
+
+@login_required
+@require_POST
+def destinar_numeros(request):
+    perm.assert_permissao(
+        perm.pode_destinar_numeros_relatorio(request.user),
+        'Somente analista de Liquidações e o administrador destinam números.')
+    try:
+        quantidade = svc.destinar_numeros(
+            request.user,
+            request.POST.get('numero_inicial'),
+            request.POST.get('numero_final'),
+            request.POST.get('data_relatorio'),
+        )
+        messages.success(
+            request,
+            f'{quantidade} número{"s" if quantidade != 1 else ""} destinado'
+            f'{"s" if quantidade != 1 else ""} para uso posterior.')
+    except (PermissionDenied, ValidationError) as exc:
+        messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
+    return redirect('controle_relatorio')
+
+
+@login_required
+@require_POST
+def cancelar_destino(request, reserva_id):
+    perm.assert_permissao(
+        perm.pode_destinar_numeros_relatorio(request.user),
+        'Somente analista de Liquidações e o administrador cancelam destinos.')
+    try:
+        numero = svc.cancelar_destino(request.user, reserva_id)
+        messages.success(request, f'Destino do nº {numero} cancelado.')
+    except (PermissionDenied, ValidationError) as exc:
+        messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
+    return redirect('controle_relatorio')
+
 

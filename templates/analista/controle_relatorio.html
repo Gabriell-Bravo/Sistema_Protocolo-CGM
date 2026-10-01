@@ -2,7 +2,7 @@
 
 {% block title %}Controle de relatório{% endblock %}
 {% block page_title %}Controle de relatório{% endblock %}
-{% block page_subtitle %}{% if pode_definir_ultimo %}Defina o último número já usado. Para corrigir uma análise, use o lápis.{% else %}Planilha das análises salvas. O lápis abre a tela da análise para você alterar e salvar.{% endif %}{% endblock %}
+{% block page_subtitle %}{% if pode_definir_ultimo %}Defina o último número já usado, destine números para depois e corrija análises pelo lápis.{% else %}Planilha das análises salvas. Destine números para usar depois; o lápis abre a tela da análise.{% endif %}{% endblock %}
 
 {% block content %}
 <div class="stack">
@@ -30,6 +30,82 @@
                 </button>
             </div>
         </form>
+    </section>
+    {% endif %}
+
+    {% if pode_destinar_numeros %}
+    <section class="card">
+        <div class="card__header">
+            <span class="card__title">Destinar números</span>
+            <span class="card__hint">Guarde uma faixa com data para usar depois na análise</span>
+        </div>
+        <form method="post" action="{% url 'controle_relatorio_destinar' %}" class="card__body">
+            {% csrf_token %}
+            <div class="form-grid">
+                <div class="field">
+                    <label class="field__label" for="numero_inicial">Do número</label>
+                    <input type="number" min="1" id="numero_inicial" name="numero_inicial"
+                           class="input" required>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="numero_final">Até o número</label>
+                    <input type="number" min="1" id="numero_final" name="numero_final"
+                           class="input" required>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="data_destino">Data desses números</label>
+                    <input type="date" id="data_destino" name="data_relatorio"
+                           class="input" required>
+                </div>
+            </div>
+            <div class="form-actions" style="margin-top:14px;">
+                <button type="submit" class="btn btn--primary">
+                    <span class="material-symbols-rounded">bookmark_add</span>
+                    Destinar números
+                </button>
+            </div>
+        </form>
+
+        {% if reservas %}
+        <div class="table-scroll" style="margin-top:8px;">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Nº destinado</th>
+                        <th>Data</th>
+                        <th>Destinado por</th>
+                        <th>Em</th>
+                        <th class="col-actions">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for reserva in reservas %}
+                    <tr>
+                        <td><strong>{{ reserva.numero }}</strong></td>
+                        <td>{{ reserva.data|date:"d/m/Y" }}</td>
+                        <td>{{ reserva.criado_por.get_full_name|default:reserva.criado_por.username|default:"—" }}</td>
+                        <td>{{ reserva.criado_em|date:"d/m/Y H:i" }}</td>
+                        <td class="col-actions">
+                            <form method="post" action="{% url 'controle_relatorio_cancelar_destino' reserva.id %}"
+                                  onsubmit="return confirm('Cancelar o destino do nº {{ reserva.numero }}?');">
+                                {% csrf_token %}
+                                <button type="submit" class="icon-btn icon-btn--danger" title="Cancelar destino">
+                                    <span class="material-symbols-rounded">bookmark_remove</span>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty empty--compact" style="margin:8px 16px 16px;">
+            <span class="material-symbols-rounded">bookmark</span>
+            <div class="empty__title">Nenhum número destinado</div>
+            <div>Quando houver uma faixa guardada, ela aparece aqui até ser usada na análise.</div>
+        </div>
+        {% endif %}
     </section>
     {% endif %}
 

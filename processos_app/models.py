@@ -709,6 +709,36 @@ class SequenciaRelatorio(models.Model):
         verbose_name_plural = "Sequências de Relatório"
 
 
+class ReservaNumeroRelatorio(models.Model):
+    """Número guardado com data para o analista usar depois."""
+
+    grupo = models.CharField(max_length=50, db_index=True, verbose_name="Grupo")
+    numero = models.PositiveIntegerField(verbose_name="Número")
+    data = models.DateField(verbose_name="Data do relatório")
+    criado_por = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='reservas_relatorio', verbose_name="Destinado por")
+    criado_em = models.DateTimeField(auto_now_add=True, verbose_name="Destinado em")
+    processo = models.ForeignKey(
+        'Processo', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='reservas_relatorio', verbose_name="Processo")
+    usado_em = models.DateTimeField(null=True, blank=True, verbose_name="Usado em")
+
+    def __str__(self):
+        return f"{self.numero} · {self.data}"
+
+    class Meta:
+        db_table = 'reservas_numero_relatorio'
+        ordering = ['numero', 'id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=('grupo', 'numero'),
+                name='reserva_relatorio_unica'),
+        ]
+        verbose_name = "Número de relatório destinado"
+        verbose_name_plural = "Números de relatório destinados"
+
+
 class LinhaControleRelatorio(models.Model):
     """Linha da planilha Controle de relatório, gravada ao salvar a análise."""
 

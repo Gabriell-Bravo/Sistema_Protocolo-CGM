@@ -162,8 +162,43 @@ class ControleRelatorioTest(BaseProcessoTestCase):
 
         self.client.force_login(self.analista_liq)
         tela = self.client.get(reverse('analista_processo', args=[processo.id]))
-        self.assertContains(tela, 'Informar número do relatório')
+        self.assertContains(tela, 'Informar número específico')
         self.assertContains(tela, 'Data deste número')
+        self.assertContains(tela, 'btnCancelarNumero')
+        self.assertNotContains(tela, 'form="formNumeroRelatorio"')
+
+    def test_salvar_analise_grava_numero_especifico_no_mesmo_botao(self):
+        processo = self.novo_processo(self.especie_liq, numero_processo='16c/2026')
+        tramitacao.assumir(processo.id, self.analista_liq)
+        self.client.force_login(self.analista_liq)
+        resposta = self.client.post(
+            reverse('analista_processo', args=[processo.id]),
+            {
+                'acao': 'salvar',
+                'destino': 'Unidade de Teste',
+                'valor': '1000',
+                'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+                'numero_relatorio': '5500',
+                'data_relatorio': '2026-07-01',
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        processo.refresh_from_db()
+        self.assertEqual(processo.numero_relatorio, '5500')
+        self.assertEqual(str(processo.data_analise), '2026-07-01')
+
+        resposta = self.client.post(
+            reverse('analista_processo', args=[processo.id]),
+            {
+                'acao': 'salvar',
+                'destino': 'Unidade de Teste',
+                'valor': '1000',
+                'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        processo.refresh_from_db()
+        self.assertEqual(processo.numero_relatorio, '5500')
 
     def test_tela_analista_ve_planilha_admin_define_ultimo(self):
         processo = self.novo_processo(self.especie_liq, numero_processo='12/2026')
@@ -174,6 +209,7 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertEqual(pagina.status_code, 200)
         self.assertContains(pagina, 'Planilha de relatórios')
         self.assertNotContains(pagina, 'Último número já usado')
+        self.assertContains(pagina, 'Destinar números')
         self.assertContains(pagina, processo.numero_relatorio)
         self.assertContains(pagina, '12/2026')
         self.assertContains(pagina, 'Editar análise')
@@ -229,6 +265,41 @@ class ControleRelatorioTest(BaseProcessoTestCase):
 
         self.assertEqual(
             svc_processos.campos_editaveis(self.analista_lic, processo), set())
+
+    def test_destinar_numeros_e_usar_traz_a_data(self):
+        relatorios.destinar_numeros(
+            self.analista_liq, 5001, 5003, '2026-06-20')
+        reservas = list(relatorios.reservas_abertas())
+        self.assertEqual([r.numero for r in reservas], [5001, 5002, 5003])
+        self.assertEqual(str(reservas[0].data), '2026-06-20')
+
+        processo = self.novo_processo(self.especie_liq, numero_processo='40/2026')
+        tramitacao.assumir(processo.id, self.analista_liq)
+        relatorios.alterar_numero(self.analista_liq, processo.id, 5002)
+        processo.refresh_from_db()
+        self.assertEqual(processo.numero_relatorio, '5002')
+        self.assertEqual(str(processo.data_analise), '2026-06-20')
+        self.assertEqual(
+            [r.numero for r in relatorios.reservas_abertas()], [5001, 5003])
+
+        automatico = self.novo_processo(self.especie_liq, numero_processo='41/2026')
+        self._salvar_liquidacao(automatico)
+        self.assertNotEqual(automatico.numero_relatorio, '5001')
+        self.assertNotEqual(automatico.numero_relatorio, '5003')
+
+        with self.assertRaises(relatorios.RelatorioInvalido):
+            relatorios.destinar_numeros(
+                self.analista_liq, 5001, 5001, '2026-06-21')
+        with self.assertRaises(PermissionDenied):
+            relatorios.destinar_numeros(
+                self.analista_lic, 6000, 6001, '2026-06-21')
+
+        self.client.force_login(self.analista_liq)
+        pagina = self.client.get(reverse('controle_relatorio'))
+        self.assertContains(pagina, '5001')
+        self.assertContains(pagina, '20/06/2026')
+        tela = self.client.get(reverse('analista_processo', args=[processo.id]))
+        self.assertContains(tela, '"5001": "2026-06-20"')
 
     def test_planilha_ordena_por_numero_de_relatorio(self):
         admin = criar_usuario('admin_ord', 'GESTAO', is_superuser=True)

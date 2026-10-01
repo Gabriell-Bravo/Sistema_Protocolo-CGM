@@ -157,7 +157,7 @@
         <input type="hidden" name="motivo" value="Encaminhado para a fila sem análise">
     </form>
     {% endif %}
-    {% if pode_editar_numero_relatorio %}
+    {% if pode_editar_numero_relatorio and not pode_editar %}
     <form id="formNumeroRelatorio" method="post" action="{% url 'controle_relatorio_alterar_numero' processo.id %}" hidden>
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ request.get_full_path }}">
@@ -182,34 +182,53 @@
                     <label class="field__label" for="numero_relatorio">Número do relatório</label>
                     {% if pode_editar_numero_relatorio %}
                     <div class="pendencia-add__row" id="numeroRelatorioExibicao">
-                        <input type="text" class="input" value="{% if processo.numero_relatorio %}Relatório {{ processo.numero_relatorio }}{% endif %}" readonly>
-                        <button type="button" class="icon-btn icon-btn--primary" id="btnEditarNumero" title="Informar número do relatório">
+                        <input type="text" class="input" value="{% if processo.numero_relatorio %}Relatório {{ processo.numero_relatorio }}{% else %}Sequencial ao salvar{% endif %}" readonly>
+                        <button type="button" class="icon-btn icon-btn--primary" id="btnEditarNumero" title="Informar número específico">
                             <span class="material-symbols-rounded">edit</span>
                         </button>
                     </div>
                     <div id="numeroRelatorioEdicao" hidden>
-                        <div class="form-grid">
-                            <div class="field">
-                                <label class="field__label" for="numero_relatorio">Número</label>
-                                <input type="text" id="numero_relatorio" name="numero_relatorio" form="formNumeroRelatorio"
-                                       class="input" inputmode="numeric" value="{{ processo.numero_relatorio }}"
-                                       placeholder="Informe o número" required>
+                        <div class="pendencia-add__row" style="align-items:flex-start;">
+                            <div class="form-grid" style="flex:1;">
+                                <div class="field">
+                                    <label class="field__label" for="numero_relatorio">Número específico</label>
+                                    <input type="text" id="numero_relatorio" name="numero_relatorio"
+                                           {% if not pode_editar %}form="formNumeroRelatorio"{% endif %}
+                                           class="input" inputmode="numeric" value="{{ processo.numero_relatorio }}"
+                                           placeholder="Informe o número" disabled>
+                                </div>
+                                <div class="field">
+                                    <label class="field__label" for="data_relatorio">Data deste número</label>
+                                    <input type="date" id="data_relatorio" name="data_relatorio"
+                                           {% if not pode_editar %}form="formNumeroRelatorio"{% endif %}
+                                           class="input" value="{{ processo.data_analise|date:'Y-m-d' }}" disabled>
+                                </div>
                             </div>
-                            <div class="field">
-                                <label class="field__label" for="data_relatorio">Data deste número</label>
-                                <input type="date" id="data_relatorio" name="data_relatorio" form="formNumeroRelatorio"
-                                       class="input" value="{{ processo.data_analise|date:'Y-m-d' }}" required>
-                            </div>
+                            <button type="button" class="icon-btn icon-btn--danger" id="btnCancelarNumero"
+                                    title="Desfazer e voltar ao número sequencial" style="margin-top:28px;">
+                                <span class="material-symbols-rounded">close</span>
+                            </button>
                         </div>
+                        {% if not pode_editar %}
                         <div class="form-actions" style="margin-top:10px;">
                             <button type="submit" form="formNumeroRelatorio" class="btn btn--outline">
                                 <span class="material-symbols-rounded">save</span>
-                                Salvar
+                                Salvar número
                             </button>
-                            <button type="button" class="btn btn--ghost" id="btnCancelarNumero">Cancelar</button>
                         </div>
+                        {% endif %}
                     </div>
-                    <span class="field__hint">{% if processo.numero_relatorio %}Gerado ao salvar a análise. Use o lápis para informar o seu número e a data.{% else %}Será gerado ao salvar a análise, ou informe o seu número e a data pelo lápis.{% endif %}</span>
+                    <span class="field__hint" id="hintNumeroRelatorio">
+                        {% if pode_editar %}
+                            {% if processo.numero_relatorio %}
+                            Use o lápis para trocar o número e a data. O botão Salvar análise grava tudo. O X desfaz e mantém o sequencial.
+                            {% else %}
+                            Sem o lápis, o número sequencial é gerado ao Salvar análise. Com o lápis, informe número e data e use o mesmo Salvar análise. O X cancela o número específico.
+                            {% endif %}
+                        {% else %}
+                            Use o lápis para informar o número e a data.
+                        {% endif %}
+                    </span>
                     {% else %}
                     <input type="text" id="numero_relatorio" class="input" value="{% if processo.numero_relatorio %}Relatório {{ processo.numero_relatorio }}{% endif %}" readonly>
                     <span class="field__hint">{% if processo.numero_relatorio %}Número gerado ao salvar a análise.{% else %}Será gerado automaticamente ao salvar a análise.{% endif %}</span>
@@ -588,19 +607,65 @@
     var edicaoNumero = document.getElementById('numeroRelatorioEdicao');
     var btnEditarNumero = document.getElementById('btnEditarNumero');
     var btnCancelarNumero = document.getElementById('btnCancelarNumero');
-    if (btnEditarNumero && exibicaoNumero && edicaoNumero) {
-        btnEditarNumero.addEventListener('click', function () {
-            exibicaoNumero.hidden = true;
-            edicaoNumero.hidden = false;
-            var campo = document.getElementById('numero_relatorio');
-            if (campo) campo.focus();
-        });
+    var reservasNumero = {{ reservas_numero_mapa|default:'{}'|safe }};
+    var campoNumeroRelatorio = document.getElementById('numero_relatorio');
+    var campoDataRelatorio = document.getElementById('data_relatorio');
+    var exibicaoNumeroValor = exibicaoNumero
+        ? exibicaoNumero.querySelector('input')
+        : null;
+
+    function aplicarDataDestinada() {
+        if (!campoNumeroRelatorio || !campoDataRelatorio) return;
+        var data = reservasNumero[String(campoNumeroRelatorio.value).trim()];
+        if (data) {
+            campoDataRelatorio.value = data;
+        }
     }
-    if (btnCancelarNumero && exibicaoNumero && edicaoNumero) {
-        btnCancelarNumero.addEventListener('click', function () {
-            edicaoNumero.hidden = true;
-            exibicaoNumero.hidden = false;
-        });
+
+    function abrirNumeroEspecifico() {
+        if (!exibicaoNumero || !edicaoNumero) return;
+        exibicaoNumero.hidden = true;
+        edicaoNumero.hidden = false;
+        if (campoNumeroRelatorio) {
+            campoNumeroRelatorio.disabled = false;
+            campoNumeroRelatorio.required = true;
+            campoNumeroRelatorio.focus();
+        }
+        if (campoDataRelatorio) {
+            campoDataRelatorio.disabled = false;
+            campoDataRelatorio.required = true;
+        }
+        aplicarDataDestinada();
+    }
+
+    function fecharNumeroEspecifico() {
+        if (!exibicaoNumero || !edicaoNumero) return;
+        edicaoNumero.hidden = true;
+        exibicaoNumero.hidden = false;
+        if (campoNumeroRelatorio) {
+            campoNumeroRelatorio.required = false;
+            campoNumeroRelatorio.disabled = true;
+            campoNumeroRelatorio.value = '';
+        }
+        if (campoDataRelatorio) {
+            campoDataRelatorio.required = false;
+            campoDataRelatorio.disabled = true;
+            campoDataRelatorio.value = '';
+        }
+        if (exibicaoNumeroValor && !exibicaoNumeroValor.value) {
+            exibicaoNumeroValor.value = 'Sequencial ao salvar';
+        }
+    }
+
+    if (btnEditarNumero) {
+        btnEditarNumero.addEventListener('click', abrirNumeroEspecifico);
+    }
+    if (btnCancelarNumero) {
+        btnCancelarNumero.addEventListener('click', fecharNumeroEspecifico);
+    }
+    if (campoNumeroRelatorio) {
+        campoNumeroRelatorio.addEventListener('input', aplicarDataDestinada);
+        campoNumeroRelatorio.addEventListener('change', aplicarDataDestinada);
     }
 
     document.addEventListener('click', function (event) {

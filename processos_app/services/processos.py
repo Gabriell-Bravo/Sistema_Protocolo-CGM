@@ -321,7 +321,8 @@ def aplicar_analise(processo, dados, usuario):
     """Grava os campos de análise enviados. Devolve quantos mudaram.
 
     Só o analista responsável (em análise) ou o analista do grupo
-    corrigindo um relatório já gerado.
+    corrigindo um relatório já gerado. Se vier número manual no POST,
+    ele é gravado no mesmo Salvar análise.
     """
     permitidos, _ = filtrar_payload(
         usuario, processo, {k: dados.get(k) for k in CAMPOS_ANALISTA if k in dados})
@@ -346,10 +347,28 @@ def aplicar_analise(processo, dados, usuario):
         alteracoes += 1
         if campo == 'destino':
             processo.destino_fk = cadastros.resolver_unidade(novo)
-    from .relatorios import atribuir_se_preciso, registrar as registrar_relatorio
+    from .relatorios import (
+        alterar_numero, atribuir_se_preciso, registrar as registrar_relatorio,
+    )
     if alteracoes:
         processo.save()
-    if campos_editaveis(usuario, processo) and atribuir_se_preciso(processo):
+
+    numero_manual = texto(dados.get('numero_relatorio')) if dados else ''
+    if (numero_manual
+            and perm.pode_editar_numero_relatorio(usuario, processo)):
+        anterior = processo.numero_relatorio or ''
+        anterior_data = (
+            processo.data_analise.isoformat() if processo.data_analise else '')
+        alterar_numero(
+            usuario, processo.id, numero_manual, dados.get('data_relatorio'))
+        processo.refresh_from_db()
+        if (processo.numero_relatorio or '') != anterior:
+            alteracoes += 1
+        nova_data = (
+            processo.data_analise.isoformat() if processo.data_analise else '')
+        if nova_data != anterior_data:
+            alteracoes += 1
+    elif campos_editaveis(usuario, processo) and atribuir_se_preciso(processo):
         processo.save(update_fields=['numero_relatorio'])
         alteracoes += 1
     elif processo.numero_relatorio:

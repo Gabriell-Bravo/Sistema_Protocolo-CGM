@@ -16,13 +16,16 @@ from django.db.models import IntegerField
 from django.db.models.functions import Cast
 from django.utils import timezone
 
-from ..models import LinhaControleRelatorio, Processo, SequenciaRelatorio
+from ..models import (
+    LinhaControleRelatorio, Processo, ReservaNumeroRelatorio, SequenciaRelatorio,
+)
 from . import permissions as perm
 from .eventos import registrar_diff
 from .processos import converter_data
 
 
 GRUPO_PADRAO = perm.GRUPO_LIQUIDACOES
+LIMITE_DESTINO = 80
 
 
 class RelatorioInvalido(ValidationError):
@@ -51,6 +54,48 @@ def _inteiro(bruto):
         return int(str(bruto).strip())
     except (TypeError, ValueError):
         return None
+
+
+def _numeros_reservados(grupo):
+    return set(
+        ReservaNumeroRelatorio.objects.filter(grupo=grupo, processo__isnull=True)
+        .values_list('numero', flat=True)
+    )
+
+
+def reservas_abertas(grupo=GRUPO_PADRAO):
+    return (ReservaNumeroRelatorio.objects
+            .filter(grupo=grupo, processo__isnull=True)
+            .select_related('criado_por')
+            .order_by('numero', 'id'))
+
+
+def reservas_abertas_mapa(grupo=GRUPO_PADRAO):
+    return {
+        str(reserva.numero): reserva.data.isoformat()
+        for reserva in reservas_abertas(grupo)
+    }
+
+
+def reserva_do_numero(numero, grupo=GRUPO_PADRAO):
+    return (ReservaNumeroRelatorio.objects
+            .filter(grupo=grupo, numero=numero, processo__isnull=True)
+            .first())
+
+
+def _liberar_reservas_do_processo(processo):
+    ReservaNumeroRelatorio.objects.filter(processo=processo).update(
+        processo=None, usado_em=None)
+
+
+def _consumir_reserva(processo, numero):
+    _liberar_reservas_do_processo(processo)
+    reserva = reserva_do_numero(numero, processo.genero or GRUPO_PADRAO)
+    if reserva is None:
+        return
+    reserva.processo = processo
+    reserva.usado_em = timezone.now()
+    reserva.save(update_fields=['processo', 'usado_em'])
 
 
 def numeros_usados(grupo, ignorar=None):
@@ -114,7 +159,7 @@ def proximo_numero(grupo):
     SequenciaRelatorio.objects.get_or_create(
         grupo=grupo, defaults={'proximo_numero': 1540})
     seq = SequenciaRelatorio.objects.select_for_update().get(grupo=grupo)
-    usados = numeros_usados(grupo)
+    usados = numeros_usados(grupo) | _numeros_reservados(grupo)
     livres = _numeros_devolvidos(grupo, usados)
     if livres:
         numero = min(livres)
@@ -178,6 +223,10 @@ def alterar_numero(usuario, processo_id, novo, data=None):
     except ValidationError as exc:
         raise RelatorioInvalido('; '.join(exc.messages))
     if data_analise is None:
+        reserva = reserva_do_numero(novo, processo.genero or GRUPO_PADRAO)
+        if reserva is not None:
+            data_analise = reserva.data
+    if data_analise is None:
         raise RelatorioInvalido(
             'Informe a data deste número de relatório.')
 
@@ -205,10 +254,10 @@ def alterar_numero(usuario, processo_id, novo, data=None):
             processo, 'data_analise', anterior_data,
             data_analise.isoformat(), usuario)
 
-    if not campos:
-        return processo
-    processo.save(update_fields=campos)
-    registrar(processo)
+    if campos:
+        processo.save(update_fields=campos)
+        registrar(processo)
+    _consumir_reserva(processo, novo)
     return processo
 
 
@@ -225,6 +274,7 @@ def registrar(processo):
 def remover_do_processo(processo):
     """Desvincula a linha. O número volta a ser o próximo a ser gerado."""
     LinhaControleRelatorio.objects.filter(processo=processo).update(processo=None)
+    _liberar_reservas_do_processo(processo)
 
 
 def listar(usuario):
@@ -262,3 +312,61 @@ def _dados_da_linha(processo):
         'observacao': processo.observacao or '',
         'grupo': processo.genero or '',
     }
+
+
+@transaction.atomic
+def destinar_numeros(usuario, inicio, fim, data, grupo=GRUPO_PADRAO):
+    """Guarda uma faixa de números com a mesma data para uso posterior."""
+    perm.assert_permissao(
+        perm.pode_destinar_numeros_relatorio(usuario),
+        'Somente analista de Liquidações e o administrador destinam números.')
+    try:
+        inicio = int(str(inicio).strip())
+        fim = int(str(fim).strip())
+    except (TypeError, ValueError):
+        raise RelatorioInvalido('Informe o número inicial e o final.')
+    if inicio < 1 or fim < 1:
+        raise RelatorioInvalido('Os números devem ser maiores que zero.')
+    if fim < inicio:
+        inicio, fim = fim, inicio
+    quantidade = fim - inicio + 1
+    if quantidade > LIMITE_DESTINO:
+        raise RelatorioInvalido(
+            f'Destine no máximo {LIMITE_DESTINO} números por vez.')
+    try:
+        data_reserva = converter_data(data)
+    except ValidationError as exc:
+        raise RelatorioInvalido('; '.join(exc.messages))
+    if data_reserva is None:
+        raise RelatorioInvalido('Informe a data desses números.')
+
+    faixa = set(range(inicio, fim + 1))
+    ocupados = numeros_usados(grupo) | _numeros_reservados(grupo)
+    choque = sorted(faixa & ocupados)
+    if choque:
+        amostra = ', '.join(str(n) for n in choque[:8])
+        extra = '…' if len(choque) > 8 else ''
+        raise RelatorioInvalido(
+            f'Estes números já estão em uso ou destinados: {amostra}{extra}.')
+
+    ReservaNumeroRelatorio.objects.bulk_create([
+        ReservaNumeroRelatorio(
+            grupo=grupo, numero=numero, data=data_reserva, criado_por=usuario)
+        for numero in range(inicio, fim + 1)
+    ])
+    return quantidade
+
+
+@transaction.atomic
+def cancelar_destino(usuario, reserva_id):
+    perm.assert_permissao(
+        perm.pode_destinar_numeros_relatorio(usuario),
+        'Somente analista de Liquidações e o administrador cancelam destinos.')
+    reserva = ReservaNumeroRelatorio.objects.filter(id=reserva_id).first()
+    if reserva is None:
+        raise RelatorioInvalido('Destino não encontrado.')
+    if reserva.processo_id:
+        raise RelatorioInvalido('Este número já foi usado numa análise.')
+    reserva.delete()
+    return reserva.numero
+
