@@ -439,7 +439,7 @@ class DevolverAssinaturaGestaoTest(BaseProcessoTestCase):
         tramitacao.assumir(processo.id, self.analista_lic)
         self.client.force_login(self.analista_lic)
         pagina = self.client.get(reverse('analista_processo', args=[processo.id]))
-        self.assertContains(pagina, 'Destino errado')
+        self.assertContains(pagina, 'Motivo: Destino errado')
         self.assertContains(pagina, 'A Gestão devolveu este processo')
         tramitacao.liberar_assinatura(processo.id, self.analista_lic)
         self.assertIsNone(tramitacao.aviso_devolucao_gestao(processo))

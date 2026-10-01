@@ -77,11 +77,9 @@
             <span class="material-symbols-rounded">undo</span>
             <span>
                 <strong>A Gestão devolveu este processo para correção.</strong>
-                {{ aviso_devolucao.dados.motivo }}
+                Motivo: {{ aviso_devolucao.dados.motivo }}
                 {% if aviso_devolucao.dados.destinatario %}
                     Encaminhado para {{ aviso_devolucao.dados.destinatario }}.
-                {% else %}
-                    Devolvido à fila.
                 {% endif %}
             </span>
         </div>
