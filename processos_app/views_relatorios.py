@@ -73,15 +73,14 @@ def definir_ultimo_numero(request):
 @login_required
 @require_POST
 def alterar_numero(request, process_id):
-    perm.assert_permissao(
-        perm.pode_editar_numero_relatorio(request.user),
-        'Somente o administrador altera o número de relatório.')
     destino = request.POST.get('next') or ''
     if not destino.startswith('/'):
         destino = reverse('controle_relatorio')
     try:
         processo = svc.alterar_numero(
-            request.user, process_id, request.POST.get('numero_relatorio'))
+            request.user, process_id,
+            request.POST.get('numero_relatorio'),
+            request.POST.get('data_relatorio'))
         messages.success(
             request,
             f'Número do relatório de {processo.numero_processo} '

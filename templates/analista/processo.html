@@ -132,7 +132,7 @@
     {% if processo.pode_assumir and not somente_leitura %}
         <div class="alert alert--info">
             <span class="material-symbols-rounded">info</span>
-            <span>Este processo está disponível. Ao assumir, você passa a ser o responsável e os demais analistas veem “Em análise por você”.</span>
+            <span>Este processo está disponível. Ao assumir, você passa a ser o responsável e os demais analistas veem quem está analisando.</span>
         </div>
         <form method="post" action="{% url 'assumir_processo' processo.id %}">
             {% csrf_token %}
@@ -141,6 +141,11 @@
                 Assumir processo
             </button>
         </form>
+    {% elif processo.situacao_tramite == 'EM_ANALISE' and not processo.eh_meu and not somente_leitura %}
+        <div class="alert alert--info">
+            <span class="material-symbols-rounded">person</span>
+            <span>Em análise por <strong>{{ processo.nome_analista }}</strong>. Não está disponível para assumir.</span>
+        </div>
     {% endif %}
 
     {% include "includes/anexos_processo.html" %}
@@ -152,7 +157,7 @@
         <input type="hidden" name="motivo" value="Encaminhado para a fila sem análise">
     </form>
     {% endif %}
-    {% if pode_editar_numero_relatorio and processo.numero_relatorio %}
+    {% if pode_editar_numero_relatorio %}
     <form id="formNumeroRelatorio" method="post" action="{% url 'controle_relatorio_alterar_numero' processo.id %}" hidden>
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ request.get_full_path }}">
@@ -175,16 +180,36 @@
                 {% if eh_liquidacao %}
                 <div class="field">
                     <label class="field__label" for="numero_relatorio">Número do relatório</label>
-                    {% if pode_editar_numero_relatorio and processo.numero_relatorio %}
-                    <div class="pendencia-add__row">
-                        <input type="text" id="numero_relatorio" name="numero_relatorio" form="formNumeroRelatorio"
-                               class="input" inputmode="numeric" value="{{ processo.numero_relatorio }}">
-                        <button type="submit" form="formNumeroRelatorio" class="btn btn--outline">
-                            <span class="material-symbols-rounded">save</span>
-                            Salvar
+                    {% if pode_editar_numero_relatorio %}
+                    <div class="pendencia-add__row" id="numeroRelatorioExibicao">
+                        <input type="text" class="input" value="{% if processo.numero_relatorio %}Relatório {{ processo.numero_relatorio }}{% endif %}" readonly>
+                        <button type="button" class="icon-btn icon-btn--primary" id="btnEditarNumero" title="Informar número do relatório">
+                            <span class="material-symbols-rounded">edit</span>
                         </button>
                     </div>
-                    <span class="field__hint">Gerado ao salvar a análise. Somente o administrador altera.</span>
+                    <div id="numeroRelatorioEdicao" hidden>
+                        <div class="form-grid">
+                            <div class="field">
+                                <label class="field__label" for="numero_relatorio">Número</label>
+                                <input type="text" id="numero_relatorio" name="numero_relatorio" form="formNumeroRelatorio"
+                                       class="input" inputmode="numeric" value="{{ processo.numero_relatorio }}"
+                                       placeholder="Informe o número" required>
+                            </div>
+                            <div class="field">
+                                <label class="field__label" for="data_relatorio">Data deste número</label>
+                                <input type="date" id="data_relatorio" name="data_relatorio" form="formNumeroRelatorio"
+                                       class="input" value="{{ processo.data_analise|date:'Y-m-d' }}" required>
+                            </div>
+                        </div>
+                        <div class="form-actions" style="margin-top:10px;">
+                            <button type="submit" form="formNumeroRelatorio" class="btn btn--outline">
+                                <span class="material-symbols-rounded">save</span>
+                                Salvar
+                            </button>
+                            <button type="button" class="btn btn--ghost" id="btnCancelarNumero">Cancelar</button>
+                        </div>
+                    </div>
+                    <span class="field__hint">{% if processo.numero_relatorio %}Gerado ao salvar a análise. Use o lápis para informar o seu número e a data.{% else %}Será gerado ao salvar a análise, ou informe o seu número e a data pelo lápis.{% endif %}</span>
                     {% else %}
                     <input type="text" id="numero_relatorio" class="input" value="{% if processo.numero_relatorio %}Relatório {{ processo.numero_relatorio }}{% endif %}" readonly>
                     <span class="field__hint">{% if processo.numero_relatorio %}Número gerado ao salvar a análise.{% else %}Será gerado automaticamente ao salvar a análise.{% endif %}</span>
@@ -557,6 +582,25 @@
     var campoValor = document.getElementById('valor');
     if (campoValor && !campoValor.readOnly) {
         campoValor.addEventListener('input', function () { formatarMoeda(campoValor); });
+    }
+
+    var exibicaoNumero = document.getElementById('numeroRelatorioExibicao');
+    var edicaoNumero = document.getElementById('numeroRelatorioEdicao');
+    var btnEditarNumero = document.getElementById('btnEditarNumero');
+    var btnCancelarNumero = document.getElementById('btnCancelarNumero');
+    if (btnEditarNumero && exibicaoNumero && edicaoNumero) {
+        btnEditarNumero.addEventListener('click', function () {
+            exibicaoNumero.hidden = true;
+            edicaoNumero.hidden = false;
+            var campo = document.getElementById('numero_relatorio');
+            if (campo) campo.focus();
+        });
+    }
+    if (btnCancelarNumero && exibicaoNumero && edicaoNumero) {
+        btnCancelarNumero.addEventListener('click', function () {
+            edicaoNumero.hidden = true;
+            exibicaoNumero.hidden = false;
+        });
     }
 
     document.addEventListener('click', function (event) {

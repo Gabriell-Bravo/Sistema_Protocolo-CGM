@@ -19,6 +19,7 @@ from django.utils import timezone
 from ..models import LinhaControleRelatorio, Processo, SequenciaRelatorio
 from . import permissions as perm
 from .eventos import registrar_diff
+from .processos import converter_data
 
 
 GRUPO_PADRAO = perm.GRUPO_LIQUIDACOES
@@ -155,42 +156,59 @@ def _inteiro_atual(processo):
 
 
 @transaction.atomic
-def alterar_numero(usuario, processo_id, novo):
-    """Administrador grava o número que quiser numa análise já feita."""
+def alterar_numero(usuario, processo_id, novo, data=None):
+    """Analista do grupo ou administrador grava o número e a data do relatório."""
     processo = (Processo.objects.select_for_update()
                 .filter(id=processo_id).first())
     if processo is None:
         raise RelatorioInvalido('Processo não encontrado.')
     perm.assert_permissao(
-        perm.pode_editar_numero_relatorio(usuario),
-        'Somente o administrador altera o número de relatório.')
-    if not processo.numero_relatorio:
-        raise RelatorioInvalido(
-            'O número só pode ser alterado depois de salvar a análise.')
+        perm.pode_editar_numero_relatorio(usuario, processo),
+        'Somente o analista do grupo e o administrador alteram o número.')
+    if not especie_gera_relatorio(processo):
+        raise RelatorioInvalido('Esta espécie não gera número de relatório.')
     try:
         novo = int(str(novo).strip())
     except (TypeError, ValueError):
         raise RelatorioInvalido('Informe um número inteiro para o relatório.')
     if novo < 1:
         raise RelatorioInvalido('O número do relatório deve ser maior que zero.')
+    try:
+        data_analise = converter_data(data)
+    except ValidationError as exc:
+        raise RelatorioInvalido('; '.join(exc.messages))
+    if data_analise is None:
+        raise RelatorioInvalido(
+            'Informe a data deste número de relatório.')
 
     atual = _inteiro_atual(processo)
-    if atual == novo:
+    campos = []
+    anterior_numero = processo.numero_relatorio or ''
+    if atual != novo:
+        processo.numero_relatorio = str(novo)
+        campos.append('numero_relatorio')
+        seq, _ = SequenciaRelatorio.objects.select_for_update().get_or_create(
+            grupo=processo.genero or GRUPO_PADRAO,
+            defaults={'proximo_numero': novo + 1})
+        if int(seq.proximo_numero or 0) <= novo:
+            seq.proximo_numero = novo + 1
+            seq.save(update_fields=['proximo_numero'])
+        registrar_diff(
+            processo, 'numero_relatorio', anterior_numero, str(novo), usuario)
+
+    if processo.data_analise != data_analise:
+        anterior_data = (
+            processo.data_analise.isoformat() if processo.data_analise else '')
+        processo.data_analise = data_analise
+        campos.append('data_analise')
+        registrar_diff(
+            processo, 'data_analise', anterior_data,
+            data_analise.isoformat(), usuario)
+
+    if not campos:
         return processo
-
-    anterior = processo.numero_relatorio or ''
-    processo.numero_relatorio = str(novo)
-    processo.save(update_fields=['numero_relatorio'])
+    processo.save(update_fields=campos)
     registrar(processo)
-
-    seq, _ = SequenciaRelatorio.objects.select_for_update().get_or_create(
-        grupo=processo.genero or GRUPO_PADRAO,
-        defaults={'proximo_numero': novo + 1})
-    if int(seq.proximo_numero or 0) <= novo:
-        seq.proximo_numero = novo + 1
-        seq.save(update_fields=['proximo_numero'])
-
-    registrar_diff(processo, 'numero_relatorio', anterior, str(novo), usuario)
     return processo
 
 

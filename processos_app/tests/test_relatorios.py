@@ -116,11 +116,12 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         admin = criar_usuario('admin_edit', 'GESTAO', is_superuser=True)
         processo = self.novo_processo(self.especie_liq, numero_processo='16/2026')
         tramitacao.assumir(processo.id, self.analista_liq)
-        with self.assertRaises(relatorios.RelatorioInvalido):
-            relatorios.alterar_numero(admin, processo.id, 3300)
+        relatorios.alterar_numero(admin, processo.id, 3300, '2026-03-15')
+        processo.refresh_from_db()
+        self.assertEqual(processo.numero_relatorio, '3300')
 
         self._salvar_liquidacao(processo)
-        relatorios.alterar_numero(admin, processo.id, 3300)
+        relatorios.alterar_numero(admin, processo.id, 3300, '2026-03-15')
         processo.refresh_from_db()
         self.assertEqual(processo.numero_relatorio, '3300')
         linha = LinhaControleRelatorio.objects.get(processo=processo)
@@ -128,15 +129,41 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertEqual(relatorios.estado_sequencia()['proximo'], 3301)
 
         with self.assertRaises(PermissionDenied):
-            relatorios.alterar_numero(self.analista_liq, processo.id, 3301)
+            relatorios.alterar_numero(self.analista_lic, processo.id, 3301)
 
         outro = self.novo_processo(self.especie_liq, numero_processo='17/2026')
         self._salvar_liquidacao(outro)
-        relatorios.alterar_numero(admin, outro.id, 3300)
+        relatorios.alterar_numero(admin, outro.id, 3300, '2026-03-16')
         outro.refresh_from_db()
         processo.refresh_from_db()
         self.assertEqual(outro.numero_relatorio, '3300')
         self.assertEqual(processo.numero_relatorio, '3300')
+
+    def test_analista_informa_o_proprio_numero(self):
+        processo = self.novo_processo(self.especie_liq, numero_processo='16b/2026')
+        tramitacao.assumir(processo.id, self.analista_liq)
+        processo.refresh_from_db()
+        relatorios.alterar_numero(self.analista_liq, processo.id, 4400, '2026-04-10')
+        processo.refresh_from_db()
+        self.assertEqual(processo.numero_relatorio, '4400')
+        self.assertEqual(str(processo.data_analise), '2026-04-10')
+        self._salvar_liquidacao(processo)
+        self.assertEqual(processo.numero_relatorio, '4400')
+        relatorios.alterar_numero(self.analista_liq, processo.id, 4401, '2026-04-11')
+        processo.refresh_from_db()
+        self.assertEqual(processo.numero_relatorio, '4401')
+        self.assertEqual(str(processo.data_analise), '2026-04-11')
+        linha = LinhaControleRelatorio.objects.get(processo=processo)
+        self.assertEqual(linha.numero_relatorio, '4401')
+        self.assertEqual(str(linha.data_relatorio), '2026-04-11')
+
+        with self.assertRaises(relatorios.RelatorioInvalido):
+            relatorios.alterar_numero(self.analista_liq, processo.id, 4402)
+
+        self.client.force_login(self.analista_liq)
+        tela = self.client.get(reverse('analista_processo', args=[processo.id]))
+        self.assertContains(tela, 'Informar número do relatório')
+        self.assertContains(tela, 'Data deste número')
 
     def test_tela_analista_ve_planilha_admin_define_ultimo(self):
         processo = self.novo_processo(self.especie_liq, numero_processo='12/2026')
@@ -209,8 +236,8 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         segundo = self.novo_processo(self.especie_liq, numero_processo='21/2026')
         self._salvar_liquidacao(primeiro)
         self._salvar_liquidacao(segundo)
-        relatorios.alterar_numero(admin, primeiro.id, 1895)
-        relatorios.alterar_numero(admin, segundo.id, 1893)
+        relatorios.alterar_numero(admin, primeiro.id, 1895, '2026-05-01')
+        relatorios.alterar_numero(admin, segundo.id, 1893, '2026-05-02')
         numeros = [linha.numero_relatorio for linha in relatorios.listar(self.analista_liq)]
         self.assertEqual(numeros, ['1893', '1895'])
 

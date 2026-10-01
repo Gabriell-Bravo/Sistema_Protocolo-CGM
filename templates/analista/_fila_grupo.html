@@ -94,6 +94,12 @@
                                 </form>
                                 {% endif %}
                             {% else %}
+                                {% if not modo_gestao and processo.situacao_tramite == 'EM_ANALISE' and processo.nome_analista %}
+                                <span class="btn btn--ghost btn--sm" aria-disabled="true">
+                                    <span class="material-symbols-rounded">person</span>
+                                    {{ processo.nome_analista }}
+                                </span>
+                                {% endif %}
                                 <a href="{% url 'analista_processo' processo.id %}" class="btn btn--outline btn--sm">
                                     <span class="material-symbols-rounded">visibility</span>
                                     Ver

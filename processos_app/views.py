@@ -1232,10 +1232,11 @@ CAMPOS_ANALISE = [
 
 
 # item 37: filtros da Minha Fila. Os da Gestão atendem aos cards do Dashboard.
-# A fila do analista parte do que ele pode trabalhar; "Com o Controlador"
-# fica no contador (e abre só se clicar no card).
+# A fila do analista parte do que ele pode trabalhar e do que um colega
+# do grupo já assumiu. "Com o Controlador" fica no contador (e abre só
+# se clicar no card).
 FILTROS_ANALISTA = [
-    ('trabalho', 'Para trabalhar'),
+    ('trabalho', 'Fila'),
     ('disponiveis', 'Disponíveis'),
     ('comigo', 'Comigo'),
     ('direcionados', 'Direcionados para mim'),
@@ -1266,11 +1267,18 @@ def eh_trabalho_analista(processo, uid):
     return False
 
 
+def na_fila_analista(processo, uid):
+    """Lista padrão: o que ele trabalha e o que um colega do grupo já assumiu."""
+    if eh_trabalho_analista(processo, uid):
+        return True
+    return processo.situacao_tramite == 'EM_ANALISE'
+
+
 def filtrar_fila(processos, filtro, usuario, vencidos_so_trabalho=False):
     """Aplica um filtro da fila sobre processos já anotados (prazo e situação)."""
     uid = usuario.id
     regras = {
-        'trabalho': lambda p: eh_trabalho_analista(p, uid),
+        'trabalho': lambda p: na_fila_analista(p, uid),
         'disponiveis': lambda p: p.situacao_tramite == 'DISPONIVEL',
         'comigo': lambda p: p.situacao_tramite == 'EM_ANALISE' and p.analista_responsavel_id == uid,
         'direcionados': lambda p: (p.situacao_tramite == 'ASSINATURA_DIRECIONADA'
@@ -1619,6 +1627,8 @@ def analista_processo(request, process_id):
                      else None),
         'voltar_controle': bool(next_controle),
         'next_controle': next_controle,
+        'pode_editar_numero_relatorio': perm.pode_editar_numero_relatorio(
+            request.user, processo),
     })
 
 

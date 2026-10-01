@@ -682,6 +682,11 @@ html[data-theme="dark"] .theme-toggle .theme-icon--sun,
     color: var(--text);
 }
 
+.btn[aria-disabled="true"] {
+    pointer-events: none;
+    cursor: default;
+}
+
 .btn--sm {
     height: 30px;
     padding: 0 10px;

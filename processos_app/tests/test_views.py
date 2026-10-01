@@ -395,7 +395,7 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         self.assertContains(resposta, 'Em análise por')
         self.assertContains(resposta, processo.nome_analista)
 
-    def test_fila_padrao_esconde_o_que_esta_com_o_controlador(self):
+    def test_fila_padrao_mostra_quem_esta_analisando_e_esconde_o_controlador(self):
         disponivel = self.novo_processo(numero_processo='1001/2026')
         comigo = self.processo_em_analise()
         comigo.numero_processo = '1002/2026'
@@ -414,7 +414,12 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         self.assertContains(resposta, 'Com o Controlador')
         self.assertContains(resposta, '1001/2026')
         self.assertContains(resposta, '1002/2026')
-        self.assertNotContains(resposta, '1003/2026')
+        self.assertContains(resposta, '1003/2026')
+        self.assertContains(resposta, outro.nome_analista)
+        html_acoes = resposta.content.decode()
+        trecho_outro = html_acoes.split('1003/2026', 1)[1].split('</tr>', 1)[0]
+        self.assertIn(outro.nome_analista, trecho_outro)
+        self.assertNotIn('Assumir processo', trecho_outro)
         self.assertNotContains(resposta, '1004/2026')
 
         resposta = self.client.get(reverse('area_analista') + '?filtro=liberados')

@@ -276,9 +276,19 @@ def pode_definir_ultimo_relatorio(user):
     return eh_administrador(user)
 
 
-def pode_editar_numero_relatorio(user):
-    """Só o administrador corrige o número de um relatório já gerado."""
-    return eh_administrador(user)
+def pode_editar_numero_relatorio(user, processo=None):
+    """Administrador sempre; analista do grupo informa o próprio número."""
+    if eh_administrador(user):
+        return True
+    if processo is None or not is_analista(user):
+        return False
+    if processo.genero != GRUPO_LIQUIDACOES:
+        return False
+    if not pode_consultar_processo(user, processo):
+        return False
+    if processo.analista_responsavel_id == user.id:
+        return True
+    return bool(processo.numero_relatorio)
 
 
 def pode_editar_linha_relatorio(user, processo=None):
