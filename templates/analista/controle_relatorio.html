@@ -2,60 +2,68 @@
 
 {% block title %}Controle de relatório{% endblock %}
 {% block page_title %}Controle de relatório{% endblock %}
-{% block page_subtitle %}{% if pode_definir_ultimo %}Defina o último número, acompanhe as análises e destine números para depois.{% else %}Planilha das análises e números destinados para usar depois.{% endif %}{% endblock %}
+{% block page_subtitle %}{% if pode_definir_ultimo %}Defina o início da numeração de cada grupo, acompanhe as análises e destine números.{% else %}Planilha das análises e números destinados para usar depois.{% endif %}{% endblock %}
 
 {% block content %}
 <div class="stack">
 
+    {% if pode_destinar_numeros or pode_definir_ultimo %}
     <section class="filters">
         <div class="filters__chips">
-            <a href="?aba=analises{% if termo %}&termo={{ termo|urlencode }}{% endif %}"
-               class="chip {% if aba == 'analises' %}chip--ativo{% endif %}">
+            <a href="?aba={{ aba }}&secao=analises{% if termo %}&termo={{ termo|urlencode }}{% endif %}"
+               class="chip {% if secao == 'analises' %}chip--ativo{% endif %}">
                 Análises
                 <span class="chip__label">{{ total }}</span>
             </a>
             {% if pode_destinar_numeros %}
-            <a href="?aba=destinados"
-               class="chip {% if aba == 'destinados' %}chip--ativo{% endif %}">
+            <a href="?aba={{ aba }}&secao=destinados"
+               class="chip {% if secao == 'destinados' %}chip--ativo{% endif %}">
                 Números destinados
-                <span class="chip__label">{{ reservas|length }}</span>
+                <span class="chip__label">{{ total_reservas }}</span>
+            </a>
+            {% endif %}
+            {% if pode_definir_ultimo %}
+            <a href="?secao=numeracao"
+               class="chip {% if secao == 'numeracao' %}chip--ativo{% endif %}">
+                Numeração
+                <span class="chip__label">{{ estados_numeracao|length }}</span>
             </a>
             {% endif %}
         </div>
     </section>
+    {% endif %}
 
-    {% if aba == 'analises' %}
+    {% if secao == 'analises' %}
 
-        {% if pode_definir_ultimo %}
+        <section class="filters">
+            <div class="filters__chips">
+                {% for item in abas %}
+                <a href="?aba={{ item.codigo }}&secao=analises{% if termo %}&termo={{ termo|urlencode }}{% endif %}"
+                   class="chip {% if item.ativa %}chip--ativo{% endif %}">
+                    {{ item.nome }}
+                    <span class="chip__label">{{ item.total }}</span>
+                </a>
+                {% endfor %}
+            </div>
+        </section>
+
         <section class="card">
             <div class="card__header">
-                <span class="card__title">Último número de relatório</span>
-                <span class="card__hint">Somente o administrador altera</span>
+                <span class="card__title">{{ info_aba.nome }}</span>
+                <span class="card__hint">Grupo de numeração · próximo nº {{ sequencia.proximo }}</span>
             </div>
-            <form method="post" action="{% url 'controle_relatorio_ultimo' %}" class="card__body">
-                {% csrf_token %}
-                <div class="form-grid">
-                    <div class="field">
-                        <label class="field__label" for="ultimo_numero">Último número já usado</label>
-                        <input type="number" min="0" id="ultimo_numero" name="ultimo_numero"
-                               class="input" value="{{ sequencia.ultimo }}" required>
-                        <span class="field__hint">O próximo relatório salvo receberá o nº {{ sequencia.proximo }}.</span>
-                    </div>
-                </div>
-                <div class="form-actions" style="margin-top:14px;">
-                    <button type="submit" class="btn btn--primary">
-                        <span class="material-symbols-rounded">save</span>
-                        Salvar número
-                    </button>
-                </div>
-            </form>
+            <div class="card__body">
+                <p style="margin:0; color:var(--text-muted, #5b6472); line-height:1.45;">
+                    {{ info_aba.resumo }}
+                </p>
+            </div>
         </section>
-        {% endif %}
 
         <section class="filters">
             <div class="filters__bar">
                 <form method="get" class="search">
-                    <input type="hidden" name="aba" value="analises">
+                    <input type="hidden" name="aba" value="{{ aba }}">
+                    <input type="hidden" name="secao" value="analises">
                     <div class="search__field">
                         <span class="material-symbols-rounded search__icon">search</span>
                         <input type="text" name="termo" class="input"
@@ -69,7 +77,7 @@
 
         <section class="table-card">
             <div class="table-card__header">
-                <span class="table-card__title">Planilha de relatórios</span>
+                <span class="table-card__title">Planilha — {{ info_aba.nome }}</span>
                 <span class="table-card__count">{{ total }} linha{{ total|pluralize:"s" }}</span>
             </div>
             <div class="table-scroll">
@@ -116,7 +124,7 @@
                             <td class="cell-wrap">{{ linha.observacao|truncatechars:60|default:"—" }}</td>
                             <td class="col-actions">
                                 {% if linha.processo_id %}
-                                <a href="{% url 'analista_processo' linha.processo_id %}?next={% url 'controle_relatorio' %}"
+                                <a href="{% url 'analista_processo' linha.processo_id %}?next={% url 'controle_relatorio' %}%3Faba%3D{{ aba }}%26secao%3Danalises"
                                    class="icon-btn icon-btn--primary" title="Editar análise">
                                     <span class="material-symbols-rounded">edit</span>
                                 </a>
@@ -128,8 +136,8 @@
                             <td colspan="14">
                                 <div class="empty empty--compact">
                                     <span class="material-symbols-rounded">table_chart</span>
-                                    <div class="empty__title">Nenhuma linha registrada</div>
-                                    <div>Quando o analista salvar a análise de um processo que gera relatório, a linha aparece aqui.</div>
+                                    <div class="empty__title">Nenhuma linha neste grupo</div>
+                                    <div>Quando o analista salvar a análise de uma espécie deste grupo, a linha aparece aqui.</div>
                                 </div>
                             </td>
                         </tr>
@@ -140,16 +148,27 @@
             {% include "includes/paginacao.html" with pagina=pagina %}
         </section>
 
-    {% elif aba == 'destinados' and pode_destinar_numeros %}
+    {% elif secao == 'destinados' and pode_destinar_numeros %}
 
         <section class="card">
             <div class="card__header">
                 <span class="card__title">Destinar números</span>
-                <span class="card__hint">Guarde uma faixa com data para usar depois na análise</span>
+                <span class="card__hint">Escolha o grupo, a faixa e a data para usar depois na análise</span>
             </div>
             <form method="post" action="{% url 'controle_relatorio_destinar' %}" class="card__body">
                 {% csrf_token %}
                 <div class="form-grid">
+                    <div class="field">
+                        <label class="field__label" for="grupo_destino">Grupo de numeração</label>
+                        <select id="grupo_destino" name="grupo" class="input" required>
+                            {% for item in grupos_destino %}
+                            <option value="{{ item.codigo }}" {% if item.codigo == aba %}selected{% endif %}>
+                                {{ item.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <span class="field__hint">O número só poderá ser usado em análises desse grupo.</span>
+                    </div>
                     <div class="field">
                         <label class="field__label" for="numero_inicial">Do número</label>
                         <input type="number" min="1" id="numero_inicial" name="numero_inicial"
@@ -175,9 +194,33 @@
             </form>
         </section>
 
+        <section class="filters">
+            <div class="filters__chips">
+                {% for item in abas_reserva %}
+                <a href="?aba={{ item.codigo }}&secao=destinados"
+                   class="chip {% if item.ativa %}chip--ativo{% endif %}">
+                    {{ item.nome }}
+                    <span class="chip__label">{{ item.total }}</span>
+                </a>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="card">
+            <div class="card__header">
+                <span class="card__title">{{ info_aba.nome }}</span>
+                <span class="card__hint">Números destinados neste grupo</span>
+            </div>
+            <div class="card__body">
+                <p style="margin:0; color:var(--text-muted, #5b6472); line-height:1.45;">
+                    {{ info_aba.resumo }}
+                </p>
+            </div>
+        </section>
+
         <section class="table-card">
             <div class="table-card__header">
-                <span class="table-card__title">Números destinados</span>
+                <span class="table-card__title">Reservados — {{ info_aba.nome }}</span>
                 <span class="table-card__count">{{ reservas|length }} número{{ reservas|length|pluralize:"s" }}</span>
             </div>
             <div class="table-scroll">
@@ -186,6 +229,7 @@
                         <tr>
                             <th>Nº destinado</th>
                             <th>Data</th>
+                            <th>Grupo</th>
                             <th>Destinado por</th>
                             <th>Em</th>
                             <th class="col-actions">Ações</th>
@@ -196,12 +240,14 @@
                         <tr>
                             <td><strong>{{ reserva.numero }}</strong></td>
                             <td>{{ reserva.data|date:"d/m/Y" }}</td>
+                            <td>{{ info_aba.nome }}</td>
                             <td>{{ reserva.criado_por.get_full_name|default:reserva.criado_por.username|default:"—" }}</td>
                             <td>{{ reserva.criado_em|date:"d/m/Y H:i" }}</td>
                             <td class="col-actions">
                                 <form method="post" action="{% url 'controle_relatorio_cancelar_destino' reserva.id %}"
                                       onsubmit="return confirm('Cancelar o destino do nº {{ reserva.numero }}?');">
                                     {% csrf_token %}
+                                    <input type="hidden" name="grupo" value="{{ aba }}">
                                     <button type="submit" class="icon-btn icon-btn--danger" title="Cancelar destino">
                                         <span class="material-symbols-rounded">bookmark_remove</span>
                                     </button>
@@ -210,12 +256,74 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="5">
+                            <td colspan="6">
                                 <div class="empty empty--compact">
                                     <span class="material-symbols-rounded">bookmark</span>
-                                    <div class="empty__title">Nenhum número destinado</div>
-                                    <div>Quando houver uma faixa guardada, ela aparece aqui até ser usada na análise.</div>
+                                    <div class="empty__title">Nenhum número destinado em {{ info_aba.nome }}</div>
+                                    <div>Escolha o grupo no formulário acima e destine uma faixa para ela aparecer aqui.</div>
                                 </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    {% elif secao == 'numeracao' and pode_definir_ultimo %}
+
+        <section class="card">
+            <div class="card__header">
+                <span class="card__title">Início da numeração por grupo</span>
+                <span class="card__hint">Somente o administrador altera</span>
+            </div>
+            <div class="card__body">
+                <p style="margin:0 0 12px; color:var(--text-muted, #5b6472); line-height:1.45;">
+                    Informe o último número já usado em cada grupo. O próximo relatório salvo
+                    daquele grupo receberá o número seguinte.
+                </p>
+            </div>
+        </section>
+
+        <section class="table-card">
+            <div class="table-card__header">
+                <span class="table-card__title">Sequências</span>
+                <span class="table-card__count">{{ estados_numeracao|length }} grupo{{ estados_numeracao|length|pluralize:"s" }}</span>
+            </div>
+            <div class="table-scroll">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Grupo</th>
+                            <th>Espécies</th>
+                            <th>Último nº usado</th>
+                            <th>Próximo nº</th>
+                            <th class="col-actions">Salvar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in estados_numeracao %}
+                        <tr>
+                            <td><strong>{{ item.nome }}</strong></td>
+                            <td class="cell-wrap">{{ item.resumo }}</td>
+                            <td>
+                                <form method="post" action="{% url 'controle_relatorio_ultimo' %}"
+                                      id="form-num-{{ item.codigo }}" class="inline-form">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="grupo" value="{{ item.codigo }}">
+                                    <input type="number" min="0" name="ultimo_numero"
+                                           class="input" value="{{ item.ultimo }}" required
+                                           style="max-width:8rem;"
+                                           aria-label="Último número de {{ item.nome }}">
+                                </form>
+                            </td>
+                            <td>{{ item.proximo }}</td>
+                            <td class="col-actions">
+                                <button type="submit" form="form-num-{{ item.codigo }}"
+                                        class="icon-btn icon-btn--primary"
+                                        title="Salvar numeração de {{ item.nome }}">
+                                    <span class="material-symbols-rounded">save</span>
+                                </button>
                             </td>
                         </tr>
                         {% endfor %}

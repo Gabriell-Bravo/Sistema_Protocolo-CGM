@@ -1632,7 +1632,9 @@ def analista_processo(request, process_id):
         'pode_editar_numero_relatorio': perm.pode_editar_numero_relatorio(
             request.user, processo),
         'reservas_numero_mapa': json.dumps(
-            svc_relatorios.reservas_abertas_mapa(processo.genero)
+            svc_relatorios.reservas_abertas_mapa(
+                svc_relatorios.sequencia_do_processo(processo)
+                or svc_relatorios.GRUPO_PADRAO)
             if processo.genero == 'LIQUIDACOES' else {}
         ),
     })

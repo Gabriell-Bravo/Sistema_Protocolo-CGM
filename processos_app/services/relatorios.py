@@ -1,18 +1,14 @@
 # processos_app/services/relatorios.py
 """Controle de relatório: sequência numérica e planilha das análises.
 
-O administrador informa o último número já usado. O número é gerado
-quando o analista salva a análise. Correções da análise saem pelo lápis
-da planilha, na tela do processo. O administrador também corrige o
-número, mesmo já emitido.
-
-A geração automática não repete um número que ainda está numa análise.
-Declinar devolve o número: o próximo salvamento usa esse, não o seguinte.
+Cada espécie de Liquidações pertence a uma sequência de numeração
+(Liquidação, Adiantamento, Bolsa Atleta…). O administrador informa o
+último número de cada sequência. O número é gerado ao salvar a análise.
 """
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import IntegerField
+from django.db.models import Count, IntegerField, Q
 from django.db.models.functions import Cast
 from django.utils import timezone
 
@@ -24,21 +20,161 @@ from .eventos import registrar_diff
 from .processos import converter_data
 
 
+# Código legado da sequência geral (continua no banco como LIQUIDACOES).
 GRUPO_PADRAO = perm.GRUPO_LIQUIDACOES
 LIMITE_DESTINO = 80
+
+SEQUENCIAS = (
+    {
+        'codigo': GRUPO_PADRAO,
+        'nome': 'Liquidação',
+        'especies': (
+            'Pagamento Geral',
+            'Reanálise',
+        ),
+        'resumo': 'Inclui (Pagamento Geral; Reanálise).',
+    },
+    {
+        'codigo': 'ADIANTAMENTO',
+        'nome': 'Adiantamento',
+        'especies': (
+            'Concessão Adiantamento',
+            'P.C. Adiantamento',
+        ),
+        'resumo': 'Inclui (Concessão Adiantamento; P.C. Adiantamento).',
+    },
+    {
+        'codigo': 'COTA_PATROCINIO',
+        'nome': 'Cota Patrocínio',
+        'especies': (
+            'Concessão Patrocínio',
+            'P.C. Patrocínio',
+        ),
+        'resumo': 'Inclui (Concessão Patrocínio; P.C. Patrocínio).',
+    },
+    {
+        'codigo': 'SUBVENCAO',
+        'nome': 'Subvenção',
+        'especies': (
+            'Subvenção Social - Concessão',
+            'Subvenção Social - Pagamento',
+            'Subvenção Social - Prestação de Contas',
+            'Subvenção Social - P.C. Anual',
+            'Subvenção Social - Renovação',
+        ),
+        'resumo': (
+            'Inclui (Subvenção Social - Concessão; Subvenção Social - Pagamento; '
+            'Subvenção Social - Prestação de Contas; Subvenção Social - P.C. Anual; '
+            'Subvenção Social - Renovação).'
+        ),
+    },
+    {
+        'codigo': 'ALUGUEL_SOCIAL',
+        'nome': 'Aluguel Social',
+        'especies': (
+            'Concessão Aux. Aluguel Social',
+        ),
+        'resumo': 'Inclui (Concessão Aux. Aluguel Social).',
+    },
+    {
+        'codigo': 'BOLSA_ATLETA',
+        'nome': 'Bolsa Atleta',
+        'especies': (
+            'Concessão Aux. Bolsa Atleta',
+            'P.C. Bolsa Atleta',
+        ),
+        'resumo': 'Inclui (Concessão Aux. Bolsa Atleta; P.C. Bolsa Atleta).',
+    },
+    {
+        'codigo': 'AUXILIO_COMPETICAO',
+        'nome': 'Auxílio Competição',
+        'especies': (),
+        'resumo': (
+            'Inclui (Auxílio Competição — ajuda de custo). '
+            'Espécie ainda não cadastrada no sistema.'
+        ),
+    },
+    {
+        'codigo': 'DIARIA',
+        'nome': 'Diária',
+        'especies': (
+            'Concessão Diária',
+        ),
+        'resumo': 'Inclui (Concessão Diária).',
+    },
+    {
+        'codigo': 'BLOCOS_CARNAVALESCOS',
+        'nome': 'Blocos carnavalescos',
+        'especies': (
+            'Subvenção Bloco Carnaval',
+            'P.C. Subvenção Bloco Carnaval',
+        ),
+        'resumo': (
+            'Inclui (Subvenção Bloco Carnaval; '
+            'P.C. Subvenção Bloco Carnaval).'
+        ),
+    },
+)
+
+_SEQUENCIA_POR_CODIGO = {item['codigo']: item for item in SEQUENCIAS}
+_ESPECIE_PARA_SEQUENCIA = {
+    nome.casefold(): item['codigo']
+    for item in SEQUENCIAS
+    for nome in item['especies']
+}
 
 
 class RelatorioInvalido(ValidationError):
     """Dados recusados no controle de relatório."""
 
 
+def _chave(texto):
+    return (texto or '').strip().casefold()
+
+
+def _proximo_padrao(sequencia):
+    return 1540 if sequencia == GRUPO_PADRAO else 1
+
+
+def sequencias_disponiveis():
+    return list(SEQUENCIAS)
+
+
+def sequencia_valida(codigo):
+    return codigo in _SEQUENCIA_POR_CODIGO
+
+
+def info_sequencia(codigo):
+    return _SEQUENCIA_POR_CODIGO.get(
+        codigo or GRUPO_PADRAO, _SEQUENCIA_POR_CODIGO[GRUPO_PADRAO])
+
+
+def nome_especie_processo(processo):
+    if processo.especie_fk_id and processo.especie_fk:
+        return processo.especie_fk.nome or ''
+    return processo.especie or ''
+
+
+def sequencia_do_processo(processo):
+    """Código da sequência de numeração conforme a espécie."""
+    if not especie_gera_relatorio(processo):
+        return None
+    mapeada = _ESPECIE_PARA_SEQUENCIA.get(_chave(nome_especie_processo(processo)))
+    if mapeada:
+        return mapeada
+    if processo.genero == perm.GRUPO_LIQUIDACOES:
+        return GRUPO_PADRAO
+    return None
+
+
 def estado_sequencia(grupo=GRUPO_PADRAO):
     seq = SequenciaRelatorio.objects.filter(grupo=grupo).first()
-    proximo = seq.proximo_numero if seq else 1540
+    proximo = seq.proximo_numero if seq else _proximo_padrao(grupo)
     return {
         'grupo': grupo,
         'proximo': proximo,
         'ultimo': max(proximo - 1, 0),
+        'nome': info_sequencia(grupo)['nome'],
     }
 
 
@@ -56,6 +192,12 @@ def _inteiro(bruto):
         return None
 
 
+def filtro_sequencia(grupo):
+    if grupo == GRUPO_PADRAO:
+        return Q(sequencia=grupo) | Q(sequencia='', grupo=GRUPO_PADRAO)
+    return Q(sequencia=grupo)
+
+
 def _numeros_reservados(grupo):
     return set(
         ReservaNumeroRelatorio.objects.filter(grupo=grupo, processo__isnull=True)
@@ -68,6 +210,21 @@ def reservas_abertas(grupo=GRUPO_PADRAO):
             .filter(grupo=grupo, processo__isnull=True)
             .select_related('criado_por')
             .order_by('numero', 'id'))
+
+
+def contagens_reservas_por_sequencia():
+    totais = {item['codigo']: 0 for item in SEQUENCIAS}
+    for linha in (ReservaNumeroRelatorio.objects
+                  .filter(processo__isnull=True)
+                  .values('grupo')
+                  .annotate(n=Count('id'))):
+        if linha['grupo'] in totais:
+            totais[linha['grupo']] += linha['n']
+    return totais
+
+
+def total_reservas_abertas():
+    return ReservaNumeroRelatorio.objects.filter(processo__isnull=True).count()
 
 
 def reservas_abertas_mapa(grupo=GRUPO_PADRAO):
@@ -90,7 +247,8 @@ def _liberar_reservas_do_processo(processo):
 
 def _consumir_reserva(processo, numero):
     _liberar_reservas_do_processo(processo)
-    reserva = reserva_do_numero(numero, processo.genero or GRUPO_PADRAO)
+    sequencia = sequencia_do_processo(processo) or GRUPO_PADRAO
+    reserva = reserva_do_numero(numero, sequencia)
     if reserva is None:
         return
     reserva.processo = processo
@@ -99,23 +257,17 @@ def _consumir_reserva(processo, numero):
 
 
 def numeros_usados(grupo, ignorar=None):
-    """Números ainda presos a uma análise. Linha desvinculada está livre."""
+    """Números ainda presos a uma análise nesta sequência."""
     ignorar = set(ignorar or ())
     usados = set()
-    fontes = (
-        Processo.objects.filter(genero=grupo)
-            .exclude(numero_relatorio__isnull=True)
-            .exclude(numero_relatorio='')
-            .values_list('numero_relatorio', flat=True),
-        LinhaControleRelatorio.objects.filter(grupo=grupo, processo__isnull=False)
-            .exclude(numero_relatorio='')
-            .values_list('numero_relatorio', flat=True),
-    )
-    for lista in fontes:
-        for bruto in lista:
-            numero = _inteiro(bruto)
-            if numero:
-                usados.add(numero)
+    for bruto in (LinhaControleRelatorio.objects
+                  .filter(processo__isnull=False)
+                  .filter(filtro_sequencia(grupo))
+                  .exclude(numero_relatorio='')
+                  .values_list('numero_relatorio', flat=True)):
+        numero = _inteiro(bruto)
+        if numero:
+            usados.add(numero)
     return usados - ignorar
 
 
@@ -123,7 +275,8 @@ def _numeros_devolvidos(grupo, usados):
     """Números de análises desistidas, ainda não reaproveitados."""
     livres = []
     for bruto in (LinhaControleRelatorio.objects
-                  .filter(grupo=grupo, processo__isnull=True)
+                  .filter(processo__isnull=True)
+                  .filter(filtro_sequencia(grupo))
                   .exclude(numero_relatorio='')
                   .values_list('numero_relatorio', flat=True)):
         numero = _inteiro(bruto)
@@ -138,6 +291,8 @@ def definir_ultimo_numero(usuario, ultimo, grupo=GRUPO_PADRAO):
     perm.assert_permissao(
         perm.pode_definir_ultimo_relatorio(usuario),
         'Somente o administrador define o último número de relatório.')
+    if not sequencia_valida(grupo):
+        raise RelatorioInvalido('Sequência de relatório inválida.')
     try:
         ultimo = int(str(ultimo).strip())
     except (TypeError, ValueError):
@@ -150,22 +305,23 @@ def definir_ultimo_numero(usuario, ultimo, grupo=GRUPO_PADRAO):
     seq.proximo_numero = ultimo + 1
     seq.save(update_fields=['proximo_numero'])
     LinhaControleRelatorio.objects.filter(
-        grupo=grupo, processo__isnull=True).delete()
+        processo__isnull=True
+    ).filter(filtro_sequencia(grupo)).delete()
     return estado_sequencia(grupo)
 
 
 def proximo_numero(grupo):
     """Trava a sequência para dois salvamentos não saírem iguais."""
     SequenciaRelatorio.objects.get_or_create(
-        grupo=grupo, defaults={'proximo_numero': 1540})
+        grupo=grupo, defaults={'proximo_numero': _proximo_padrao(grupo)})
     seq = SequenciaRelatorio.objects.select_for_update().get(grupo=grupo)
     usados = numeros_usados(grupo) | _numeros_reservados(grupo)
     livres = _numeros_devolvidos(grupo, usados)
     if livres:
         numero = min(livres)
         LinhaControleRelatorio.objects.filter(
-            grupo=grupo, processo__isnull=True, numero_relatorio=str(numero)
-        ).delete()
+            processo__isnull=True, numero_relatorio=str(numero)
+        ).filter(filtro_sequencia(grupo)).delete()
         return str(numero)
 
     numero = int(seq.proximo_numero or 1)
@@ -188,7 +344,10 @@ def atribuir_se_preciso(processo):
     if processo.numero_relatorio:
         registrar(processo)
         return False
-    processo.numero_relatorio = proximo_numero(processo.genero)
+    sequencia = sequencia_do_processo(processo)
+    if not sequencia:
+        return False
+    processo.numero_relatorio = proximo_numero(sequencia)
     registrar(processo)
     return True
 
@@ -212,6 +371,7 @@ def alterar_numero(usuario, processo_id, novo, data=None):
         'Somente o analista do grupo e o administrador alteram o número.')
     if not especie_gera_relatorio(processo):
         raise RelatorioInvalido('Esta espécie não gera número de relatório.')
+    sequencia = sequencia_do_processo(processo) or GRUPO_PADRAO
     try:
         novo = int(str(novo).strip())
     except (TypeError, ValueError):
@@ -223,7 +383,7 @@ def alterar_numero(usuario, processo_id, novo, data=None):
     except ValidationError as exc:
         raise RelatorioInvalido('; '.join(exc.messages))
     if data_analise is None:
-        reserva = reserva_do_numero(novo, processo.genero or GRUPO_PADRAO)
+        reserva = reserva_do_numero(novo, sequencia)
         if reserva is not None:
             data_analise = reserva.data
     if data_analise is None:
@@ -237,7 +397,7 @@ def alterar_numero(usuario, processo_id, novo, data=None):
         processo.numero_relatorio = str(novo)
         campos.append('numero_relatorio')
         seq, _ = SequenciaRelatorio.objects.select_for_update().get_or_create(
-            grupo=processo.genero or GRUPO_PADRAO,
+            grupo=sequencia,
             defaults={'proximo_numero': novo + 1})
         if int(seq.proximo_numero or 0) <= novo:
             seq.proximo_numero = novo + 1
@@ -256,6 +416,8 @@ def alterar_numero(usuario, processo_id, novo, data=None):
 
     if campos:
         processo.save(update_fields=campos)
+        registrar(processo)
+    else:
         registrar(processo)
     _consumir_reserva(processo, novo)
     return processo
@@ -277,7 +439,7 @@ def remover_do_processo(processo):
     _liberar_reservas_do_processo(processo)
 
 
-def listar(usuario):
+def listar(usuario, sequencia=None):
     consulta = LinhaControleRelatorio.objects.filter(processo__isnull=False)
     if perm.eh_administrador(usuario) or perm.is_gestao(usuario):
         pass
@@ -289,9 +451,22 @@ def listar(usuario):
             return consulta.none()
     else:
         return consulta.none()
+    if sequencia:
+        consulta = consulta.filter(filtro_sequencia(sequencia))
     return consulta.annotate(
         numero_ordem=Cast('numero_relatorio', IntegerField())
     ).order_by('numero_ordem', 'id')
+
+
+def contagens_por_sequencia(usuario):
+    base = listar(usuario)
+    totais = {item['codigo']: 0 for item in SEQUENCIAS}
+    for linha in base.values('sequencia', 'grupo').annotate(n=Count('id')):
+        codigo = linha['sequencia'] or (
+            GRUPO_PADRAO if linha['grupo'] == GRUPO_PADRAO else '')
+        if codigo in totais:
+            totais[codigo] += linha['n']
+    return totais
 
 
 def _dados_da_linha(processo):
@@ -311,6 +486,7 @@ def _dados_da_linha(processo):
         'status_analise': processo.status_analise or '',
         'observacao': processo.observacao or '',
         'grupo': processo.genero or '',
+        'sequencia': sequencia_do_processo(processo) or GRUPO_PADRAO,
     }
 
 
@@ -320,6 +496,8 @@ def destinar_numeros(usuario, inicio, fim, data, grupo=GRUPO_PADRAO):
     perm.assert_permissao(
         perm.pode_destinar_numeros_relatorio(usuario),
         'Somente analista de Liquidações e o administrador destinam números.')
+    if not sequencia_valida(grupo):
+        raise RelatorioInvalido('Sequência de relatório inválida.')
     try:
         inicio = int(str(inicio).strip())
         fim = int(str(fim).strip())
@@ -369,4 +547,3 @@ def cancelar_destino(usuario, reserva_id):
         raise RelatorioInvalido('Este número já foi usado numa análise.')
     reserva.delete()
     return reserva.numero
-

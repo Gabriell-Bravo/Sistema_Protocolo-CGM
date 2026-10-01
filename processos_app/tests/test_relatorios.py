@@ -207,29 +207,45 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.client.force_login(self.analista_liq)
         pagina = self.client.get(reverse('controle_relatorio'))
         self.assertEqual(pagina.status_code, 200)
-        self.assertContains(pagina, 'Planilha de relatórios')
-        self.assertNotContains(pagina, 'Último número já usado')
+        self.assertContains(pagina, 'Planilha — Liquidação')
+        self.assertContains(pagina, 'Bolsa Atleta')
+        self.assertContains(pagina, 'Inclui (Pagamento Geral; Reanálise).')
+        self.assertNotContains(pagina, 'Último nº usado')
+        self.assertNotContains(pagina, 'Início da numeração')
         self.assertContains(pagina, 'Números destinados')
         self.assertContains(pagina, 'Análises')
         self.assertNotContains(pagina, 'Do número')
         self.assertContains(pagina, processo.numero_relatorio)
         self.assertContains(pagina, '12/2026')
         self.assertContains(pagina, 'Editar análise')
-        self.assertContains(
-            pagina,
-            f"{reverse('analista_processo', args=[processo.id])}"
-            f"?next={reverse('controle_relatorio')}")
         self.assertNotContains(pagina, 'name="valor"')
         self.assertNotContains(pagina, 'name="numero_relatorio"')
 
         admin = criar_usuario('admin_rel2', 'GESTAO', is_superuser=True)
         self.client.force_login(admin)
         pagina = self.client.get(reverse('controle_relatorio'))
-        self.assertContains(pagina, 'Último número já usado')
+        self.assertContains(pagina, 'Numeração')
         self.assertContains(pagina, '12/2026')
         self.assertContains(pagina, 'Editar análise')
         self.assertNotContains(pagina, 'name="numero_relatorio"')
         self.assertNotContains(pagina, 'name="valor"')
+
+        numeracao = self.client.get(
+            reverse('controle_relatorio') + '?secao=numeracao')
+        self.assertContains(numeracao, 'Início da numeração por grupo')
+        self.assertContains(numeracao, 'Último nº usado')
+        self.assertContains(numeracao, 'Bolsa Atleta')
+        self.assertContains(numeracao, 'Adiantamento')
+        self.assertContains(numeracao, 'name="ultimo_numero"')
+        resposta = self.client.post(reverse('controle_relatorio_ultimo'), {
+            'grupo': 'BOLSA_ATLETA',
+            'ultimo_numero': '50',
+        })
+        self.assertRedirects(
+            resposta,
+            reverse('controle_relatorio') + '?aba=BOLSA_ATLETA&secao=numeracao')
+        self.assertEqual(
+            relatorios.estado_sequencia('BOLSA_ATLETA')['proximo'], 51)
 
     def test_analista_corrige_pela_tela_da_analise(self):
         processo = self.novo_processo(self.especie_liq, numero_processo='18/2026')
@@ -297,13 +313,82 @@ class ControleRelatorioTest(BaseProcessoTestCase):
                 self.analista_lic, 6000, 6001, '2026-06-21')
 
         self.client.force_login(self.analista_liq)
-        pagina = self.client.get(reverse('controle_relatorio') + '?aba=destinados')
+        pagina = self.client.get(
+            reverse('controle_relatorio') + '?aba=destinados')
         self.assertContains(pagina, '5001')
         self.assertContains(pagina, '20/06/2026')
         self.assertContains(pagina, 'Destinar números')
-        self.assertNotContains(pagina, 'Planilha de relatórios')
+        self.assertContains(pagina, 'Grupo de numeração')
+        self.assertContains(pagina, 'name="grupo"')
+        self.assertContains(pagina, 'Bolsa Atleta')
+        self.assertNotContains(pagina, 'Planilha — Liquidação')
         tela = self.client.get(reverse('analista_processo', args=[processo.id]))
         self.assertContains(tela, '"5001": "2026-06-20"')
+
+        relatorios.destinar_numeros(
+            self.analista_liq, 11, 12, '2026-08-01', grupo='BOLSA_ATLETA')
+        aba_bolsa = self.client.get(
+            reverse('controle_relatorio') + '?aba=BOLSA_ATLETA&secao=destinados')
+        self.assertContains(aba_bolsa, '11')
+        self.assertContains(aba_bolsa, '12')
+        self.assertContains(aba_bolsa, '01/08/2026')
+        self.assertContains(aba_bolsa, 'Reservados — Bolsa Atleta')
+        self.assertNotContains(aba_bolsa, '5001')
+        aba_liq = self.client.get(
+            reverse('controle_relatorio') + '?aba=LIQUIDACOES&secao=destinados')
+        self.assertContains(aba_liq, '5001')
+        self.assertNotContains(aba_liq, '>11</strong>')
+
+    def test_especies_usam_sequencias_separadas_e_abas(self):
+        from processos_app.models import EspecieProcesso
+
+        bolsa, _ = EspecieProcesso.objects.get_or_create(
+            nome='Concessão Aux. Bolsa Atleta', grupo='LIQUIDACOES',
+            defaults={'ativo': True, 'gera_relatorio': True})
+        bolsa.gera_relatorio = True
+        bolsa.ativo = True
+        bolsa.save(update_fields=['gera_relatorio', 'ativo'])
+        diaria, _ = EspecieProcesso.objects.get_or_create(
+            nome='Concessão Diária', grupo='LIQUIDACOES',
+            defaults={'ativo': True, 'gera_relatorio': True})
+        diaria.gera_relatorio = True
+        diaria.ativo = True
+        diaria.save(update_fields=['gera_relatorio', 'ativo'])
+        admin = criar_usuario('admin_seq', 'GESTAO', is_superuser=True)
+        relatorios.definir_ultimo_numero(admin, 100, grupo='LIQUIDACOES')
+        relatorios.definir_ultimo_numero(admin, 10, grupo='BOLSA_ATLETA')
+        relatorios.definir_ultimo_numero(admin, 20, grupo='DIARIA')
+
+        liquidacao = self.novo_processo(self.especie_liq, numero_processo='60/2026')
+        processo_bolsa = self.novo_processo(bolsa, numero_processo='61/2026')
+        processo_diaria = self.novo_processo(diaria, numero_processo='62/2026')
+        self._salvar_liquidacao(liquidacao)
+        self._salvar_liquidacao(processo_bolsa)
+        self._salvar_liquidacao(processo_diaria)
+
+        self.assertEqual(liquidacao.numero_relatorio, '101')
+        self.assertEqual(processo_bolsa.numero_relatorio, '11')
+        self.assertEqual(processo_diaria.numero_relatorio, '21')
+        self.assertEqual(
+            LinhaControleRelatorio.objects.get(processo=processo_bolsa).sequencia,
+            'BOLSA_ATLETA')
+        self.assertEqual(
+            LinhaControleRelatorio.objects.get(processo=processo_diaria).sequencia,
+            'DIARIA')
+
+        self.client.force_login(self.analista_liq)
+        aba_bolsa = self.client.get(
+            reverse('controle_relatorio') + '?aba=BOLSA_ATLETA')
+        self.assertContains(aba_bolsa, 'Bolsa Atleta')
+        self.assertContains(
+            aba_bolsa, 'Inclui (Concessão Aux. Bolsa Atleta; P.C. Bolsa Atleta).')
+        self.assertContains(aba_bolsa, '61/2026')
+        self.assertNotContains(aba_bolsa, '60/2026')
+        self.assertNotContains(aba_bolsa, '62/2026')
+
+        aba_liq = self.client.get(reverse('controle_relatorio'))
+        self.assertContains(aba_liq, '60/2026')
+        self.assertNotContains(aba_liq, '61/2026')
 
     def test_planilha_ordena_por_numero_de_relatorio(self):
         admin = criar_usuario('admin_ord', 'GESTAO', is_superuser=True)

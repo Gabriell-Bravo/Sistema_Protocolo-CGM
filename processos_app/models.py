@@ -760,6 +760,9 @@ class LinhaControleRelatorio(models.Model):
         max_length=50, blank=True, verbose_name="Status da análise")
     observacao = models.TextField(blank=True, verbose_name="Observação")
     grupo = models.CharField(max_length=50, blank=True, db_index=True, verbose_name="Grupo")
+    sequencia = models.CharField(
+        max_length=50, blank=True, db_index=True,
+        verbose_name="Sequência de numeração")
     registrado_em = models.DateTimeField(auto_now_add=True, verbose_name="Registrado em")
     atualizado_em = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
 
