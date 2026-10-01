@@ -316,6 +316,11 @@ def pode_cancelar_processo(user):
     return is_gestao(user)
 
 
+def pode_apagar_processo(user):
+    """Exclusão do registro. Só o administrador, e só em processo ativo."""
+    return eh_administrador(user)
+
+
 def pode_editar_cadastros(user):
     """itens 19 a 22: cadastros parametrizáveis são mantidos pela Gestão."""
     return is_gestao(user)

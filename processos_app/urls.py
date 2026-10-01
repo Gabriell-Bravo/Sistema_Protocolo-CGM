@@ -26,6 +26,7 @@ urlpatterns = [
     path('get_process_by_number/<str:numero_processo>',
          views.get_process_by_number, name='get_process_by_number'),
     path('deletar/<int:id>', views.deletar_processo, name='deletar_processo'),
+    path('apagar/<int:id>', views.apagar_processo, name='apagar_processo'),
     path('processo/<int:process_id>/concluir_monitoramento/',
          views.concluir_monitoramento, name='concluir_monitoramento'),
     path('processo/<int:process_id>/marcar_saida/',

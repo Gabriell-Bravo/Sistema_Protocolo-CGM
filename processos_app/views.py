@@ -459,6 +459,7 @@ def listar_processos(request):
         # item 51: só o Protocolo corrige dados de protocolo nesta tela
         'can_edit': perm.is_protocolo(request.user),
         'can_delete': perm.pode_cancelar_processo(request.user),
+        'can_apagar': perm.pode_apagar_processo(request.user),
         'can_mark_saida': pode_saida,
         'can_create_process': perm.pode_cadastrar_processo(request.user),
         'pode_desfazer': perm.pode_desfazer_tramite(request.user),
@@ -524,6 +525,20 @@ def deletar_processo(request, id):
     except Exception as exc:
         return _erro_json(exc)
     return JsonResponse({'success': True, 'message': 'Processo cancelado. O registro foi preservado no histórico.'})
+
+
+@login_required
+@require_POST
+def apagar_processo(request, id):
+    """Administrador exclui um processo que ainda está ativo."""
+    try:
+        numero = tramitacao.apagar_processo(id, request.user)
+    except Exception as exc:
+        return _erro_json(exc)
+    return JsonResponse({
+        'success': True,
+        'message': f'Processo {numero} excluído.',
+    })
 
 
 def montar_passagens(processo):

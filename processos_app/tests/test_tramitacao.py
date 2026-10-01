@@ -416,6 +416,47 @@ class DestinoPrioridadeCancelamentoTest(BaseProcessoTestCase):
         self.assertFalse(tramitacao.finalizados().filter(id=processo.id).exists())
 
 
+class ApagarProcessoTest(BaseProcessoTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.admin = self.gestao
+        self.admin.is_superuser = True
+        self.admin.save(update_fields=['is_superuser'])
+
+    def test_admin_exclui_processo_ativo_e_libera_o_relatorio(self):
+        from processos_app.models import LinhaControleRelatorio
+        from processos_app.services.relatorios import registrar
+
+        processo = self.novo_processo(
+            self.especie_liq, numero_processo='3001/2026')
+        tramitacao.assumir(processo.id, self.analista_liq)
+        processo.numero_relatorio = '1898'
+        processo.save(update_fields=['numero_relatorio'])
+        registrar(processo)
+
+        numero = tramitacao.apagar_processo(processo.id, self.admin)
+        self.assertEqual(numero, '3001/2026')
+        self.assertFalse(Processo.objects.filter(id=processo.id).exists())
+        self.assertFalse(EventoProcesso.objects.filter(processo_id=processo.id).exists())
+        linha = LinhaControleRelatorio.objects.get(numero_relatorio='1898')
+        self.assertIsNone(linha.processo)
+
+    def test_gestao_e_processo_finalizado_nao_excluem(self):
+        self.admin.is_superuser = False
+        self.admin.save(update_fields=['is_superuser'])
+        processo = self.novo_processo(numero_processo='3002/2026')
+        with self.assertRaises(PermissionDenied):
+            tramitacao.apagar_processo(processo.id, self.gestao)
+
+        self.admin.is_superuser = True
+        self.admin.save(update_fields=['is_superuser'])
+        tramitacao.registrar_saida_direta(processo.id, self.protocolo)
+        with self.assertRaises(TransicaoInvalida):
+            tramitacao.apagar_processo(processo.id, self.admin)
+        self.assertTrue(Processo.objects.filter(id=processo.id).exists())
+
+
 class DevolverAssinaturaGestaoTest(BaseProcessoTestCase):
 
     def _no_controlador(self):

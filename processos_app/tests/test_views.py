@@ -260,6 +260,24 @@ class AcoesHttpTest(BaseProcessoTestCase):
         processo.refresh_from_db()
         self.assertEqual(processo.situacao_tramite, 'EM_ANALISE')
 
+    def test_admin_exclui_processo_na_lista_de_ativos(self):
+        processo = self.novo_processo(numero_processo='3003/2026')
+        admin = self.gestao
+        admin.is_superuser = True
+        admin.save(update_fields=['is_superuser'])
+
+        self.client.force_login(self.protocolo)
+        negado = self.client.post(reverse('apagar_processo', args=[processo.id]))
+        self.assertEqual(negado.status_code, 403)
+        self.assertTrue(Processo.objects.filter(id=processo.id).exists())
+
+        self.client.force_login(admin)
+        pagina = self.client.get(reverse('listar_processos'))
+        self.assertContains(pagina, 'Excluir processo')
+        resposta = self.client.post(reverse('apagar_processo', args=[processo.id]))
+        self.assertEqual(resposta.status_code, 200)
+        self.assertFalse(Processo.objects.filter(id=processo.id).exists())
+
     def test_admin_apaga_usuario(self):
         from django.contrib.auth.models import User
         admin = self.gestao

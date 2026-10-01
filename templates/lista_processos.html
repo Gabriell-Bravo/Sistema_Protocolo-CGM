@@ -254,6 +254,11 @@
                                         <span class="material-symbols-rounded">block</span>
                                     </button>
                                 {% endif %}
+                                {% if can_apagar %}
+                                    <button type="button" class="icon-btn icon-btn--danger" title="Excluir processo" onclick="excluirProcesso('{{ processo.id }}', '{{ processo.numero_processo|escapejs }}')">
+                                        <span class="material-symbols-rounded">delete</span>
+                                    </button>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>
@@ -641,6 +646,29 @@
                 location.reload();
             } else {
                 alert('Não foi possível cancelar: ' + result.message);
+            }
+        } catch (error) {
+            alert('Erro na comunicação com o servidor: ' + error.message);
+        }
+    }
+
+    async function excluirProcesso(id, numero) {
+        if (!confirm('Excluir o processo ' + numero + '? Ele sai de Processos Ativos, junto com o histórico e os anexos. Essa ação não pode ser desfeita.')) {
+            return;
+        }
+        try {
+            const response = await fetch(`{% url 'apagar_processo' id=0 %}`.replace('0', id), {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            });
+            const result = await response.json();
+            if (result.success) {
+                location.reload();
+            } else {
+                alert('Não foi possível excluir: ' + result.message);
             }
         } catch (error) {
             alert('Erro na comunicação com o servidor: ' + error.message);

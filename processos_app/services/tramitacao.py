@@ -831,6 +831,33 @@ def cancelar_processo(processo_id, usuario, motivo):
     return processo
 
 
+@transaction.atomic
+def apagar_processo(processo_id, usuario):
+    """Remove o processo ativo. Histórico, pendências e anexos saem junto.
+
+    O cancelamento da Gestão continua preservando o registro. Esta ação
+    é só do administrador e só vale enquanto o processo está na CGM.
+    O número de relatório, se houver, volta a ficar disponível.
+    """
+    processo = _travar(processo_id)
+    perm.assert_permissao(
+        perm.pode_apagar_processo(usuario),
+        'Somente o administrador pode excluir um processo.')
+    if (processo.cancelado_em is not None
+            or processo.situacao_tramite not in Processo.SITUACOES_ATIVAS):
+        raise TransicaoInvalida(
+            'Só é possível excluir um processo que ainda está ativo.')
+
+    from .relatorios import remover_do_processo
+    remover_do_processo(processo)
+    for anexo in processo.anexos.all():
+        if anexo.arquivo:
+            anexo.arquivo.delete(save=False)
+    numero = processo.numero_processo
+    processo.delete()
+    return numero
+
+
 # --------------------------------------------------------------------------
 # Consultas de apoio
 # --------------------------------------------------------------------------
