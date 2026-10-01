@@ -179,10 +179,10 @@
             <div class="form-grid form-grid--full">
                 {% if eh_liquidacao %}
                 <div class="field">
-                    <label class="field__label" for="numero_relatorio">Número do relatório</label>
+                    <label class="field__label" for="numero_relatorio_exibicao">Número do relatório</label>
                     {% if pode_editar_numero_relatorio %}
                     <div class="pendencia-add__row" id="numeroRelatorioExibicao">
-                        <input type="text" class="input" value="{% if processo.numero_relatorio %}Relatório {{ processo.numero_relatorio }}{% else %}Sequencial ao salvar{% endif %}" readonly>
+                        <input type="text" id="numero_relatorio_exibicao" class="input" value="{% if processo.numero_relatorio %}Relatório {{ processo.numero_relatorio }}{% else %}Sequencial ao salvar{% endif %}" readonly>
                         <button type="button" class="icon-btn icon-btn--primary" id="btnEditarNumero" title="Informar número específico">
                             <span class="material-symbols-rounded">edit</span>
                         </button>
@@ -201,7 +201,9 @@
                                     <label class="field__label" for="data_relatorio">Data deste número</label>
                                     <input type="date" id="data_relatorio" name="data_relatorio"
                                            {% if not pode_editar %}form="formNumeroRelatorio"{% endif %}
-                                           class="input" value="{{ processo.data_analise|date:'Y-m-d' }}" disabled>
+                                           class="input"
+                                           value="{% if processo.data_analise %}{{ processo.data_analise|date:'Y-m-d' }}{% else %}{% now 'Y-m-d' %}{% endif %}"
+                                           disabled>
                                 </div>
                             </div>
                             <button type="button" class="icon-btn icon-btn--danger" id="btnCancelarNumero"
@@ -223,7 +225,7 @@
                             {% if processo.numero_relatorio %}
                             Use o lápis para trocar o número e a data. O botão Salvar análise grava tudo. O X desfaz e mantém o sequencial.
                             {% else %}
-                            Sem o lápis, o número sequencial é gerado ao Salvar análise. Com o lápis, informe número e data e use o mesmo Salvar análise. O X cancela o número específico.
+                            Sem o lápis, o número sequencial e a data abaixo são gravados ao Salvar análise. Com o lápis, informe número e data e use o mesmo Salvar análise. O X cancela o número específico.
                             {% endif %}
                         {% else %}
                             Use o lápis para informar o número e a data.
@@ -233,6 +235,13 @@
                     <input type="text" id="numero_relatorio" class="input" value="{% if processo.numero_relatorio %}Relatório {{ processo.numero_relatorio }}{% endif %}" readonly>
                     <span class="field__hint">{% if processo.numero_relatorio %}Número gerado ao salvar a análise.{% else %}Será gerado automaticamente ao salvar a análise.{% endif %}</span>
                     {% endif %}
+                </div>
+                <div class="field" id="dataRelatorioExibicaoCampo">
+                    <label class="field__label" for="data_relatorio_exibicao">Data do relatório</label>
+                    <input type="date" id="data_relatorio_exibicao" class="input"
+                           value="{% if processo.data_analise %}{{ processo.data_analise|date:'Y-m-d' }}{% else %}{% now 'Y-m-d' %}{% endif %}"
+                           readonly>
+                    <span class="field__hint">Data que será gravada no Controle de relatório. Só fica editável se você informar um número específico.</span>
                 </div>
                 {% endif %}
                 <div class="field">
@@ -610,6 +619,9 @@
     var reservasNumero = {{ reservas_numero_mapa|default:'{}'|safe }};
     var campoNumeroRelatorio = document.getElementById('numero_relatorio');
     var campoDataRelatorio = document.getElementById('data_relatorio');
+    var campoDataExibicao = document.getElementById('data_relatorio_exibicao');
+    var dataRelatorioExibicaoCampo = document.getElementById('dataRelatorioExibicaoCampo');
+    var dataRelatorioPadrao = campoDataExibicao ? campoDataExibicao.value : '';
     var exibicaoNumeroValor = exibicaoNumero
         ? exibicaoNumero.querySelector('input')
         : null;
@@ -619,6 +631,8 @@
         var data = reservasNumero[String(campoNumeroRelatorio.value).trim()];
         if (data) {
             campoDataRelatorio.value = data;
+        } else if (!campoDataRelatorio.value && dataRelatorioPadrao) {
+            campoDataRelatorio.value = dataRelatorioPadrao;
         }
     }
 
@@ -626,6 +640,9 @@
         if (!exibicaoNumero || !edicaoNumero) return;
         exibicaoNumero.hidden = true;
         edicaoNumero.hidden = false;
+        if (dataRelatorioExibicaoCampo) {
+            dataRelatorioExibicaoCampo.hidden = true;
+        }
         if (campoNumeroRelatorio) {
             campoNumeroRelatorio.disabled = false;
             campoNumeroRelatorio.required = true;
@@ -634,6 +651,9 @@
         if (campoDataRelatorio) {
             campoDataRelatorio.disabled = false;
             campoDataRelatorio.required = true;
+            if (!campoDataRelatorio.value && dataRelatorioPadrao) {
+                campoDataRelatorio.value = dataRelatorioPadrao;
+            }
         }
         aplicarDataDestinada();
     }
@@ -642,6 +662,9 @@
         if (!exibicaoNumero || !edicaoNumero) return;
         edicaoNumero.hidden = true;
         exibicaoNumero.hidden = false;
+        if (dataRelatorioExibicaoCampo) {
+            dataRelatorioExibicaoCampo.hidden = false;
+        }
         if (campoNumeroRelatorio) {
             campoNumeroRelatorio.required = false;
             campoNumeroRelatorio.disabled = true;
@@ -650,7 +673,10 @@
         if (campoDataRelatorio) {
             campoDataRelatorio.required = false;
             campoDataRelatorio.disabled = true;
-            campoDataRelatorio.value = '';
+            campoDataRelatorio.value = dataRelatorioPadrao;
+        }
+        if (campoDataExibicao && dataRelatorioPadrao) {
+            campoDataExibicao.value = dataRelatorioPadrao;
         }
         if (exibicaoNumeroValor && !exibicaoNumeroValor.value) {
             exibicaoNumeroValor.value = 'Sequencial ao salvar';

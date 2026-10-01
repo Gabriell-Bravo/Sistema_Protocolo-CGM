@@ -190,6 +190,8 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         tela = self.client.get(reverse('analista_processo', args=[processo.id]))
         self.assertContains(tela, 'Informar número específico')
         self.assertContains(tela, 'Data deste número')
+        self.assertContains(tela, 'Data do relatório')
+        self.assertContains(tela, 'data_relatorio_exibicao')
         self.assertContains(tela, 'btnCancelarNumero')
         self.assertNotContains(tela, 'form="formNumeroRelatorio"')
 
