@@ -297,6 +297,19 @@ def _numeros_devolvidos(grupo, usados):
     return livres
 
 
+def _buracos_na_sequencia(usados, proximo):
+    """Números pulados abaixo do contador (ex.: alguém informou 1904 e
+    o 1903 nunca foi emitido). Só olha a faixa já iniciada nesta sequência.
+    """
+    if proximo < 2:
+        return []
+    abaixo = [n for n in usados if n < proximo]
+    if not abaixo:
+        return []
+    inicio = min(abaixo)
+    return [n for n in range(inicio, proximo) if n not in usados]
+
+
 @transaction.atomic
 def definir_ultimo_numero(usuario, ultimo, grupo=GRUPO_PADRAO):
     """O próximo relatório será ultimo + 1."""
@@ -323,12 +336,18 @@ def definir_ultimo_numero(usuario, ultimo, grupo=GRUPO_PADRAO):
 
 
 def proximo_numero(grupo):
-    """Trava a sequência para dois salvamentos não saírem iguais."""
+    """Trava a sequência para dois salvamentos não saírem iguais.
+
+    Ordem: número devolvido (desistência) → buraco na sequência → próximo
+    do contador.
+    """
     SequenciaRelatorio.objects.get_or_create(
         grupo=grupo, defaults={'proximo_numero': _proximo_padrao(grupo)})
     seq = SequenciaRelatorio.objects.select_for_update().get(grupo=grupo)
     usados = numeros_usados(grupo) | _numeros_reservados(grupo)
     livres = _numeros_devolvidos(grupo, usados)
+    if not livres:
+        livres = _buracos_na_sequencia(usados, int(seq.proximo_numero or 1))
     if livres:
         numero = min(livres)
         LinhaControleRelatorio.objects.filter(

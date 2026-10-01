@@ -102,6 +102,32 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self._salvar_liquidacao(quarto)
         self.assertEqual(quarto.numero_relatorio, '2003')
 
+    def test_buraco_de_numero_especifico_e_reaproveitado(self):
+        admin = criar_usuario('admin_buraco', 'GESTAO', is_superuser=True)
+        relatorios.definir_ultimo_numero(admin, 1900)
+        primeiro = self.novo_processo(self.especie_liq, numero_processo='93a/2026')
+        segundo = self.novo_processo(self.especie_liq, numero_processo='93b/2026')
+        self._salvar_liquidacao(primeiro)
+        self._salvar_liquidacao(segundo)
+        self.assertEqual(primeiro.numero_relatorio, '1901')
+        self.assertEqual(segundo.numero_relatorio, '1902')
+
+        # Terceiro recebe número específico 1904 sem passar pelo 1903.
+        terceiro = self.novo_processo(self.especie_liq, numero_processo='93c/2026')
+        tramitacao.assumir(terceiro.id, self.analista_liq)
+        relatorios.alterar_numero(self.analista_liq, terceiro.id, 1904, '2026-10-01')
+        terceiro.refresh_from_db()
+        self.assertEqual(terceiro.numero_relatorio, '1904')
+        self.assertEqual(relatorios.estado_sequencia()['proximo'], 1905)
+
+        quarto = self.novo_processo(self.especie_liq, numero_processo='93d/2026')
+        self._salvar_liquidacao(quarto)
+        self.assertEqual(quarto.numero_relatorio, '1903')
+
+        quinto = self.novo_processo(self.especie_liq, numero_processo='93e/2026')
+        self._salvar_liquidacao(quinto)
+        self.assertEqual(quinto.numero_relatorio, '1905')
+
     def test_dois_analistas_nao_recebem_o_mesmo_numero(self):
         outro = criar_usuario('dana_liq', 'ANALISTA_LIQUIDACOES')
         p1 = self.novo_processo(self.especie_liq, numero_processo='14/2026')
