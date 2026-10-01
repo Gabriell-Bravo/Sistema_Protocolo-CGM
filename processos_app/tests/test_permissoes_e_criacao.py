@@ -52,11 +52,17 @@ class CriacaoTest(BaseProcessoTestCase):
                 svc_processos.criar_processo(self.dados_protocolo(), usuario)
 
     def test_protocolo_pode_informar_observacao_na_entrada(self):
+        from django.urls import reverse
         processo = self.novo_processo(
             observacao_protocolo='Chegou sem anexo',
             numero_processo='obs-1/2026')
         self.assertEqual(processo.observacao_protocolo, 'Chegou sem anexo')
         self.assertFalse(processo.observacao)
+
+        self.client.force_login(self.protocolo)
+        pagina = self.client.get(reverse('listar_processos'))
+        self.assertContains(pagina, 'Chegou sem anexo')
+        self.assertContains(pagina, 'data-field="observacao_protocolo"')
 
     def test_criacao_ignora_campos_de_analise(self):
         processo = self.novo_processo(

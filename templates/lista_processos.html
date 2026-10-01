@@ -227,10 +227,10 @@
                         </td>
                         <td class="" data-field="tecnico">{{ processo.nome_analista|default:'' }}</td>
                         <td class="" data-field="numero_despacho">{{ processo.numero_despacho|default:'' }}</td>
-                        <td class="cell-wrap" data-field="observacao" data-full-text="{{ processo.observacao|default:'' }}">
-                            <span class="cell-preview">{{ processo.observacao|default:''|truncatechars:70 }}</span>
-                            {% if processo.observacao and processo.observacao|length > 70 %}
-                                <button type="button" class="link-more" onclick="visualizarObservacao('{{ processo.observacao|escapejs }}', 'Observação')">Ver tudo</button>
+                        <td class="editable cell-wrap" data-field="observacao_protocolo" data-full-text="{{ processo.observacao_protocolo|default:'' }}">
+                            <span class="cell-preview">{{ processo.observacao_protocolo|default:''|truncatechars:70 }}</span>
+                            {% if processo.observacao_protocolo and processo.observacao_protocolo|length > 70 %}
+                                <button type="button" class="link-more" onclick="visualizarObservacao('{{ processo.observacao_protocolo|escapejs }}', 'Observação')">Ver tudo</button>
                             {% endif %}
                         </td>
                         <td class="" data-field="valor">{{ processo.valor|default:'' }}</td>
@@ -337,7 +337,7 @@
         row.querySelectorAll('.editable').forEach(cell => {
             const field = cell.getAttribute('data-field');
             let value;
-            if (field === 'objeto' || field === 'observacao') {
+            if (field === 'objeto' || field === 'observacao' || field === 'observacao_protocolo') {
                 value = cell.getAttribute('data-full-text') || cell.textContent.trim();
             } else if (field === 'prioridade') {
                 value = cell.getAttribute('data-prioridade-raw') || cell.textContent.trim();
@@ -355,7 +355,7 @@
             let value = originalData[field];
             let inputElement;
 
-            if (field === 'objeto' || field === 'observacao') {
+            if (field === 'objeto' || field === 'observacao' || field === 'observacao_protocolo') {
                 inputElement = document.createElement('textarea');
                 inputElement.className = 'edit-field';
                 inputElement.value = value;
@@ -616,7 +616,7 @@
                     }
                 }
 
-                if (field === 'objeto' || field === 'observacao') {
+                if (field === 'objeto' || field === 'observacao' || field === 'observacao_protocolo') {
                     cell.innerHTML = `
                         <span class="cell-preview">${restoredValue.substring(0, 70)}</span>
                         ${restoredValue.length > 70 ? `<button type="button" class="link-more" onclick="visualizarObservacao('${restoredValue.replace(/'/g, "\\'")}')">Ver tudo</button>` : ''}

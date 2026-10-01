@@ -883,6 +883,7 @@ def exportar_finalizados_excel(request):
             Q(contratada__icontains=termo_pesquisa) |
             Q(tecnico__icontains=termo_pesquisa) |
             Q(observacao__icontains=termo_pesquisa) |
+            Q(observacao_protocolo__icontains=termo_pesquisa) |
             Q(valor__icontains=termo_pesquisa) |
             Q(periodo__icontains=termo_pesquisa)
         )
@@ -953,7 +954,7 @@ def exportar_finalizados_excel(request):
             process.prioridade,
             process.tecnico,
             process.numero_despacho,
-            process.observacao,
+            process.observacao_protocolo or process.observacao or '',
             process.valor,
 
         ]

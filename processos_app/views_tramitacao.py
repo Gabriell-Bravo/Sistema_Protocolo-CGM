@@ -129,25 +129,17 @@ def liberar_assinatura(request, process_id):
 def disponibilizar_retirada(request, process_id):
     """item 13: o processo assinado voltou fisicamente ao Protocolo."""
     erro, _ = _executar(
-        request, tramitacao.disponibilizar_retirada, 'processos_para_retirada',
+        request, tramitacao.disponibilizar_retirada, 'listar_processos',
         process_id, request.user,
         sucesso='Processo disponibilizado para retirada.')
-    return erro or redirect('processos_para_retirada')
+    return erro or redirect('listar_processos')
 
 
 @login_required
 @perm.exige(perm.is_protocolo, 'Área exclusiva do Protocolo.')
 def processos_para_retirada(request):
-    """item 14: tela "Processos disponíveis para retirada — N"."""
-    disponiveis = tramitacao.disponiveis_para_retirada()
-    aguardando = tramitacao.liberados_para_assinatura()
-    return render(request, 'protocolo/retirada.html', {
-        'disponiveis': disponiveis,
-        'total_disponiveis': disponiveis.count(),
-        'aguardando_assinatura': aguardando,
-        'total_aguardando': aguardando.count(),
-        **perm.contexto_de_permissoes(request.user),
-    })
+    """Tela removida: a saída fica em Processos Ativos."""
+    return redirect('listar_processos')
 
 
 @login_required
@@ -159,7 +151,7 @@ def registrar_saida(request, process_id=None):
     """
     ids = request.POST.getlist('processos') or ([process_id] if process_id else [])
     erro, processos = _executar(
-        request, tramitacao.registrar_saida, 'processos_para_retirada',
+        request, tramitacao.registrar_saida, 'listar_processos',
         ids, request.user)
     if erro:
         return erro
@@ -167,7 +159,7 @@ def registrar_saida(request, process_id=None):
     messages.success(
         request,
         f'Saída registrada para {n} processo' + ('s.' if n > 1 else '.'))
-    return redirect('processos_para_retirada')
+    return redirect('listar_processos')
 
 
 @login_required

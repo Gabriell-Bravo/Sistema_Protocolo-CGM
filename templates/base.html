@@ -72,15 +72,6 @@
                 </a>
                 {% endif %}
 
-                {% if is_protocolo %}
-                    <a href="{% url 'processos_para_retirada' %}"
-                       class="nav-item {% if nav == 'processos_para_retirada' or nav == 'tram_form_alterar_destino' %}is-active{% endif %}"
-                       title="Retirada">
-                        <span class="material-symbols-rounded">assignment_return</span>
-                        <span class="nav-item__label">Retirada</span>
-                    </a>
-                {% endif %}
-
                 <a href="{% url 'listar_finalizados' %}"
                    class="nav-item {% if nav == 'listar_finalizados' %}is-active{% endif %}" title="Finalizados">
                     <span class="material-symbols-rounded">task_alt</span>

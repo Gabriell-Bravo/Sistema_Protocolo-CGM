@@ -313,6 +313,8 @@ def aplicar_edicao(processo, dados, usuario):
             processo.prazo_dias = cadastro.prazo_dias
             alteracoes['prioridade'] = (atual, novo)
             continue
+        elif campo == 'observacao_protocolo':
+            novo = texto(bruto)
         else:
             novo = texto(bruto) or None
         if campo in OBRIGATORIOS_PROTOCOLO and not novo:

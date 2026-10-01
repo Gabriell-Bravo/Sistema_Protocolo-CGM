@@ -32,9 +32,9 @@ class TelasPorPapelTest(BaseProcessoTestCase):
         return resposta
 
     def test_protocolo(self):
-        for nome in ('listar_processos', 'listar_finalizados', 'cadastrar_processo',
-                     'processos_para_retirada'):
+        for nome in ('listar_processos', 'listar_finalizados', 'cadastrar_processo'):
             self._get(self.protocolo, nome)
+        self._get(self.protocolo, 'processos_para_retirada', esperado=302)
         self._get(self.protocolo, 'ver_historico_processo', self.processo.id)
         self._get(self.protocolo, 'listar_processos', query='?situacao=DISPONIVEL&page=1')
 
