@@ -1119,6 +1119,28 @@ def delete_user(request, user_id):
     return redirect('manage_users')
 
 
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def apagar_usuario(request, user_id):
+    """Remove a conta. Processos, eventos e análises ficam, sem o nome do autor."""
+    if request.method != 'POST':
+        return redirect('manage_users')
+    alvo = get_object_or_404(User, id=user_id)
+    if alvo.id == request.user.id:
+        messages.error(request, 'Você não pode apagar o próprio usuário.')
+        return redirect('manage_users')
+    if alvo.is_superuser:
+        messages.error(request, 'Não é possível apagar outro administrador.')
+        return redirect('manage_users')
+    nome = alvo.username
+    _encerrar_sessoes_do_usuario(alvo)
+    alvo.delete()
+    messages.success(
+        request,
+        f'{nome} foi apagado. Os processos em que essa pessoa atuou continuam registrados.')
+    return redirect('manage_users')
+
+
 def _encerrar_sessoes_do_usuario(usuario):
     """Encerra sessões abertas do usuário após a senha ser redefinida."""
     from django.contrib.sessions.models import Session

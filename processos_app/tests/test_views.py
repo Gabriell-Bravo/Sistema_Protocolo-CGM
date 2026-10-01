@@ -260,6 +260,25 @@ class AcoesHttpTest(BaseProcessoTestCase):
         processo.refresh_from_db()
         self.assertEqual(processo.situacao_tramite, 'EM_ANALISE')
 
+    def test_admin_apaga_usuario(self):
+        from django.contrib.auth.models import User
+        admin = self.gestao
+        admin.is_staff = True
+        admin.is_superuser = True
+        admin.save()
+        self.client.force_login(self.protocolo)
+        self.client.post(reverse('apagar_usuario', args=[self.analista_lic2.id]))
+        self.assertTrue(User.objects.filter(id=self.analista_lic2.id).exists())
+
+        self.client.force_login(admin)
+        pagina = self.client.get(reverse('manage_users'))
+        self.assertContains(pagina, 'Apagar usuário')
+        resposta = self.client.post(reverse('apagar_usuario', args=[self.analista_lic2.id]))
+        self.assertRedirects(resposta, reverse('manage_users'))
+        self.assertFalse(User.objects.filter(id=self.analista_lic2.id).exists())
+        self.client.post(reverse('apagar_usuario', args=[admin.id]))
+        self.assertTrue(User.objects.filter(id=admin.id).exists())
+
     def test_desativar_usuario_nao_apaga(self):
         admin = self.gestao
         admin.is_staff = True

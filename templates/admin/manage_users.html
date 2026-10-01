@@ -71,6 +71,13 @@
                                         <span class="material-symbols-rounded">{% if u.is_active %}person_off{% else %}person_check{% endif %}</span>
                                     </button>
                                 </form>
+                                <form action="{% url 'apagar_usuario' u.id %}" method="post"
+                                      onsubmit="return confirm('Apagar o usuário {{ u.username|escapejs }}? Ele deixa de entrar no sistema. Os processos em que ele atuou continuam registrados.');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="icon-btn icon-btn--danger" title="Apagar usuário">
+                                        <span class="material-symbols-rounded">delete</span>
+                                    </button>
+                                </form>
                             {% endif %}
                         </div>
                     {% endif %}
