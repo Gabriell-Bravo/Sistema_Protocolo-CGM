@@ -184,7 +184,16 @@
             {% endif %}
             <div class="form-grid form-grid--full">
                 {% if eh_liquidacao %}
-                <div class="field">
+                <div class="field field--checkbox">
+                    <label class="check">
+                        <input type="checkbox" id="sem_relatorio" name="sem_relatorio" value="1"
+                               {% if processo.sem_relatorio %}checked{% endif %}
+                               {% if not pode_editar %}disabled{% endif %}>
+                        <span>Sem relatório</span>
+                    </label>
+                    <span class="field__hint">Marque se o processo for despachado sem gerar número de relatório. Ele ainda entra no Controle com aviso.</span>
+                </div>
+                <div class="field" id="blocoNumeroRelatorio" {% if processo.sem_relatorio %}hidden{% endif %}>
                     <label class="field__label" for="numero_relatorio_exibicao">Número do relatório</label>
                     {% if pode_editar_numero_relatorio %}
                     <div class="pendencia-add__row" id="numeroRelatorioExibicao">
@@ -242,7 +251,7 @@
                     <span class="field__hint">{% if processo.numero_relatorio %}Número gerado ao salvar a análise.{% else %}Será gerado automaticamente ao salvar a análise.{% endif %}</span>
                     {% endif %}
                 </div>
-                <div class="field" id="dataRelatorioExibicaoCampo">
+                <div class="field" id="dataRelatorioExibicaoCampo" {% if processo.sem_relatorio %}hidden{% endif %}>
                     <label class="field__label" for="data_relatorio_exibicao">Data do relatório</label>
                     <input type="date" id="data_relatorio_exibicao" class="input"
                            value="{% if processo.data_analise %}{{ processo.data_analise|date:'Y-m-d' }}{% else %}{% now 'Y-m-d' %}{% endif %}"
@@ -698,6 +707,33 @@
     if (campoNumeroRelatorio) {
         campoNumeroRelatorio.addEventListener('input', aplicarDataDestinada);
         campoNumeroRelatorio.addEventListener('change', aplicarDataDestinada);
+    }
+
+    var checkSemRelatorio = document.getElementById('sem_relatorio');
+    var blocoNumeroRelatorio = document.getElementById('blocoNumeroRelatorio');
+
+    function atualizarSemRelatorio() {
+        if (!checkSemRelatorio) return;
+        var marcado = checkSemRelatorio.checked;
+        if (blocoNumeroRelatorio) {
+            blocoNumeroRelatorio.hidden = marcado;
+        }
+        if (dataRelatorioExibicaoCampo) {
+            dataRelatorioExibicaoCampo.hidden = marcado;
+        }
+        if (marcado) {
+            fecharNumeroEspecifico();
+            if (campoNumeroRelatorio) {
+                campoNumeroRelatorio.required = false;
+                campoNumeroRelatorio.disabled = true;
+                campoNumeroRelatorio.value = '';
+            }
+        }
+    }
+
+    if (checkSemRelatorio) {
+        checkSemRelatorio.addEventListener('change', atualizarSemRelatorio);
+        atualizarSemRelatorio();
     }
 
     document.addEventListener('click', function (event) {

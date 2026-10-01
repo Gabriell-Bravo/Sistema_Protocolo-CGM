@@ -8,7 +8,7 @@ Cada espécie de Liquidações pertence a uma sequência de numeração
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Count, IntegerField, Q
+from django.db.models import Case, Count, F, IntegerField, Q, Value, When
 from django.db.models.functions import Cast
 from django.utils import timezone
 
@@ -370,6 +370,8 @@ def atribuir_se_preciso(processo):
 
     Não grava o processo: o chamador inclui `numero_relatorio` no save.
     """
+    if getattr(processo, 'sem_relatorio', False):
+        return False
     if not especie_gera_relatorio(processo):
         return False
     if processo.numero_relatorio:
@@ -402,6 +404,9 @@ def alterar_numero(usuario, processo_id, novo, data=None):
         'Somente o analista do grupo e o administrador alteram o número.')
     if not especie_gera_relatorio(processo):
         raise RelatorioInvalido('Esta espécie não gera número de relatório.')
+    limpar_sem_relatorio = bool(processo.sem_relatorio)
+    if limpar_sem_relatorio:
+        processo.sem_relatorio = False
     sequencia = sequencia_do_processo(processo) or GRUPO_PADRAO
     try:
         novo = int(str(novo).strip())
@@ -423,6 +428,8 @@ def alterar_numero(usuario, processo_id, novo, data=None):
 
     atual = _inteiro_atual(processo)
     campos = []
+    if limpar_sem_relatorio:
+        campos.append('sem_relatorio')
     anterior_numero = processo.numero_relatorio or ''
     if atual != novo:
         processo.numero_relatorio = str(novo)
@@ -456,9 +463,13 @@ def alterar_numero(usuario, processo_id, novo, data=None):
 
 def registrar(processo):
     """Cria ou atualiza a linha da planilha a partir do processo."""
-    if not processo.numero_relatorio:
+    sem_relatorio = bool(getattr(processo, 'sem_relatorio', False))
+    if not processo.numero_relatorio and not sem_relatorio:
         return None
     dados = _dados_da_linha(processo)
+    dados['sem_relatorio'] = sem_relatorio
+    if sem_relatorio:
+        dados['numero_relatorio'] = ''
     linha, _ = LinhaControleRelatorio.objects.update_or_create(
         processo=processo, defaults=dados)
     return linha
@@ -485,8 +496,13 @@ def listar(usuario, sequencia=None):
     if sequencia:
         consulta = consulta.filter(filtro_sequencia(sequencia))
     return consulta.annotate(
-        numero_ordem=Cast('numero_relatorio', IntegerField())
-    ).order_by('numero_ordem', 'id')
+        numero_ordem=Case(
+            When(sem_relatorio=True, then=Value(None)),
+            When(numero_relatorio='', then=Value(None)),
+            default=Cast('numero_relatorio', IntegerField()),
+            output_field=IntegerField(null=True),
+        )
+    ).order_by(F('numero_ordem').asc(nulls_last=True), 'id')
 
 
 def contagens_por_sequencia(usuario):
@@ -505,7 +521,10 @@ def _dados_da_linha(processo):
     return {
         'numero_processo': processo.numero_processo or '',
         'volume': processo.volume or '',
-        'numero_relatorio': processo.numero_relatorio or '',
+        'numero_relatorio': (
+            '' if getattr(processo, 'sem_relatorio', False)
+            else (processo.numero_relatorio or '')),
+        'sem_relatorio': bool(getattr(processo, 'sem_relatorio', False)),
         'data_relatorio': data,
         'secretaria': processo.secretaria or '',
         'contratada': processo.contratada or '',

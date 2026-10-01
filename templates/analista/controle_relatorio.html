@@ -103,7 +103,17 @@
                     <tbody>
                         {% for linha in linhas %}
                         <tr>
-                            <td><strong>{{ linha.numero_relatorio }}</strong></td>
+                            <td>
+                                {% if linha.sem_relatorio %}
+                                <span class="aviso-sem-relatorio"
+                                      title="Processo despachado sem relatório"
+                                      aria-label="Processo despachado sem relatório">
+                                    <span class="material-symbols-rounded">warning</span>
+                                </span>
+                                {% else %}
+                                <strong>{{ linha.numero_relatorio }}</strong>
+                                {% endif %}
+                            </td>
                             <td>{{ linha.data_relatorio|date:"d/m/Y" }}</td>
                             <td class="col-sticky">
                                 {% if linha.processo_id %}

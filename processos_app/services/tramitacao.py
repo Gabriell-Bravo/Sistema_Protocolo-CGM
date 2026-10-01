@@ -161,8 +161,9 @@ def assumir(processo_id, usuario):
 
 CAMPOS_ANALISE_AO_DECLINAR = [
     'analista_responsavel', 'data_hora_assumido', 'tecnico', 'data_analise',
-    'numero_despacho', 'numero_relatorio', 'observacao', 'valor', 'periodo',
-    'destino', 'destino_fk', 'status_analise', 'situacao_tramite',
+    'numero_despacho', 'numero_relatorio', 'sem_relatorio', 'observacao',
+    'valor', 'periodo', 'destino', 'destino_fk', 'status_analise',
+    'situacao_tramite',
 ]
 
 
@@ -200,6 +201,7 @@ def declinar_analise(processo_id, usuario, motivo):
     processo.data_analise = None
     processo.numero_despacho = None
     processo.numero_relatorio = None
+    processo.sem_relatorio = False
     processo.observacao = None
     processo.valor = None
     processo.periodo = None

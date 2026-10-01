@@ -71,7 +71,7 @@ def campos_editaveis(usuario, processo=None):
         if (processo.situacao_tramite == 'EM_ANALISE'
                 and processo.analista_responsavel_id == usuario.id):
             return set(CAMPOS_ANALISTA)
-        if (processo.numero_relatorio
+        if ((processo.numero_relatorio or processo.sem_relatorio)
                 and perm.pode_editar_linha_relatorio(usuario, processo)):
             return set(CAMPOS_ANALISTA)
         return set()
@@ -374,14 +374,43 @@ def aplicar_analise(processo, dados, usuario):
         if campo == 'destino':
             processo.destino_fk = cadastros.resolver_unidade(novo)
     from .relatorios import (
-        alterar_numero, atribuir_se_preciso, registrar as registrar_relatorio,
+        alterar_numero, atribuir_se_preciso, especie_gera_relatorio,
+        registrar as registrar_relatorio,
     )
     if alteracoes:
         processo.save()
 
     numero_manual = texto(dados.get('numero_relatorio')) if dados else ''
-    if (numero_manual
-            and perm.pode_editar_numero_relatorio(usuario, processo)):
+    marcado_sem_relatorio = _marcado_sem_relatorio(dados)
+    pode_mexer_relatorio = (
+        campos_editaveis(usuario, processo)
+        and especie_gera_relatorio(processo)
+    )
+
+    if pode_mexer_relatorio and marcado_sem_relatorio:
+        campos_extra = []
+        if not processo.sem_relatorio:
+            processo.sem_relatorio = True
+            campos_extra.append('sem_relatorio')
+            alteracoes += 1
+        if processo.numero_relatorio:
+            anterior = processo.numero_relatorio
+            processo.numero_relatorio = None
+            campos_extra.append('numero_relatorio')
+            registrar_diff(processo, 'numero_relatorio', anterior, '', usuario)
+            alteracoes += 1
+        if campos_extra:
+            processo.save(update_fields=campos_extra)
+        if not processo.data_analise:
+            processo.data_analise = timezone.localdate()
+            processo.save(update_fields=['data_analise'])
+            alteracoes += 1
+        registrar_relatorio(processo)
+    elif numero_manual and perm.pode_editar_numero_relatorio(usuario, processo):
+        if processo.sem_relatorio:
+            processo.sem_relatorio = False
+            processo.save(update_fields=['sem_relatorio'])
+            alteracoes += 1
         anterior = processo.numero_relatorio or ''
         anterior_data = (
             processo.data_analise.isoformat() if processo.data_analise else '')
@@ -394,9 +423,25 @@ def aplicar_analise(processo, dados, usuario):
             processo.data_analise.isoformat() if processo.data_analise else '')
         if nova_data != anterior_data:
             alteracoes += 1
-    elif campos_editaveis(usuario, processo) and atribuir_se_preciso(processo):
-        processo.save(update_fields=['numero_relatorio'])
-        alteracoes += 1
-    elif processo.numero_relatorio:
+    elif campos_editaveis(usuario, processo):
+        if processo.sem_relatorio and not marcado_sem_relatorio:
+            processo.sem_relatorio = False
+            processo.save(update_fields=['sem_relatorio'])
+            alteracoes += 1
+        if atribuir_se_preciso(processo):
+            processo.save(update_fields=['numero_relatorio'])
+            alteracoes += 1
+        elif processo.numero_relatorio or processo.sem_relatorio:
+            registrar_relatorio(processo)
+    elif processo.numero_relatorio or processo.sem_relatorio:
         registrar_relatorio(processo)
     return alteracoes
+
+
+def _marcado_sem_relatorio(dados):
+    if not dados:
+        return False
+    bruto = dados.get('sem_relatorio')
+    if isinstance(bruto, bool):
+        return bruto
+    return str(bruto or '').strip().lower() in ('1', 'true', 'on', 'sim')

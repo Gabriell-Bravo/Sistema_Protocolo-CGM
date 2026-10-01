@@ -23,6 +23,34 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         processo.refresh_from_db()
         return processo
 
+    def test_salvar_analise_sem_relatorio_aparece_no_controle(self):
+        processo = self.novo_processo(self.especie_liq, numero_processo='sr-1/2026')
+        tramitacao.assumir(processo.id, self.analista_liq)
+        processo.refresh_from_db()
+        svc_processos.aplicar_analise(processo, {
+            'destino': 'Unidade de Teste',
+            'valor': '1000',
+            'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+            'sem_relatorio': '1',
+        }, self.analista_liq)
+        processo.refresh_from_db()
+        self.assertTrue(processo.sem_relatorio)
+        self.assertFalse(processo.numero_relatorio)
+        linha = LinhaControleRelatorio.objects.get(processo=processo)
+        self.assertTrue(linha.sem_relatorio)
+        self.assertEqual(linha.numero_relatorio, '')
+        self.assertEqual(linha.numero_processo, 'sr-1/2026')
+
+        self.client.force_login(self.analista_liq)
+        pagina = self.client.get(reverse('controle_relatorio'))
+        self.assertContains(pagina, 'sr-1/2026')
+        self.assertContains(pagina, 'Processo despachado sem relatório')
+        self.assertContains(pagina, 'aviso-sem-relatorio')
+
+        tela = self.client.get(reverse('analista_processo', args=[processo.id]))
+        self.assertContains(tela, 'name="sem_relatorio"')
+        self.assertContains(tela, 'Sem relatório')
+
     def test_admin_define_ultimo_e_proximo_salvo_continua(self):
         admin = criar_usuario('admin_rel', 'GESTAO', is_superuser=True)
         relatorios.definir_ultimo_numero(admin, 2000)

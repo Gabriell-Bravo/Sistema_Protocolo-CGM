@@ -127,6 +127,10 @@ class Processo(models.Model):
         blank=True,
         verbose_name="Número do relatório"
     )
+    sem_relatorio = models.BooleanField(
+        default=False,
+        verbose_name="Despachado sem relatório",
+    )
 
     # --- Assinatura -------------------------------------------------------
     # Encaminhar a outro analista transfere o responsável. O campo
@@ -751,7 +755,10 @@ class LinhaControleRelatorio(models.Model):
         related_name='linha_relatorio', verbose_name="Processo")
     numero_processo = models.CharField(max_length=255, verbose_name="Nº do processo")
     volume = models.CharField(max_length=255, blank=True, verbose_name="Volume")
-    numero_relatorio = models.CharField(max_length=50, verbose_name="Nº do relatório")
+    numero_relatorio = models.CharField(
+        max_length=50, blank=True, default='', verbose_name="Nº do relatório")
+    sem_relatorio = models.BooleanField(
+        default=False, verbose_name="Despachado sem relatório")
     data_relatorio = models.DateField(verbose_name="Data do relatório")
     secretaria = models.CharField(max_length=255, blank=True, verbose_name="Secretaria")
     contratada = models.CharField(max_length=255, blank=True, verbose_name="Contratada")

@@ -1528,7 +1528,7 @@ def analista_processo(request, process_id):
     eh_responsavel = processo.analista_responsavel_id == request.user.id
     pode_editar = perm.is_analista(request.user) and (
         (processo.situacao_tramite == 'EM_ANALISE' and eh_responsavel)
-        or (bool(processo.numero_relatorio)
+        or ((bool(processo.numero_relatorio) or processo.sem_relatorio)
             and perm.pode_editar_linha_relatorio(request.user, processo))
     )
     # itens 8, 10 e 11
