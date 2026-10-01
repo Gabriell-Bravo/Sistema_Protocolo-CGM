@@ -9,9 +9,10 @@ Criação e edição de Processo (itens 17, 18, 21 e 51).
     não é gravado, mesmo que venha na requisição — e a resposta informa o
     que foi recusado.
   - Campos de tramitação (situacao_tramite, analista_responsavel,
-    liberado_assinatura_*, saida_concluida_*, cancelado_*, prioridade)
+    liberado_assinatura_*, saida_concluida_*, cancelado_*)
     não estão em whitelist nenhuma: só mudam pelos endpoints próprios de
-    services/tramitacao.py (item 52).
+    services/tramitacao.py (item 52). A prioridade na entrada é do Protocolo;
+    a Gestão continua podendo alterá-la depois.
 """
 
 from datetime import date, datetime, time
@@ -32,7 +33,7 @@ from .eventos import registrar_diff, registrar_evento
 # Dados de protocolo: o que o Protocolo registra na entrada e pode corrigir.
 CAMPOS_PROTOCOLO = (
     'numero_processo', 'volume', 'secretaria', 'data_entrada', 'hora_entrada',
-    'genero', 'especie', 'objeto', 'contratada', 'recorrente',
+    'genero', 'especie', 'objeto', 'contratada', 'recorrente', 'prioridade',
 )
 
 # Dados da análise: o que o analista responsável alimenta.
@@ -191,9 +192,9 @@ def _definir_especie(processo, nome, grupo_enviado, especie_id=None):
 def criar_processo(dados, usuario):
     """Única porta de criação de Processo.
 
-    item 17: a entrada registra só informação de protocolo. Técnico,
-    despacho, observação, prioridade e dados de saída NÃO são aceitos
-    aqui, mesmo que venham na requisição.
+    A entrada registra informação de protocolo, inclusive a prioridade.
+    Técnico, despacho, observação e dados de saída NÃO são aceitos aqui,
+    mesmo que venham na requisição.
     """
     perm.assert_permissao(perm.pode_cadastrar_processo(usuario),
                           'Somente o Protocolo cadastra processos.')
@@ -234,14 +235,20 @@ def criar_processo(dados, usuario):
 
     processo.secretaria_fk = cadastros.resolver_unidade(processo.secretaria)
 
-    # item 17: a prioridade é da Gestão. Nasce Normal, salvo quando a
-    # Gestão marcou este número como urgência recorrente.
-    codigo_prioridade = ('URGENTE'
-                         if UrgenciaRecorrente.vale_para(processo.numero_processo)
-                         else 'NORMAL')
+    # Prioridade informada na entrada. Se o número está marcado como
+    # urgência recorrente pela Gestão, nasce Urgente de qualquer forma.
+    codigo_prioridade = prazos.normalizar_prioridade(dados.get('prioridade'))
+    if UrgenciaRecorrente.vale_para(processo.numero_processo):
+        codigo_prioridade = 'URGENTE'
+    cadastro_prio = cadastros.resolver_prioridade(codigo_prioridade)
+    if cadastro_prio is None or not cadastro_prio.ativo:
+        codigo_prioridade = 'NORMAL'
+        cadastro_prio = cadastros.resolver_prioridade(codigo_prioridade)
     processo.prioridade = codigo_prioridade
-    processo.prioridade_fk = cadastros.resolver_prioridade(codigo_prioridade)
-    processo.prazo_dias = prazos.dias_por_prioridade(codigo_prioridade)
+    processo.prioridade_fk = cadastro_prio
+    processo.prazo_dias = (
+        cadastro_prio.prazo_dias if cadastro_prio
+        else prazos.dias_por_prioridade(codigo_prioridade))
 
     monitoramento.definir_inicial(processo)
     processo.save()
@@ -250,7 +257,8 @@ def criar_processo(dados, usuario):
     registrar_evento(
         processo, 'PROCESSO_CADASTRADO', usuario,
         descricao=f'Processo cadastrado por {perm.nome_usuario(usuario)}.',
-        especie=processo.especie, grupo=processo.genero)
+        especie=processo.especie, grupo=processo.genero,
+        prioridade=processo.prioridade)
     return processo
 
 
@@ -289,6 +297,20 @@ def aplicar_edicao(processo, dados, usuario):
             novo = converter_hora(bruto)
         elif campo == 'recorrente':
             novo = normalizar_recorrente(bruto)
+        elif campo == 'prioridade':
+            codigo = prazos.normalizar_prioridade(bruto)
+            cadastro = cadastros.resolver_prioridade(codigo)
+            if cadastro is None or not cadastro.ativo:
+                raise DadosInvalidos('Prioridade inválida ou inativa.')
+            novo = cadastro.codigo
+            atual = processo.prioridade
+            if atual == novo:
+                continue
+            processo.prioridade = novo
+            processo.prioridade_fk = cadastro
+            processo.prazo_dias = cadastro.prazo_dias
+            alteracoes['prioridade'] = (atual, novo)
+            continue
         else:
             novo = texto(bruto) or None
         if campo in OBRIGATORIOS_PROTOCOLO and not novo:

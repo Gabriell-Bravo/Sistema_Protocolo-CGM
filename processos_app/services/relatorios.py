@@ -123,6 +123,11 @@ _ESPECIE_PARA_SEQUENCIA = {
     for nome in item['especies']
 }
 
+# Por enquanto só Liquidação gera/consome número. As outras abas e o mapa
+# de espécies ficam prontos; inclua o código em SEQUENCIAS_ATIVAS quando
+# for liberar a numeração própria de cada grupo.
+SEQUENCIAS_ATIVAS = frozenset({GRUPO_PADRAO})
+
 
 class RelatorioInvalido(ValidationError):
     """Dados recusados no controle de relatório."""
@@ -155,12 +160,19 @@ def nome_especie_processo(processo):
     return processo.especie or ''
 
 
+def sequencia_ativa(codigo):
+    return codigo in SEQUENCIAS_ATIVAS
+
+
 def sequencia_do_processo(processo):
-    """Código da sequência de numeração conforme a espécie."""
+    """Código da sequência de numeração conforme a espécie.
+
+    Espécies de grupos ainda não liberados entram na sequência Liquidação.
+    """
     if not especie_gera_relatorio(processo):
         return None
     mapeada = _ESPECIE_PARA_SEQUENCIA.get(_chave(nome_especie_processo(processo)))
-    if mapeada:
+    if mapeada and sequencia_ativa(mapeada):
         return mapeada
     if processo.genero == perm.GRUPO_LIQUIDACOES:
         return GRUPO_PADRAO

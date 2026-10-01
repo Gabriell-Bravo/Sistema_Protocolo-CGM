@@ -109,4 +109,8 @@ def dados_para_formulario():
             {'valor': valor, 'rotulo': rotulo}
             for valor, rotulo in EspecieProcesso.GRUPO_CHOICES
         ] + [{'valor': GRUPO_OUTROS, 'rotulo': 'Outros (fora das filas de análise)'}],
+        'prioridades': [
+            {'codigo': codigo, 'nome': nome}
+            for codigo, nome in opcoes_prioridade()
+        ],
     }

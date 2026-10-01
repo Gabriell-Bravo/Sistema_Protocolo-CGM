@@ -1497,7 +1497,7 @@ button.encaminhamento__opcao:disabled {
     display: block;
     white-space: pre-wrap;
     word-break: break-word;
-    color: var(--text);
+    color: inherit;
 }
 
 .link-more {

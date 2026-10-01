@@ -54,13 +54,33 @@ class CriacaoTest(BaseProcessoTestCase):
     def test_criacao_ignora_campos_de_analise(self):
         processo = self.novo_processo(
             tecnico='Fulano', numero_despacho='99', observacao='x',
-            prioridade='URGENTE', data_saida='2026-09-02', destino='Outro')
+            data_saida='2026-09-02', destino='Outro')
         self.assertEqual(processo.situacao_tramite, 'DISPONIVEL')
         self.assertEqual(processo.prioridade, 'NORMAL')
         self.assertIsNone(processo.analista_responsavel)
         self.assertFalse(processo.numero_despacho)
         self.assertIsNone(processo.data_saida)
         self.assertIsNone(processo.destino)
+
+    def test_protocolo_define_prioridade_na_entrada(self):
+        urgente = self.novo_processo(
+            prioridade='URGENTE', numero_processo='9001/2026')
+        self.assertEqual(urgente.prioridade, 'URGENTE')
+        prioritario = self.novo_processo(
+            prioridade='PRIORITARIO', numero_processo='9002/2026')
+        self.assertEqual(prioritario.prioridade, 'PRIORITARIO')
+        invalida = self.novo_processo(
+            prioridade='INVENTADA', numero_processo='9003/2026')
+        self.assertEqual(invalida.prioridade, 'NORMAL')
+
+    def test_protocolo_pode_corrigir_prioridade(self):
+        processo = self.novo_processo()
+        alteracoes, recusados = svc_processos.aplicar_edicao(
+            processo, {'prioridade': 'URGENTE'}, self.protocolo)
+        processo.refresh_from_db()
+        self.assertEqual(processo.prioridade, 'URGENTE')
+        self.assertIn('prioridade', alteracoes)
+        self.assertNotIn('prioridade', recusados)
 
     def test_grupo_vem_da_especie(self):
         dados = self.dados_protocolo(self.especie_liq)

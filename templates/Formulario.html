@@ -2,7 +2,7 @@
 
 {% block title %}Novo Processo{% endblock %}
 {% block page_title %}Entrada de Processo{% endblock %}
-{% block page_subtitle %}Registro de protocolo. A análise, a prioridade e a saída acontecem depois, cada uma no seu momento.{% endblock %}
+{% block page_subtitle %}Registro de protocolo. Informe a prioridade na entrada; a análise e a saída acontecem depois, cada uma no seu momento.{% endblock %}
 {% block content_class %}content--narrow{% endblock %}
 
 {% block topbar_actions %}
@@ -140,12 +140,27 @@
                         <option value="SIM">Sim</option>
                     </select>
                 </div>
+                <div class="field field--required">
+                    <label class="field__label" for="prioridade">Prioridade</label>
+                    <select id="prioridade" name="prioridade" class="select" required>
+                        {% for item in dados_formulario.prioridades %}
+                            <option value="{{ item.codigo }}" {% if item.codigo == 'NORMAL' %}selected{% endif %}>
+                                {{ item.nome }}
+                            </option>
+                        {% empty %}
+                            <option value="NORMAL" selected>Normal</option>
+                            <option value="PRIORITARIO">Prioritário</option>
+                            <option value="URGENTE">Urgente</option>
+                        {% endfor %}
+                    </select>
+                    <span class="field__hint">Define o prazo e o destaque na fila. A Gestão ainda pode alterar depois.</span>
+                </div>
             </div>
             <div class="alert alert--info">
                 <span class="material-symbols-rounded">info</span>
                 <span>
-                    O processo entra com prioridade Normal. A prioridade é definida pela Gestão;
-                    o analista responsável passa a existir quando alguém assumir o processo.
+                    O analista responsável passa a existir quando alguém assumir o processo.
+                    Números marcados pela Gestão como urgência recorrente entram como Urgente.
                 </span>
             </div>
         </div>
@@ -325,7 +340,8 @@
             hora_entrada: document.getElementById('horaEntrada').value,
             objeto: document.getElementById('objeto').value.trim(),
             contratada: contratadaInput.value.trim() || null,
-            recorrente: document.getElementById('recorrente').value
+            recorrente: document.getElementById('recorrente').value,
+            prioridade: document.getElementById('prioridade').value || 'NORMAL'
         };
 
         const e = especieSelecionada();

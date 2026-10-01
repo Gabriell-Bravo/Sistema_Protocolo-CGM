@@ -339,7 +339,8 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertContains(aba_liq, '5001')
         self.assertNotContains(aba_liq, '>11</strong>')
 
-    def test_especies_usam_sequencias_separadas_e_abas(self):
+    def test_especies_ainda_usam_so_sequencia_liquidacao(self):
+        """Outras sequências existem na tela, mas ainda não geram número próprio."""
         from processos_app.models import EspecieProcesso
 
         bolsa, _ = EspecieProcesso.objects.get_or_create(
@@ -367,14 +368,15 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self._salvar_liquidacao(processo_diaria)
 
         self.assertEqual(liquidacao.numero_relatorio, '101')
-        self.assertEqual(processo_bolsa.numero_relatorio, '11')
-        self.assertEqual(processo_diaria.numero_relatorio, '21')
-        self.assertEqual(
-            LinhaControleRelatorio.objects.get(processo=processo_bolsa).sequencia,
-            'BOLSA_ATLETA')
-        self.assertEqual(
-            LinhaControleRelatorio.objects.get(processo=processo_diaria).sequencia,
-            'DIARIA')
+        self.assertEqual(processo_bolsa.numero_relatorio, '102')
+        self.assertEqual(processo_diaria.numero_relatorio, '103')
+        for processo in (liquidacao, processo_bolsa, processo_diaria):
+            self.assertEqual(
+                LinhaControleRelatorio.objects.get(processo=processo).sequencia,
+                'LIQUIDACOES')
+
+        self.assertEqual(relatorios.estado_sequencia('BOLSA_ATLETA')['proximo'], 11)
+        self.assertEqual(relatorios.estado_sequencia('DIARIA')['proximo'], 21)
 
         self.client.force_login(self.analista_liq)
         aba_bolsa = self.client.get(
@@ -382,13 +384,12 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertContains(aba_bolsa, 'Bolsa Atleta')
         self.assertContains(
             aba_bolsa, 'Inclui (Concessão Aux. Bolsa Atleta; P.C. Bolsa Atleta).')
-        self.assertContains(aba_bolsa, '61/2026')
-        self.assertNotContains(aba_bolsa, '60/2026')
-        self.assertNotContains(aba_bolsa, '62/2026')
+        self.assertNotContains(aba_bolsa, '61/2026')
 
         aba_liq = self.client.get(reverse('controle_relatorio'))
         self.assertContains(aba_liq, '60/2026')
-        self.assertNotContains(aba_liq, '61/2026')
+        self.assertContains(aba_liq, '61/2026')
+        self.assertContains(aba_liq, '62/2026')
 
     def test_planilha_ordena_por_numero_de_relatorio(self):
         admin = criar_usuario('admin_ord', 'GESTAO', is_superuser=True)
