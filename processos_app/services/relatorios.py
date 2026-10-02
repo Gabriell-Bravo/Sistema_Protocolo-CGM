@@ -342,25 +342,23 @@ def definir_ultimo_numero(usuario, ultimo, grupo=GRUPO_PADRAO):
 def proximo_numero(grupo):
     """Trava a sequência para dois salvamentos não saírem iguais.
 
-    Ordem: número devolvido (desistência) → próximo do contador definido
-    pelo administrador. Não preenche buracos antigos só porque alguém
-    informou um número manual fora da sequência atual.
+    Usa somente o contador definido pelo administrador (e avançado
+    automaticamente). Números antigos soltos na planilha — de desistência
+    ou de digitação manual — não voltam a ser emitidos.
     """
     SequenciaRelatorio.objects.get_or_create(
         grupo=grupo, defaults={'proximo_numero': _proximo_padrao(grupo)})
     seq = SequenciaRelatorio.objects.select_for_update().get(grupo=grupo)
     usados = numeros_usados(grupo) | _numeros_reservados(grupo)
-    livres = _numeros_devolvidos(grupo, usados)
-    if livres:
-        numero = min(livres)
-        LinhaControleRelatorio.objects.filter(
-            processo__isnull=True, numero_relatorio=str(numero)
-        ).filter(filtro_sequencia(grupo)).delete()
-        return str(numero)
 
     numero = int(seq.proximo_numero or 1)
     if numero < 1:
         numero = 1
+    # Limpa sobras antigas abaixo do contador para não confundir a planilha.
+    LinhaControleRelatorio.objects.filter(
+        processo__isnull=True
+    ).filter(filtro_sequencia(grupo)).exclude(numero_relatorio='').delete()
+
     while numero in usados:
         numero += 1
     seq.proximo_numero = numero + 1
@@ -526,9 +524,26 @@ def registrar(processo):
     return linha
 
 
+@transaction.atomic
 def remover_do_processo(processo):
-    """Desvincula a linha. O número volta a ser o próximo a ser gerado."""
-    LinhaControleRelatorio.objects.filter(processo=processo).update(processo=None)
+    """Desvincula a linha. Se era o último número emitido, o contador volta.
+
+    Não deixa o número antigo solto para ser reaproveitado no meio da
+    sequência — o próximo automático continua no contador.
+    """
+    linhas = list(LinhaControleRelatorio.objects.filter(processo=processo))
+    for linha in linhas:
+        numero = _inteiro(linha.numero_relatorio)
+        sequencia = (linha.sequencia or '').strip() or GRUPO_PADRAO
+        if numero:
+            seq = (SequenciaRelatorio.objects
+                   .select_for_update()
+                   .filter(grupo=sequencia)
+                   .first())
+            if seq and int(seq.proximo_numero or 0) == numero + 1:
+                seq.proximo_numero = numero
+                seq.save(update_fields=['proximo_numero'])
+        linha.delete()
     _liberar_reservas_do_processo(processo)
 
 

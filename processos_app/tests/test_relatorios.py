@@ -7,6 +7,8 @@ from processos_app.services import relatorios, tramitacao
 
 from .base import BaseProcessoTestCase, criar_usuario
 
+import datetime
+
 
 class ControleRelatorioTest(BaseProcessoTestCase):
 
@@ -238,7 +240,7 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self._salvar_liquidacao(segundo)
         self.assertEqual(segundo.numero_relatorio, '2001')
 
-    def test_declinar_no_meio_devolve_so_o_numero_livre(self):
+    def test_declinar_no_meio_nao_volta_a_numero_antigo(self):
         admin = criar_usuario('admin_meio', 'GESTAO', is_superuser=True)
         relatorios.definir_ultimo_numero(admin, 2000)
         primeiro = self.novo_processo(self.especie_liq, numero_processo='11c/2026')
@@ -249,12 +251,30 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertEqual(segundo.numero_relatorio, '2002')
         tramitacao.declinar_analise(primeiro.id, self.analista_liq, 'Teste')
 
+        # O 2001 do meio não é reaproveitado; o contador segue em 2003.
         terceiro = self.novo_processo(self.especie_liq, numero_processo='11e/2026')
         self._salvar_liquidacao(terceiro)
-        self.assertEqual(terceiro.numero_relatorio, '2001')
+        self.assertEqual(terceiro.numero_relatorio, '2003')
         quarto = self.novo_processo(self.especie_liq, numero_processo='11f/2026')
         self._salvar_liquidacao(quarto)
-        self.assertEqual(quarto.numero_relatorio, '2003')
+        self.assertEqual(quarto.numero_relatorio, '2004')
+
+    def test_numero_antigo_devolvido_nao_vence_o_contador(self):
+        admin = criar_usuario('admin_orfao', 'GESTAO', is_superuser=True)
+        relatorios.definir_ultimo_numero(admin, 1914)
+        # Simula sobra antiga na planilha (como o 1727 que estava voltando).
+        LinhaControleRelatorio.objects.create(
+            processo=None,
+            numero_relatorio='1727',
+            numero_processo='orfao/2026',
+            grupo='LIQUIDACOES',
+            sequencia='LIQUIDACOES',
+            data_relatorio=datetime.date(2026, 9, 4),
+        )
+        processo = self.novo_processo(self.especie_liq, numero_processo='1915x/2026')
+        self._salvar_liquidacao(processo)
+        self.assertEqual(processo.numero_relatorio, '1915')
+        self.assertEqual(relatorios.estado_sequencia()['proximo'], 1916)
 
     def test_numero_especifico_antigo_nao_puxa_sequencia_para_tras(self):
         admin = criar_usuario('admin_buraco', 'GESTAO', is_superuser=True)
