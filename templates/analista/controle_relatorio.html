@@ -67,7 +67,7 @@
                     <div class="search__field">
                         <span class="material-symbols-rounded search__icon">search</span>
                         <input type="text" name="termo" class="input"
-                               placeholder="Buscar por processo, relatório, espécie, secretaria, analista…"
+                               placeholder="Buscar em qualquer campo: processo, relatório, data, espécie, valor, destino, status…"
                                value="{{ termo|default:'' }}">
                     </div>
                     <button type="submit" class="btn btn--primary">Buscar</button>
@@ -98,7 +98,7 @@
                             <th>Analista</th>
                             <th>Status da análise</th>
                             <th>Observação</th>
-                            <th class="col-actions">Ações</th>
+                            <th class="col-actions col-actions--compact">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -131,7 +131,7 @@
                             <td>{{ linha.analista|default:"—" }}</td>
                             <td>{{ linha.status_analise_display }}</td>
                             <td class="cell-wrap">{{ linha.observacao|truncatechars:60|default:"—" }}</td>
-                            <td class="col-actions">
+                            <td class="col-actions col-actions--compact">
                                 {% if linha.processo_id %}
                                 <a href="{% url 'analista_processo' linha.processo_id %}?next={% url 'controle_relatorio' %}%3Faba%3D{{ aba }}%26secao%3Danalises"
                                    class="icon-btn icon-btn--primary" title="Editar análise">
@@ -241,7 +241,7 @@
                             <th>Grupo</th>
                             <th>Destinado por</th>
                             <th>Em</th>
-                            <th class="col-actions">Ações</th>
+                            <th class="col-actions col-actions--compact">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -252,7 +252,7 @@
                             <td>{{ info_aba.nome }}</td>
                             <td>{{ reserva.criado_por.get_full_name|default:reserva.criado_por.username|default:"—" }}</td>
                             <td>{{ reserva.criado_em|date:"d/m/Y H:i" }}</td>
-                            <td class="col-actions">
+                            <td class="col-actions col-actions--compact">
                                 <form method="post" action="{% url 'controle_relatorio_cancelar_destino' reserva.id %}"
                                       onsubmit="return confirm('Cancelar o destino do nº {{ reserva.numero }}?');">
                                     {% csrf_token %}

@@ -9,7 +9,7 @@ from django.urls import reverse
 from processos_app.models import EventoProcesso, ProcessHistory, Processo
 from processos_app.services import tramitacao
 
-from .base import BaseProcessoTestCase
+from .base import BaseProcessoTestCase, criar_usuario
 
 STATIC = {'STORAGES': {
     'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
@@ -107,6 +107,16 @@ class TelasPorPapelTest(BaseProcessoTestCase):
         self.assertContains(dilig, 'Falta documento')
         self.assertNotContains(dilig, 'Indicar atendimento')
         self.assertContains(dilig, 'Consulta. A indicação de atendimento é da Gestão.')
+        self.assertContains(dilig, 'name="termo"')
+
+        busca = self._get(self.analista_lic, 'gestao_diligencias',
+                          query='?termo=2004')
+        self.assertContains(busca, 'Falta documento')
+        self.assertEqual(busca.context['total'], 1)
+        vazia = self._get(self.analista_lic, 'gestao_diligencias',
+                          query='?termo=inexistente-xyz')
+        self.assertEqual(vazia.context['total'], 0)
+        self.assertContains(vazia, 'Nenhuma diligência encontrada')
 
         self.client.force_login(self.analista_lic)
         resposta = self.client.post(
@@ -124,6 +134,56 @@ class TelasPorPapelTest(BaseProcessoTestCase):
         depois = (ProcessHistory.objects.count(), EventoProcesso.objects.count(),
                   list(Processo.objects.values_list('status_monitoramento', flat=True)))
         self.assertEqual(antes, depois)
+
+    def test_gestao_edita_especie_nome_grupo_e_sequencia(self):
+        from processos_app.models import EspecieProcesso
+        from .base import criar_usuario
+        processo = self.novo_processo(self.especie_liq, numero_processo='esp-cad/2026')
+        self.assertEqual(processo.genero, 'LIQUIDACOES')
+        self.assertEqual(processo.especie, self.especie_liq.nome)
+
+        pagina = self._get(self.gestao, 'gestao_cadastros', 'especies')
+        self.assertContains(pagina, 'Espécies de Processo')
+        self.assertContains(pagina, 'Grupo do relatório')
+        self.assertContains(pagina, 'name="sequencia_numeracao"')
+
+        self.client.force_login(self.gestao)
+        resposta = self.client.post(reverse('gestao_cadastro_salvar', args=['especies']), {
+            'id': self.especie_liq.id,
+            'nome': 'Pagamento Geral Renomeado',
+            'grupo': 'LIQUIDACOES',
+            'sequencia_numeracao': 'ADIANTAMENTO',
+            'ordem': '10',
+            'tipo_monitoramento': 'NENHUM',
+            'gera_relatorio': 'on',
+        })
+        self.assertEqual(resposta.status_code, 302)
+        self.especie_liq.refresh_from_db()
+        self.assertEqual(self.especie_liq.nome, 'Pagamento Geral Renomeado')
+        self.assertEqual(self.especie_liq.sequencia_numeracao, 'ADIANTAMENTO')
+        processo.refresh_from_db()
+        self.assertEqual(processo.especie, 'Pagamento Geral Renomeado')
+        self.assertEqual(processo.genero, 'LIQUIDACOES')
+
+        from processos_app.services import relatorios
+        self.assertEqual(relatorios.sequencia_do_processo(processo), 'ADIANTAMENTO')
+
+        admin = criar_usuario('admin_esp', 'PROTOCOLO', is_superuser=True)
+        self._get(admin, 'gestao_cadastros', 'especies')
+        self.client.force_login(admin)
+        resposta = self.client.post(reverse('gestao_cadastro_salvar', args=['especies']), {
+            'id': self.especie_liq.id,
+            'nome': 'Pagamento Geral Admin',
+            'grupo': 'LIQUIDACOES',
+            'sequencia_numeracao': 'DIARIA',
+            'ordem': '10',
+            'tipo_monitoramento': 'NENHUM',
+            'gera_relatorio': 'on',
+        })
+        self.assertEqual(resposta.status_code, 302)
+        self.especie_liq.refresh_from_db()
+        self.assertEqual(self.especie_liq.nome, 'Pagamento Geral Admin')
+        self.assertEqual(self.especie_liq.sequencia_numeracao, 'DIARIA')
 
     def test_exportar_excel(self):
         finalizado = self.processo_disponivel_retirada()
@@ -225,15 +285,29 @@ class AcoesHttpTest(BaseProcessoTestCase):
             resposta = self.client.get(reverse(nome, args=[processo.id]))
             self.assertEqual(resposta.status_code, 405, nome)
 
-    def test_edicao_em_linha_recusa_campo_fora_do_papel(self):
+    def test_edicao_em_linha_protocolo_grava_analise_e_saida(self):
         processo = self.novo_processo()
         resposta = self._post_json(self.protocolo, 'atualizar_processo', [processo.id],
-                                   {'objeto': 'Alterado', 'numero_despacho': '7/2026'})
+                                   {'objeto': 'Alterado', 'numero_despacho': '7/2026',
+                                    'data_saida': '2026-10-02', 'hora_saida': '11:00'})
         self.assertEqual(resposta.status_code, 200, resposta.content)
-        self.assertIn('numero_despacho', resposta.json()['recusados'])
+        self.assertEqual(resposta.json()['recusados'], [])
         processo.refresh_from_db()
         self.assertEqual(processo.objeto, 'Alterado')
-        self.assertFalse(processo.numero_despacho)
+        self.assertEqual(processo.numero_despacho, '7/2026')
+        self.assertEqual(processo.data_saida.isoformat(), '2026-10-02')
+        self.assertEqual(processo.hora_saida.strftime('%H:%M'), '11:00')
+
+    def test_edicao_em_linha_recusa_campo_de_tramitacao(self):
+        processo = self.novo_processo()
+        situacao = processo.situacao_tramite
+        resposta = self._post_json(self.protocolo, 'atualizar_processo', [processo.id],
+                                   {'objeto': 'Ok', 'situacao_tramite': 'SAIDA_CONCLUIDA'})
+        self.assertEqual(resposta.status_code, 200, resposta.content)
+        self.assertIn('situacao_tramite', resposta.json()['recusados'])
+        processo.refresh_from_db()
+        self.assertEqual(processo.objeto, 'Ok')
+        self.assertEqual(processo.situacao_tramite, situacao)
 
     def test_gestao_nao_edita_em_linha(self):
         processo = self.novo_processo()
@@ -265,6 +339,59 @@ class AcoesHttpTest(BaseProcessoTestCase):
         resposta = self.client.post(reverse('analista_processo', args=[processo.id]),
                                     {'status_analise': 'NAO_PROSSEGUIMENTO'})
         self.assertEqual(resposta.status_code, 403)
+
+    def test_analista_e_admin_editam_dados_do_resumo(self):
+        processo = self.processo_em_analise(self.analista_liq, self.especie_liq)
+        self.client.force_login(self.analista_liq)
+        tela = self.client.get(reverse('analista_processo', args=[processo.id]))
+        self.assertTrue(tela.context['pode_editar'])
+        self.assertContains(tela, 'name="objeto"')
+        self.assertContains(tela, 'name="contratada"')
+        self.assertContains(tela, 'name="volume"')
+
+        resposta = self.client.post(reverse('analista_processo', args=[processo.id]), {
+            'objeto': 'Objeto corrigido pelo analista',
+            'contratada': 'Empresa XYZ',
+            'volume': '5',
+            'secretaria': processo.secretaria,
+            'especie': processo.especie,
+            'genero': processo.genero,
+            'prioridade': processo.prioridade or 'NORMAL',
+            'data_entrada': processo.data_entrada.isoformat(),
+            'hora_entrada': processo.hora_entrada.strftime('%H:%M'),
+            'destino': processo.destino or 'Unidade de Teste',
+            'valor': '1500',
+            'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+            'acao': 'salvar',
+        })
+        self.assertEqual(resposta.status_code, 302, getattr(resposta, 'content', b''))
+        processo.refresh_from_db()
+        self.assertEqual(processo.objeto, 'Objeto corrigido pelo analista')
+        self.assertEqual(processo.contratada, 'Empresa XYZ')
+        self.assertEqual(processo.volume, '5')
+
+        admin = criar_usuario('admin_resumo', 'GESTAO', is_superuser=True)
+        self.client.force_login(admin)
+        tela_admin = self.client.get(reverse('analista_processo', args=[processo.id]))
+        self.assertTrue(tela_admin.context['pode_editar'])
+        resposta_admin = self.client.post(reverse('analista_processo', args=[processo.id]), {
+            'objeto': 'Objeto pelo admin',
+            'contratada': 'Empresa XYZ',
+            'volume': '5',
+            'secretaria': processo.secretaria,
+            'especie': processo.especie,
+            'genero': processo.genero,
+            'prioridade': 'URGENTE',
+            'data_entrada': processo.data_entrada.isoformat(),
+            'hora_entrada': processo.hora_entrada.strftime('%H:%M'),
+            'destino': processo.destino or 'Unidade de Teste',
+            'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+            'acao': 'salvar',
+        })
+        self.assertEqual(resposta_admin.status_code, 302)
+        processo.refresh_from_db()
+        self.assertEqual(processo.objeto, 'Objeto pelo admin')
+        self.assertEqual(processo.prioridade, 'URGENTE')
 
     def test_direcionar_seletor_vazio_nao_quebra(self):
         processo = self.processo_em_analise()

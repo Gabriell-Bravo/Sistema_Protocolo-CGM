@@ -212,6 +212,26 @@ def fila_diligencias(status='AGUARDANDO_ATENDIMENTO'):
     return consulta
 
 
+def filtrar_por_termo(consulta, termo):
+    """Busca livre na fila de diligências (processo, secretaria, texto, analista)."""
+    termo = (termo or '').strip()
+    if not termo:
+        return consulta
+    from django.db.models import Q
+    return consulta.filter(
+        Q(descricao__icontains=termo) |
+        Q(processo__numero_processo__icontains=termo) |
+        Q(processo__secretaria__icontains=termo) |
+        Q(processo__objeto__icontains=termo) |
+        Q(processo__contratada__icontains=termo) |
+        Q(processo__especie__icontains=termo) |
+        Q(responsavel_tecnico__first_name__icontains=termo) |
+        Q(responsavel_tecnico__last_name__icontains=termo) |
+        Q(responsavel_tecnico__username__icontains=termo) |
+        Q(motivo_cancelamento__icontains=termo)
+    )
+
+
 def atendimentos_indicados(usuario):
     """item 30: o que voltou para o analista avaliar."""
     return (Pendencia.objects

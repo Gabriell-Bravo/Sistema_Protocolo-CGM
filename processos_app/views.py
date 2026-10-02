@@ -1526,18 +1526,17 @@ def analista_processo(request, process_id):
         ja_no_controle
         and perm.pode_editar_linha_relatorio(request.user, processo))
     pode_editar = (
-        (perm.is_analista(request.user) and (
+        perm.eh_administrador(request.user)
+        or (perm.is_analista(request.user) and (
             (processo.situacao_tramite == 'EM_ANALISE' and eh_responsavel)
             or pode_editar_controle))
-        or (perm.eh_administrador(request.user) and pode_editar_controle)
     )
 
     if request.method == 'POST' and not perm.is_analista(request.user):
         if not (perm.eh_administrador(request.user) and pode_editar):
             raise PermissionDenied(
                 'A Gestão consulta o processo; atos de análise são do '
-                'analista. O administrador só edita quando o processo já '
-                'está no Controle de relatório.')
+                'analista. O administrador pode editar os dados do processo.')
 
     # itens 8, 10 e 11
     pode_direcionar = perm.pode_direcionar_assinatura(request.user, processo) and (
@@ -1672,6 +1671,8 @@ def analista_processo(request, process_id):
             request.user, processo),
         'pode_alterar_sequencia_relatorio': perm.pode_alterar_sequencia_relatorio(
             request.user),
+        'dados_formulario': svc_cadastros.dados_para_formulario(),
+        'prioridades': svc_cadastros.opcoes_prioridade(),
         'sequencia_relatorio_codigo': (
             svc_relatorios.sequencia_do_processo(processo)
             or svc_relatorios.GRUPO_PADRAO

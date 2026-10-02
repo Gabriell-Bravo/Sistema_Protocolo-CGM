@@ -13,6 +13,9 @@
                 <tr>
                     <th>Processo</th>
                     <th>Secretaria</th>
+                    <th>Espécie</th>
+                    <th>Contratada</th>
+                    <th>Objeto</th>
                     <th>Volumes</th>
                     <th>Analisado por</th>
                     <th>Liberado por</th>
@@ -27,6 +30,9 @@
                 <tr class="{{ processo.prioridade_linha_class }}">
                     <td>{{ processo.numero_processo }}</td>
                     <td>{{ processo.secretaria }}</td>
+                    <td>{{ processo.especie|default:"—" }}</td>
+                    <td>{{ processo.contratada|default:"—" }}</td>
+                    <td class="cell-wrap">{{ processo.objeto|truncatechars:80|default:"—" }}</td>
                     <td>{{ processo.volume }}</td>
                     <td>{{ processo.nome_analista|default:"—" }}</td>
                     <td>{{ processo.liberado_assinatura_por|default:"—" }}</td>

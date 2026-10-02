@@ -22,20 +22,45 @@
 {% block content %}
 <div class="stack">
 
-    <section class="meta-grid">
+    <section class="meta-grid" id="metaProcesso" {% if pode_editar %}data-editavel="1"{% endif %}>
         <div class="meta-item">
             <span class="meta-item__label">Grupo</span>
+            {% if pode_editar %}
+            <select id="meta_genero" name="genero" form="formAnalise" class="select">
+                {% for item in dados_formulario.grupos %}
+                <option value="{{ item.valor }}" {% if processo.genero == item.valor %}selected{% endif %}>{{ item.rotulo }}</option>
+                {% endfor %}
+            </select>
+            {% else %}
             <span class="badge {% if processo.genero == 'LICITACOES_E_CONTRATOS' %}badge--grupo-licitacoes{% else %}badge--grupo-liquidacoes{% endif %}">
                 {{ processo.genero_display }}
             </span>
+            {% endif %}
         </div>
         <div class="meta-item">
             <span class="meta-item__label">Espécie</span>
+            {% if pode_editar %}
+            <select id="meta_especie" name="especie" form="formAnalise" class="select" required>
+                <option value="">Selecione</option>
+            </select>
+            <input type="text" id="meta_especie_outros" name="especie_outros" form="formAnalise"
+                   class="input" style="margin-top:8px;display:none;"
+                   placeholder="Digite a espécie" value="">
+            {% else %}
             <span class="meta-item__value">{{ processo.especie|default:"—" }}</span>
+            {% endif %}
         </div>
         <div class="meta-item">
             <span class="meta-item__label">Prioridade</span>
+            {% if pode_editar %}
+            <select id="meta_prioridade" name="prioridade" form="formAnalise" class="select">
+                {% for codigo, nome in prioridades %}
+                <option value="{{ codigo }}" {% if processo.prioridade == codigo %}selected{% endif %}>{{ nome }}</option>
+                {% endfor %}
+            </select>
+            {% else %}
             {% include "includes/badge_prioridade.html" with processo=processo %}
+            {% endif %}
         </div>
         <div class="meta-item">
             <span class="meta-item__label">Situação</span>
@@ -47,11 +72,25 @@
         </div>
         <div class="meta-item">
             <span class="meta-item__label">Volume</span>
+            {% if pode_editar %}
+            <input type="text" name="volume" form="formAnalise" class="input"
+                   value="{{ processo.volume|default:'' }}" required>
+            {% else %}
             <span class="meta-item__value">{{ processo.volume|default:'—' }}</span>
+            {% endif %}
         </div>
         <div class="meta-item">
             <span class="meta-item__label">Entrada</span>
+            {% if pode_editar %}
+            <div class="meta-item__row">
+                <input type="date" name="data_entrada" form="formAnalise" class="input"
+                       value="{{ processo.data_entrada|date:'Y-m-d' }}" required>
+                <input type="time" name="hora_entrada" form="formAnalise" class="input"
+                       value="{% if processo.hora_entrada %}{{ processo.hora_entrada|time:'H:i' }}{% endif %}" required>
+            </div>
+            {% else %}
             <span class="meta-item__value">{{ processo.data_entrada|date:"d/m/Y" }} {% if processo.hora_entrada %}às {{ processo.hora_entrada|time:"H:i" }}{% endif %}</span>
+            {% endif %}
         </div>
         {% if processo.data_hora_assumido %}
         <div class="meta-item">
@@ -68,19 +107,48 @@
         {# item 40: exibido nos dois grupos, com rótulo geral #}
         <div class="meta-item">
             <span class="meta-item__label">Contratada / Favorecido / Interessado</span>
+            {% if pode_editar %}
+            <input type="text" name="contratada" form="formAnalise" class="input"
+                   value="{{ processo.contratada|default:'' }}">
+            {% else %}
             <span class="meta-item__value">{{ processo.contratada|default:'—' }}</span>
+            {% endif %}
         </div>
         <div class="meta-item meta-item--wide">
             <span class="meta-item__label">Objeto</span>
+            {% if pode_editar %}
+            <textarea name="objeto" form="formAnalise" class="textarea" rows="2" required>{{ processo.objeto }}</textarea>
+            {% else %}
             <span class="meta-item__value">{{ processo.objeto }}</span>
+            {% endif %}
         </div>
-        {% if processo.observacao_protocolo %}
+        {% if pode_editar or processo.observacao_protocolo %}
         <div class="meta-item meta-item--wide">
             <span class="meta-item__label">Observação do Protocolo</span>
+            {% if pode_editar %}
+            <textarea name="observacao_protocolo" form="formAnalise" class="textarea" rows="2">{{ processo.observacao_protocolo|default:'' }}</textarea>
+            {% else %}
             <span class="meta-item__value">{{ processo.observacao_protocolo }}</span>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% if pode_editar %}
+        <div class="meta-item meta-item--wide">
+            <span class="meta-item__label">Secretaria</span>
+            <select name="secretaria" form="formAnalise" class="select" required>
+                {% for nome in secretarias %}
+                <option value="{{ nome }}" {% if processo.secretaria == nome %}selected{% endif %}>{{ nome }}</option>
+                {% endfor %}
+                {% if processo.secretaria and processo.secretaria not in secretarias %}
+                <option value="{{ processo.secretaria }}" selected>{{ processo.secretaria }}</option>
+                {% endif %}
+            </select>
         </div>
         {% endif %}
     </section>
+    {% if pode_editar %}
+    {{ dados_formulario|json_script:"dados-formulario-meta" }}
+    {% endif %}
 
     {% if aviso_devolucao %}
         <div class="alert alert--warning">
@@ -140,7 +208,7 @@
     {% elif user.is_superuser and pode_editar and not processo.eh_meu %}
         <div class="alert alert--info">
             <span class="material-symbols-rounded">edit</span>
-            <span>Edição do administrador neste processo do Controle de relatório. Marque <strong>Sem relatório</strong> se o número não deve permanecer.</span>
+            <span>Edição do administrador. Altere os dados do processo e a análise; use <strong>Salvar análise</strong> para gravar. Marque <strong>Sem relatório</strong> se o número não deve permanecer.</span>
         </div>
     {% endif %}
 
@@ -781,5 +849,97 @@
                 event.target.closest('#formPendencia button[type="submit"]'));
         }
     });
+
+    (function initMetaEditavel() {
+        var dadosEl = document.getElementById('dados-formulario-meta');
+        var genero = document.getElementById('meta_genero');
+        var especie = document.getElementById('meta_especie');
+        var outros = document.getElementById('meta_especie_outros');
+        if (!dadosEl || !genero || !especie || !outros) return;
+
+        var dados = JSON.parse(dadosEl.textContent);
+        var OUTROS = '__OUTROS__';
+        var especieAtual = "{{ processo.especie|default:''|escapejs }}";
+        var generoAtual = "{{ processo.genero|default:''|escapejs }}";
+
+        function especiesDoGrupo(grupo) {
+            return (dados.especies || []).filter(function (e) {
+                return !grupo || e.grupo === grupo;
+            });
+        }
+
+        function preencherEspecies(grupo, selecionada) {
+            especie.innerHTML = '';
+            var vazio = document.createElement('option');
+            vazio.value = '';
+            vazio.textContent = 'Selecione';
+            especie.appendChild(vazio);
+
+            especiesDoGrupo(grupo).forEach(function (e) {
+                var opt = document.createElement('option');
+                opt.value = e.nome;
+                opt.textContent = e.nome;
+                if (selecionada && selecionada === e.nome) opt.selected = true;
+                especie.appendChild(opt);
+            });
+
+            var optOutros = document.createElement('option');
+            optOutros.value = OUTROS;
+            optOutros.textContent = 'Outros (digitar)';
+            especie.appendChild(optOutros);
+
+            var nomes = especiesDoGrupo(grupo).map(function (e) { return e.nome; });
+            if (selecionada && nomes.indexOf(selecionada) === -1) {
+                optOutros.selected = true;
+                outros.style.display = 'block';
+                outros.value = selecionada;
+                outros.required = true;
+            } else {
+                outros.style.display = 'none';
+                outros.required = false;
+                if (!selecionada || nomes.indexOf(selecionada) !== -1) {
+                    outros.value = '';
+                }
+            }
+        }
+
+        function aoMudarEspecie() {
+            var ehOutros = especie.value === OUTROS;
+            outros.style.display = ehOutros ? 'block' : 'none';
+            outros.required = ehOutros;
+            if (ehOutros) return;
+            outros.value = '';
+            var encontrada = (dados.especies || []).find(function (e) {
+                return e.nome === especie.value;
+            });
+            if (encontrada && encontrada.grupo && genero.value !== encontrada.grupo) {
+                genero.value = encontrada.grupo;
+                preencherEspecies(encontrada.grupo, encontrada.nome);
+            }
+        }
+
+        genero.addEventListener('change', function () {
+            preencherEspecies(genero.value, '');
+            aoMudarEspecie();
+        });
+        especie.addEventListener('change', aoMudarEspecie);
+
+        if (generoAtual) genero.value = generoAtual;
+        preencherEspecies(genero.value || generoAtual, especieAtual);
+        aoMudarEspecie();
+
+        var form = document.getElementById('formAnalise');
+        if (form) {
+            form.addEventListener('submit', function () {
+                if (especie.value === OUTROS) {
+                    especie.name = '';
+                    outros.name = 'especie';
+                } else {
+                    outros.name = 'especie_outros';
+                    outros.disabled = true;
+                }
+            });
+        }
+    })();
 </script>
 {% endblock %}

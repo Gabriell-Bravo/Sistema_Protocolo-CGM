@@ -175,15 +175,19 @@ def sequencia_ativa(codigo):
 def sequencia_do_processo(processo):
     """Código da sequência de numeração conforme a espécie do processo.
 
-    O administrador pode gravar um ajuste em `sequencia_relatorio`.
-    Espécie mapeada e ativa → sequência própria.
-    Demais Liquidações → Liquidação (legado).
+    Ordem: ajuste manual no processo → sequência cadastrada na espécie →
+    mapa legado pelo nome → Liquidação (demais Liquidações).
     """
     if not especie_gera_relatorio(processo):
         return None
     ajuste = (getattr(processo, 'sequencia_relatorio', None) or '').strip()
     if ajuste and sequencia_ativa(ajuste):
         return ajuste
+    especie = processo.especie_fk if getattr(processo, 'especie_fk_id', None) else None
+    if especie is not None:
+        cadastrada = (especie.sequencia_numeracao or '').strip()
+        if cadastrada and sequencia_ativa(cadastrada):
+            return cadastrada
     mapeada = _ESPECIE_PARA_SEQUENCIA.get(_chave(nome_especie_processo(processo)))
     if mapeada and sequencia_ativa(mapeada):
         return mapeada
@@ -540,6 +544,64 @@ def remover_do_processo(processo):
     """Desvincula a linha. O número volta a ser o próximo a ser gerado."""
     LinhaControleRelatorio.objects.filter(processo=processo).update(processo=None)
     _liberar_reservas_do_processo(processo)
+
+
+def filtrar_por_termo(consulta, termo):
+    """Busca livre em qualquer coluna da planilha de análises."""
+    termo = (termo or '').strip()
+    if not termo:
+        return consulta
+
+    from ..models import Processo
+    from datetime import datetime
+
+    filtro = (
+        Q(numero_processo__icontains=termo) |
+        Q(numero_relatorio__icontains=termo) |
+        Q(volume__icontains=termo) |
+        Q(secretaria__icontains=termo) |
+        Q(contratada__icontains=termo) |
+        Q(objeto__icontains=termo) |
+        Q(valor__icontains=termo) |
+        Q(periodo__icontains=termo) |
+        Q(destino__icontains=termo) |
+        Q(analista__icontains=termo) |
+        Q(status_analise__icontains=termo) |
+        Q(observacao__icontains=termo) |
+        Q(grupo__icontains=termo) |
+        Q(sequencia__icontains=termo) |
+        Q(processo__especie__icontains=termo) |
+        Q(processo__genero__icontains=termo) |
+        Q(processo__objeto__icontains=termo) |
+        Q(processo__contratada__icontains=termo) |
+        Q(processo__secretaria__icontains=termo) |
+        Q(processo__destino__icontains=termo)
+    )
+
+    chave = termo.casefold()
+    status_codes = [
+        codigo for codigo, rotulo in Processo.STATUS_ANALISE_CHOICES
+        if chave in rotulo.casefold() or chave in codigo.casefold()
+    ]
+    if status_codes:
+        filtro |= Q(status_analise__in=status_codes)
+
+    for item in SEQUENCIAS:
+        if (chave in item['nome'].casefold()
+                or chave in item['codigo'].casefold()):
+            filtro |= Q(sequencia=item['codigo']) | Q(grupo=item['codigo'])
+
+    if chave in ('sem relatório', 'sem relatorio', 's/r', 'sem n'):
+        filtro |= Q(sem_relatorio=True)
+
+    for formato in ('%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y', '%d/%m/%y'):
+        try:
+            filtro |= Q(data_relatorio=datetime.strptime(termo, formato).date())
+            break
+        except ValueError:
+            continue
+
+    return consulta.filter(filtro)
 
 
 def listar(usuario, sequencia=None):

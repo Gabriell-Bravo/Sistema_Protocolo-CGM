@@ -853,6 +853,9 @@ class EspecieProcesso(models.Model):
     grupo = models.CharField(
         max_length=30, choices=GRUPO_CHOICES, db_index=True,
         verbose_name="Grupo")
+    sequencia_numeracao = models.CharField(
+        max_length=50, blank=True, default='', db_index=True,
+        verbose_name="Grupo do relatório")
     ativo = models.BooleanField(default=True, verbose_name="Ativo")
     ordem = models.PositiveIntegerField(default=100, verbose_name="Ordem")
     exige_contratada = models.BooleanField(

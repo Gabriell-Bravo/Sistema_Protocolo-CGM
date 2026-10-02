@@ -145,18 +145,26 @@
                     <span class="nav-item__label">Diligências</span>
                 </a>
             {% endif %}
-            {% if is_gestao %}
+            {% if is_gestao or user.is_superuser %}
+                {% if is_gestao %}
                 <a href="{% url 'gestao_pessoas' %}"
                    class="nav-item {% if nav == 'gestao_pessoas' %}is-active{% endif %}"
                    title="Gestão de Pessoas CGM">
                     <span class="material-symbols-rounded">badge</span>
                     <span class="nav-item__label">Gestão de Pessoas CGM</span>
                 </a>
+                {% endif %}
                 <a href="{% url 'gestao_cadastros' slug='unidades' %}"
-                   class="nav-item {% if nav == 'gestao_cadastros' or nav == 'gestao_cadastros_inicio' %}is-active{% endif %}"
+                   class="nav-item {% if nav == 'gestao_cadastros_inicio' or nav == 'gestao_cadastros' and request.resolver_match.kwargs.slug|default:'unidades' != 'especies' %}is-active{% endif %}"
                    title="Cadastros">
                     <span class="material-symbols-rounded">tune</span>
                     <span class="nav-item__label">Cadastros</span>
+                </a>
+                <a href="{% url 'gestao_cadastros' slug='especies' %}"
+                   class="nav-item {% if nav == 'gestao_cadastros' and request.resolver_match.kwargs.slug|default:'' == 'especies' %}is-active{% endif %}"
+                   title="Espécies">
+                    <span class="material-symbols-rounded">category</span>
+                    <span class="nav-item__label">Espécies</span>
                 </a>
             {% endif %}
 

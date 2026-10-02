@@ -5,7 +5,6 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
-from django.db.models import Q
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -84,15 +83,7 @@ def controle_relatorio(request):
     linhas = svc.listar(request.user, sequencia=grupo)
     termo = request.GET.get('termo', '').strip()
     if termo:
-        linhas = linhas.filter(
-            Q(numero_processo__icontains=termo) |
-            Q(numero_relatorio__icontains=termo) |
-            Q(secretaria__icontains=termo) |
-            Q(contratada__icontains=termo) |
-            Q(analista__icontains=termo) |
-            Q(objeto__icontains=termo) |
-            Q(processo__especie__icontains=termo)
-        )
+        linhas = svc.filtrar_por_termo(linhas, termo)
     total = linhas.count()
     pagina = Paginator(linhas, 50).get_page(request.GET.get('page'))
 

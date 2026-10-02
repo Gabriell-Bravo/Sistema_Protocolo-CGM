@@ -12,7 +12,8 @@ Criação e edição de Processo (itens 17, 18, 21 e 51).
     liberado_assinatura_*, saida_concluida_*, cancelado_*)
     não estão em whitelist nenhuma: só mudam pelos endpoints próprios de
     services/tramitacao.py (item 52). A prioridade na entrada é do Protocolo;
-    a Gestão continua podendo alterá-la depois.
+    analista e administrador também corrigem dados cadastrais (CAMPOS_CADASTRO)
+    na tela do processo.
 """
 
 from datetime import date, datetime, time
@@ -30,17 +31,29 @@ from .eventos import registrar_diff, registrar_evento
 # Whitelists (item 51)
 # --------------------------------------------------------------------------
 
-# Dados de protocolo: o que o Protocolo registra na entrada e pode corrigir.
+# Dados de protocolo: o que o Protocolo registra na entrada e pode corrigir
+# nas listas de ativos e finalizados (entrada e saída).
 CAMPOS_PROTOCOLO = (
     'numero_processo', 'volume', 'secretaria', 'data_entrada', 'hora_entrada',
+    'data_saida', 'hora_saida', 'destino',
     'genero', 'especie', 'objeto', 'contratada', 'recorrente', 'prioridade',
-    'observacao_protocolo',
+    'observacao_protocolo', 'observacao',
+    'numero_despacho', 'valor', 'periodo', 'status_analise',
 )
 
 # Dados da análise: o que o analista responsável alimenta.
 CAMPOS_ANALISTA = (
     'valor', 'destino', 'periodo', 'data_analise', 'numero_despacho',
     'status_analise', 'observacao',
+)
+
+# Dados cadastrais do processo que analista e administrador também
+# corrigem na tela do processo (resumo: espécie, volume, objeto etc.).
+# Situação, analista e assumido em continuam só pela tramitação.
+CAMPOS_CADASTRO = (
+    'volume', 'secretaria', 'data_entrada', 'hora_entrada',
+    'genero', 'especie', 'objeto', 'contratada', 'prioridade',
+    'observacao_protocolo',
 )
 
 # A Gestão não pratica ato técnico nem edita dado de protocolo (item 2).
@@ -61,27 +74,25 @@ class DadosInvalidos(ValidationError):
     """Dados de processo recusados pela validação de backend."""
 
 
+def _campos_analista_e_cadastro():
+    return set(CAMPOS_ANALISTA) | set(CAMPOS_CADASTRO)
+
+
 def campos_editaveis(usuario, processo=None):
     """Campos que este usuário pode gravar neste processo."""
     if perm.is_protocolo(usuario):
         return set(CAMPOS_PROTOCOLO)
     if perm.eh_administrador(usuario):
-        if processo is None:
-            return set(CAMPOS_ANALISTA)
-        if processo.numero_relatorio or processo.sem_relatorio:
-            return set(CAMPOS_ANALISTA)
-        if perm.is_gestao(usuario):
-            return set(CAMPOS_GESTAO)
-        return set()
+        return _campos_analista_e_cadastro()
     if perm.is_analista(usuario):
         if processo is None:
-            return set(CAMPOS_ANALISTA)
+            return _campos_analista_e_cadastro()
         if (processo.situacao_tramite == 'EM_ANALISE'
                 and processo.analista_responsavel_id == usuario.id):
-            return set(CAMPOS_ANALISTA)
+            return _campos_analista_e_cadastro()
         if ((processo.numero_relatorio or processo.sem_relatorio)
                 and perm.pode_editar_linha_relatorio(usuario, processo)):
-            return set(CAMPOS_ANALISTA)
+            return _campos_analista_e_cadastro()
         return set()
     if perm.is_gestao(usuario):
         return set(CAMPOS_GESTAO)
@@ -301,9 +312,9 @@ def aplicar_edicao(processo, dados, usuario):
     for campo, bruto in permitidos.items():
         if campo in ('especie', 'genero'):
             continue
-        if campo == 'data_entrada':
+        if campo in ('data_entrada', 'data_saida'):
             novo = converter_data(bruto)
-        elif campo == 'hora_entrada':
+        elif campo in ('hora_entrada', 'hora_saida'):
             novo = converter_hora(bruto)
         elif campo == 'recorrente':
             novo = normalizar_recorrente(bruto)
@@ -321,7 +332,13 @@ def aplicar_edicao(processo, dados, usuario):
             processo.prazo_dias = cadastro.prazo_dias
             alteracoes['prioridade'] = (atual, novo)
             continue
-        elif campo == 'observacao_protocolo':
+        elif campo == 'status_analise':
+            novo = texto(bruto) or 'NAO_APLICAVEL'
+            if novo not in dict(Processo.STATUS_ANALISE_CHOICES):
+                raise DadosInvalidos('Status da análise inválido.')
+        elif campo == 'valor':
+            novo = formatar_valor(bruto) or None
+        elif campo in ('observacao_protocolo', 'observacao'):
             novo = texto(bruto)
         else:
             novo = texto(bruto) or None
@@ -338,6 +355,8 @@ def aplicar_edicao(processo, dados, usuario):
 
     if 'secretaria' in alteracoes:
         processo.secretaria_fk = cadastros.resolver_unidade(processo.secretaria)
+    if 'destino' in alteracoes:
+        processo.destino_fk = cadastros.resolver_unidade(processo.destino)
     monitoramento.recalcular_apos_edicao(processo, alteracoes.keys())
     processo.save()
     for campo, (anterior, novo) in alteracoes.items():
@@ -354,13 +373,22 @@ def aplicar_edicao(processo, dados, usuario):
 def aplicar_analise(processo, dados, usuario):
     """Grava os campos de análise enviados. Devolve quantos mudaram.
 
-    Só o analista responsável (em análise) ou o analista do grupo
-    corrigindo um relatório já gerado. Se vier número manual no POST,
-    ele é gravado no mesmo Salvar análise.
+    Só o analista responsável (em análise), o administrador ou o
+    analista do grupo corrigindo um relatório já gerado. Se vier número
+    manual no POST, ele é gravado no mesmo Salvar análise. Dados de
+    cadastro (espécie, volume, objeto…) passam por aplicar_edicao.
     """
+    dados_cadastro = {
+        k: dados.get(k) for k in CAMPOS_CADASTRO if k in (dados or {})
+    }
+    alteracoes = 0
+    if dados_cadastro:
+        mudancas, _ = aplicar_edicao(processo, dados_cadastro, usuario)
+        alteracoes += len(mudancas)
+        processo.refresh_from_db()
+
     permitidos, _ = filtrar_payload(
         usuario, processo, {k: dados.get(k) for k in CAMPOS_ANALISTA if k in dados})
-    alteracoes = 0
     for campo, bruto in permitidos.items():
         if campo == 'data_analise':
             novo = converter_data(bruto)

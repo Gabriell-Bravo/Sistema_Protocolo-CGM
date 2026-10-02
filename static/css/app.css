@@ -1435,6 +1435,15 @@ button.encaminhamento__opcao:disabled {
     box-shadow: -1px 0 0 var(--border);
 }
 
+.table .col-actions--compact {
+    width: 56px;
+    min-width: 56px;
+    max-width: 56px;
+    padding-left: 8px;
+    padding-right: 8px;
+    text-align: center;
+}
+
 .table .col-actions .btn {
     white-space: nowrap;
     flex-shrink: 0;
@@ -2252,6 +2261,18 @@ button.encaminhamento__opcao:disabled {
     color: var(--text);
     white-space: pre-wrap;
     word-break: break-word;
+}
+
+.meta-item .input,
+.meta-item .select,
+.meta-item .textarea {
+    width: 100%;
+}
+
+.meta-item__row {
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr;
+    gap: 8px;
 }
 
 .pendencia-list {

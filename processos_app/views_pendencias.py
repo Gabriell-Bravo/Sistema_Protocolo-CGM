@@ -52,13 +52,16 @@ def diligencias(request):
     status = request.GET.get('status', 'AGUARDANDO_ATENDIMENTO')
     if status not in dict(Pendencia.STATUS_CHOICES) and status != 'ABERTAS':
         status = 'AGUARDANDO_ATENDIMENTO'
+    termo = request.GET.get('termo', '').strip()
 
-    lista = _diligencias_visiveis(request.user, status)
+    lista = svc.filtrar_por_termo(
+        _diligencias_visiveis(request.user, status), termo)
     return render(request, 'gestao/diligencias.html', {
         'pendencias': lista,
         'total': lista.count(),
         'status_atual': status,
         'status_choices': Pendencia.STATUS_CHOICES,
+        'termo': termo,
         'total_aguardando': _diligencias_visiveis(
             request.user, 'AGUARDANDO_ATENDIMENTO').count(),
         'total_indicados': _diligencias_visiveis(

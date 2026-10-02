@@ -203,15 +203,15 @@
                         <td class="editable" data-field="secretaria">{{ processo.secretaria }}</td>
                         <td class="editable" data-field="data_entrada">{{ processo.data_entrada|date:"Y-m-d" }}</td>
                         <td class="editable" data-field="hora_entrada">{{ processo.hora_entrada|time:"H:i" }}</td>
-                        <td class="" data-field="data_saida" id="data_saida_{{ processo.id }}">{{ processo.data_saida|default:''|date:"Y-m-d" }}</td>
-                        <td class="" data-field="hora_saida" id="hora_saida_{{ processo.id }}">{{ processo.hora_saida|default:''|time:"H:i" }}</td>
+                        <td class="editable" data-field="data_saida" id="data_saida_{{ processo.id }}">{{ processo.data_saida|default:''|date:"Y-m-d" }}</td>
+                        <td class="editable" data-field="hora_saida" id="hora_saida_{{ processo.id }}">{{ processo.hora_saida|default:''|time:"H:i" }}</td>
                         <td><span class="badge badge--situacao {% if processo.situacao_tramite == 'EM_ANALISE' %}badge--mine{% elif processo.situacao_tramite == 'AGUARDANDO_ASSINATURA' %}badge--primary{% endif %}">{{ processo.situacao_exibicao }}</span></td>
                         <td>
                             <span class="badge badge--dot {% if processo.prazo_status == 'atrasado' %}badge--danger{% elif processo.prazo_status == 'hoje' or processo.prazo_status == 'atencao' %}badge--warning{% elif processo.prazo_status == 'ok' %}badge--success{% endif %}">
                                 {{ processo.prazo_formatado }}
                             </span>
                         </td>
-                        <td>{{ processo.destino|default:'' }}</td>
+                        <td class="editable" data-field="destino">{{ processo.destino|default:'' }}</td>
                         <td class="editable" data-field="genero">{{ processo.genero }}</td>
                         <td class="editable" data-field="especie">{{ processo.especie }}</td>
                         <td class="editable cell-wrap" data-field="objeto" data-full-text="{{ processo.objeto|default:'' }}">
@@ -222,20 +222,20 @@
                         </td>
                         <td class="editable" data-field="contratada">{{ processo.contratada|default:'' }}</td>
                         <td class="editable" data-field="recorrente">{{ processo.recorrente|default:'NAO' }}</td>
-                        <td class="" data-field="prioridade" data-prioridade-raw="{{ processo.prioridade }}">
+                        <td class="editable" data-field="prioridade" data-prioridade-raw="{{ processo.prioridade }}">
                             {% include "includes/badge_prioridade.html" with processo=processo %}
                         </td>
                         <td class="" data-field="tecnico">{{ processo.nome_analista|default:'' }}</td>
-                        <td class="" data-field="numero_despacho">{{ processo.numero_despacho|default:'' }}</td>
+                        <td class="editable" data-field="numero_despacho">{{ processo.numero_despacho|default:'' }}</td>
                         <td class="editable cell-wrap" data-field="observacao_protocolo" data-full-text="{{ processo.observacao_protocolo|default:'' }}">
                             <span class="cell-preview">{{ processo.observacao_protocolo|default:''|truncatechars:70 }}</span>
                             {% if processo.observacao_protocolo and processo.observacao_protocolo|length > 70 %}
                                 <button type="button" class="link-more" onclick="visualizarObservacao('{{ processo.observacao_protocolo|escapejs }}', 'Observação')">Ver tudo</button>
                             {% endif %}
                         </td>
-                        <td class="" data-field="valor">{{ processo.valor|default:'' }}</td>
-                        <td class="" data-field="periodo">{{ processo.periodo|default:'' }}</td>
-                        <td class="" data-field="status_analise" data-status-analise-raw="{{ processo.status_analise }}">
+                        <td class="editable" data-field="valor">{{ processo.valor|default:'' }}</td>
+                        <td class="editable" data-field="periodo">{{ processo.periodo|default:'' }}</td>
+                        <td class="editable" data-field="status_analise" data-status-analise-raw="{{ processo.status_analise }}">
                             <span class="badge {% if processo.status_analise == 'PROSSEGUIMENTO_SEM_RESSALVA' %}badge--success{% elif processo.status_analise == 'PROSSEGUIMENTO_COM_RESSALVA' %}badge--warning{% elif processo.status_analise == 'NAO_PROSSEGUIMENTO' or processo.status_analise == 'DEVOLUCAO_PARA_SANEAMENTO' %}badge--danger{% endif %}">{{ processo.get_status_analise_display }}</span>
                         </td>
                         <td>
@@ -359,12 +359,18 @@
                 inputElement = document.createElement('textarea');
                 inputElement.className = 'edit-field';
                 inputElement.value = value;
-            } else if (field === 'secretaria') {
+            } else if (field === 'secretaria' || field === 'destino') {
                 inputElement = document.createElement('select');
                 inputElement.className = 'edit-field';
-                // item 20: Secretarias vêm do cadastro de Unidades Administrativas.
+                // item 20: Secretarias/destinos vêm do cadastro de Unidades Administrativas.
                 const options = DADOS_FORMULARIO.unidades.slice();
                 if (value && !options.includes(value)) { options.unshift(value); }
+                if (field === 'destino') {
+                    const vazio = document.createElement('option');
+                    vazio.value = '';
+                    vazio.textContent = '—';
+                    inputElement.appendChild(vazio);
+                }
                 options.forEach(optionText => {
                     const option = document.createElement('option');
                     option.value = optionText;

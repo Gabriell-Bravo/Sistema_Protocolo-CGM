@@ -371,8 +371,8 @@ def pode_apagar_processo(user):
 
 
 def pode_editar_cadastros(user):
-    """itens 19 a 22: cadastros parametrizáveis são mantidos pela Gestão."""
-    return is_gestao(user)
+    """itens 19 a 22: cadastros parametrizáveis são da Gestão e do administrador."""
+    return is_gestao(user) or eh_administrador(user)
 
 
 def pode_acessar_fila_gestao(user):

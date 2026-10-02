@@ -23,6 +23,40 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         processo.refresh_from_db()
         return processo
 
+    def test_busca_encontra_por_qualquer_campo(self):
+        processo = self.novo_processo(self.especie_liq, numero_processo='busca-1/2026')
+        tramitacao.assumir(processo.id, self.analista_liq)
+        processo.refresh_from_db()
+        svc_processos.aplicar_analise(processo, {
+            'destino': 'Secretaria da Cultura',
+            'valor': '2500,50',
+            'periodo': 'Jan/2026',
+            'observacao': 'Obs exclusiva busca',
+            'status_analise': 'PROSSEGUIMENTO_COM_RESSALVA',
+        }, self.analista_liq)
+        processo.refresh_from_db()
+        linha = LinhaControleRelatorio.objects.get(processo=processo)
+
+        self.client.force_login(self.analista_liq)
+        for termo in (
+            processo.numero_relatorio,
+            'busca-1/2026',
+            'Secretaria da Cultura',
+            'Jan/2026',
+            'Obs exclusiva busca',
+            'com ressalva',
+            linha.data_relatorio.strftime('%d/%m/%Y'),
+        ):
+            pagina = self.client.get(
+                reverse('controle_relatorio') + f'?termo={termo}')
+            self.assertContains(
+                pagina, 'busca-1/2026',
+                msg_prefix=f'termo={termo!r}')
+
+        vazia = self.client.get(
+            reverse('controle_relatorio') + '?termo=nao-existe-xyz')
+        self.assertNotContains(vazia, 'busca-1/2026')
+
     def test_salvar_analise_sem_relatorio_aparece_no_controle(self):
         processo = self.novo_processo(self.especie_liq, numero_processo='sr-1/2026')
         tramitacao.assumir(processo.id, self.analista_liq)

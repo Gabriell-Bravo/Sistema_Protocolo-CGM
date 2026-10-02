@@ -122,16 +122,47 @@ class CriacaoTest(BaseProcessoTestCase):
 
 class WhitelistEdicaoTest(BaseProcessoTestCase):
 
-    def test_protocolo_nao_grava_campo_de_analise(self):
-        processo = self.novo_processo()
+    def test_protocolo_edita_entrada_saida_e_analise(self):
+        processo = self.processo_disponivel_retirada()
         alteracoes, recusados = svc_processos.aplicar_edicao(
-            processo, {'objeto': 'Novo objeto', 'numero_despacho': '1/2026',
-                       'status_analise': 'NAO_PROSSEGUIMENTO'}, self.protocolo)
+            processo, {
+                'objeto': 'Novo objeto',
+                'numero_despacho': '1/2026',
+                'status_analise': 'NAO_PROSSEGUIMENTO',
+                'data_saida': '2026-10-01',
+                'hora_saida': '15:30',
+                'destino': 'Unidade de Teste',
+                'valor': '2500',
+                'periodo': '01/2026',
+                'prioridade': 'URGENTE',
+            }, self.protocolo)
         processo.refresh_from_db()
+        self.assertEqual(recusados, [])
         self.assertEqual(processo.objeto, 'Novo objeto')
-        self.assertIn('numero_despacho', recusados)
-        self.assertIn('status_analise', recusados)
-        self.assertFalse(processo.numero_despacho)
+        self.assertEqual(processo.numero_despacho, '1/2026')
+        self.assertEqual(processo.status_analise, 'NAO_PROSSEGUIMENTO')
+        self.assertEqual(processo.data_saida.isoformat(), '2026-10-01')
+        self.assertEqual(processo.hora_saida.strftime('%H:%M'), '15:30')
+        self.assertEqual(processo.destino, 'Unidade de Teste')
+        self.assertEqual(processo.prioridade, 'URGENTE')
+        self.assertIn('numero_despacho', alteracoes)
+        self.assertIn('data_saida', alteracoes)
+
+    def test_protocolo_nao_grava_campo_de_tramitacao(self):
+        processo = self.novo_processo()
+        situacao = processo.situacao_tramite
+        alteracoes, recusados = svc_processos.aplicar_edicao(
+            processo, {
+                'objeto': 'Ok',
+                'situacao_tramite': 'SAIDA_CONCLUIDA',
+                'analista_responsavel': self.analista_lic.id,
+            }, self.protocolo)
+        processo.refresh_from_db()
+        self.assertEqual(processo.objeto, 'Ok')
+        self.assertEqual(processo.situacao_tramite, situacao)
+        self.assertIsNone(processo.analista_responsavel)
+        self.assertIn('situacao_tramite', recusados)
+        self.assertIn('analista_responsavel', recusados)
 
     def test_gestao_nao_edita_nada(self):
         processo = self.novo_processo()

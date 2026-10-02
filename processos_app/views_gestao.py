@@ -20,13 +20,24 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .models import (EspecieProcesso, Prioridade, Profile,
-                     TipoIndisponibilidade, UnidadeAdministrativa)
+                     TipoIndisponibilidade, UnidadeAdministrativa, Processo)
 from .services import gestao_pessoas, indicadores, prazos
 from .services import permissions as perm
+from .services import relatorios as svc_relatorios
 
 logger = logging.getLogger(__name__)
 
 APENAS_GESTAO = 'Área exclusiva da Gestão.'
+APENAS_GESTAO_OU_ADMIN = 'Área exclusiva da Gestão e do administrador.'
+
+
+def _opcoes_sequencia_relatorio():
+    return [('', 'Automática / sem grupo específico')] + [
+        (item['codigo'], item['nome'])
+        for item in svc_relatorios.SEQUENCIAS
+        if svc_relatorios.sequencia_ativa(item['codigo'])
+        or item['codigo'] == 'AUXILIO_COMPETICAO'
+    ]
 
 
 # --------------------------------------------------------------------------
@@ -48,21 +59,30 @@ CADASTROS = {
     'especies': {
         'modelo': EspecieProcesso,
         'titulo': 'Espécies de Processo',
-        'subtitulo': 'A espécie define o grupo do processo e a periodicidade do monitoramento.',
-        'campos': [('nome', 'Nome', 'texto'), ('grupo', 'Grupo', 'escolha'),
-                   ('ordem', 'Ordem', 'numero'),
-                   ('tipo_monitoramento', 'Monitoramento', 'escolha'),
-                   ('encerra_monitoramento_anterior', 'Encerra monitoramento anterior', 'bool'),
-                   ('gera_relatorio', 'Gera nº de relatório', 'bool'),
-                   ('exige_contratada', 'Exige contratada', 'bool'),
-                   ('exige_valor', 'Exige valor', 'bool')],
-        'escolhas': {'grupo': EspecieProcesso.GRUPO_CHOICES,
-                     'tipo_monitoramento': EspecieProcesso.TIPO_MONITORAMENTO_CHOICES},
+        'subtitulo': (
+            'Edite o nome, o grupo de análise e o grupo do relatório. '
+            'O grupo do relatório define a numeração no Controle de relatório.'
+        ),
+        'campos': [
+            ('nome', 'Nome', 'texto'),
+            ('grupo', 'Grupo de análise', 'escolha'),
+            ('sequencia_numeracao', 'Grupo do relatório', 'escolha'),
+            ('gera_relatorio', 'Gera nº de relatório', 'bool'),
+            ('ordem', 'Ordem', 'numero'),
+            ('tipo_monitoramento', 'Monitoramento', 'escolha'),
+            ('encerra_monitoramento_anterior', 'Encerra monitoramento anterior', 'bool'),
+            ('exige_contratada', 'Exige contratada', 'bool'),
+        ],
+        'escolhas': {
+            'grupo': EspecieProcesso.GRUPO_CHOICES,
+            'tipo_monitoramento': EspecieProcesso.TIPO_MONITORAMENTO_CHOICES,
+            'sequencia_numeracao': _opcoes_sequencia_relatorio,
+        },
         'obrigatorios': ['nome', 'grupo'],
         'relacionados': ['processos'],
-        # Mudar o grupo de espécie já usada deixaria os processos antigos
-        # com grupo derivado diferente do gravado.
-        'travados_se_usado': ['grupo'],
+        # Nome e grupo podem mudar: os processos vinculados são sincronizados.
+        'travados_se_usado': [],
+        'ordenar': ['grupo', 'ordem', 'nome'],
     },
     'prioridades': {
         'modelo': Prioridade,
@@ -92,17 +112,38 @@ def _config(slug):
     return CADASTROS[slug]
 
 
+def _escolhas_do(config):
+    resolvidas = {}
+    for campo, opcoes in config.get('escolhas', {}).items():
+        resolvidas[campo] = opcoes() if callable(opcoes) else opcoes
+    return resolvidas
+
+
 def _em_uso(registro, config):
     return any(getattr(registro, rel).exists() for rel in config.get('relacionados', []))
 
 
+def _sincronizar_especie(registro, antes_nome, antes_grupo):
+    """Mantém o texto legado dos processos alinhado ao cadastro da espécie."""
+    updates = {}
+    if registro.nome != antes_nome:
+        updates['especie'] = registro.nome
+    if registro.grupo != antes_grupo:
+        updates['genero'] = registro.grupo
+    if updates:
+        Processo.objects.filter(especie_fk=registro).update(**updates)
+
+
 @login_required
-@perm.exige(perm.pode_editar_cadastros, APENAS_GESTAO)
+@perm.exige(perm.pode_editar_cadastros, APENAS_GESTAO_OU_ADMIN)
 def cadastros(request, slug='unidades'):
     config = _config(slug)
     consulta = config['modelo'].objects.all()
+    ordenar = config.get('ordenar')
+    if ordenar:
+        consulta = consulta.order_by(*ordenar)
     pagina = Paginator(consulta, 50).get_page(request.GET.get('page'))
-    escolhas = config.get('escolhas', {})
+    escolhas = _escolhas_do(config)
 
     colunas = [{'campo': c, 'rotulo': r, 'tipo': t, 'opcoes': escolhas.get(c, [])}
                for c, r, t in config['campos']]
@@ -130,10 +171,11 @@ def cadastros(request, slug='unidades'):
 
 @login_required
 @require_POST
-@perm.exige(perm.pode_editar_cadastros, APENAS_GESTAO)
+@perm.exige(perm.pode_editar_cadastros, APENAS_GESTAO_OU_ADMIN)
 def cadastro_salvar(request, slug):
     config = _config(slug)
     modelo = config['modelo']
+    escolhas = _escolhas_do(config)
     registro = None
     if request.POST.get('id'):
         registro = get_object_or_404(modelo, id=request.POST.get('id'))
@@ -156,7 +198,7 @@ def cadastro_salvar(request, slug):
                     messages.error(request, f'{rotulo}: informe um número inteiro positivo.')
                     return redirect('gestao_cadastros', slug=slug)
         elif tipo == 'escolha':
-            validas = [v for v, _ in config['escolhas'][campo]]
+            validas = [v for v, _ in escolhas[campo]]
             if valor not in validas:
                 messages.error(request, f'{rotulo}: opção inválida.')
                 return redirect('gestao_cadastros', slug=slug)
@@ -184,9 +226,13 @@ def cadastro_salvar(request, slug):
             modelo.objects.create(**dados)
             messages.success(request, 'Cadastro criado.')
         else:
+            antes_nome = getattr(registro, 'nome', None)
+            antes_grupo = getattr(registro, 'grupo', None)
             for campo, valor in dados.items():
                 setattr(registro, campo, valor)
             registro.save()
+            if modelo is EspecieProcesso:
+                _sincronizar_especie(registro, antes_nome, antes_grupo)
             messages.success(request, 'Cadastro atualizado.')
     except IntegrityError:
         messages.error(request, 'Já existe um cadastro com esse nome ou código.')
@@ -202,7 +248,7 @@ def cadastro_salvar(request, slug):
 
 @login_required
 @require_POST
-@perm.exige(perm.pode_editar_cadastros, APENAS_GESTAO)
+@perm.exige(perm.pode_editar_cadastros, APENAS_GESTAO_OU_ADMIN)
 def cadastro_alternar(request, slug, registro_id):
     """Inativa ou reativa. Nunca exclui (item 19)."""
     config = _config(slug)

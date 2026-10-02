@@ -133,6 +133,11 @@
     <p class="cell-muted">
         Cadastro usado em processos não é excluído — é inativado. O registro inativo
         sai das listas de seleção, mas continua vinculado aos processos antigos.
+        {% if slug == 'especies' %}
+        Nas espécies, ao alterar o <strong>nome</strong> ou o <strong>grupo de análise</strong>,
+        os processos já vinculados são atualizados. O <strong>grupo do relatório</strong>
+        define em qual aba do Controle de relatório o número entra.
+        {% endif %}
     </p>
 </div>
 {% endblock %}
