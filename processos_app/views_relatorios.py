@@ -90,7 +90,8 @@ def controle_relatorio(request):
             Q(secretaria__icontains=termo) |
             Q(contratada__icontains=termo) |
             Q(analista__icontains=termo) |
-            Q(objeto__icontains=termo)
+            Q(objeto__icontains=termo) |
+            Q(processo__especie__icontains=termo)
         )
     total = linhas.count()
     pagina = Paginator(linhas, 50).get_page(request.GET.get('page'))

@@ -30,6 +30,10 @@
             </span>
         </div>
         <div class="meta-item">
+            <span class="meta-item__label">Espécie</span>
+            <span class="meta-item__value">{{ processo.especie|default:"—" }}</span>
+        </div>
+        <div class="meta-item">
             <span class="meta-item__label">Prioridade</span>
             {% include "includes/badge_prioridade.html" with processo=processo %}
         </div>

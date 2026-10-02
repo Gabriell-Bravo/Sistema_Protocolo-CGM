@@ -11,6 +11,7 @@
                 <tr>
                     <th>Prioridade</th>
                     <th class="col-sticky">Processo</th>
+                    <th>Espécie</th>
                     <th>Secretaria</th>
                     {% if mostrar_contratada %}
                         <th>Contratada / Favorecido / Interessado</th>
@@ -41,6 +42,7 @@
                         {% endif %}
                     </td>
                     <td class="col-sticky"><strong>{{ processo.numero_processo }}</strong></td>
+                    <td>{{ processo.especie|default:"—" }}</td>
                     <td>{{ processo.secretaria }}</td>
                     {% if mostrar_contratada %}
                         <td>{{ processo.contratada|default:'—' }}</td>

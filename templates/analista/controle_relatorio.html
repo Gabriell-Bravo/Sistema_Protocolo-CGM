@@ -67,7 +67,7 @@
                     <div class="search__field">
                         <span class="material-symbols-rounded search__icon">search</span>
                         <input type="text" name="termo" class="input"
-                               placeholder="Buscar por processo, relatório, secretaria, analista…"
+                               placeholder="Buscar por processo, relatório, espécie, secretaria, analista…"
                                value="{{ termo|default:'' }}">
                     </div>
                     <button type="submit" class="btn btn--primary">Buscar</button>
@@ -87,6 +87,7 @@
                             <th>Nº relatório</th>
                             <th>Data do relatório</th>
                             <th class="col-sticky">Nº processo</th>
+                            <th>Espécie</th>
                             <th>Volume</th>
                             <th>Secretaria</th>
                             <th>Contratada / Favorecido</th>
@@ -119,6 +120,7 @@
                                 {{ linha.numero_processo }}
                                 {% endif %}
                             </td>
+                            <td>{{ linha.processo.especie|default:"—" }}</td>
                             <td>{{ linha.volume|default:"—" }}</td>
                             <td>{{ linha.secretaria|default:"—" }}</td>
                             <td>{{ linha.contratada|default:"—" }}</td>
@@ -140,7 +142,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="14">
+                            <td colspan="15">
                                 <div class="empty empty--compact">
                                     <span class="material-symbols-rounded">table_chart</span>
                                     <div class="empty__title">Nenhuma linha neste grupo</div>

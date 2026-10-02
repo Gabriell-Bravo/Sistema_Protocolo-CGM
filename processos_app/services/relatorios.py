@@ -543,7 +543,9 @@ def remover_do_processo(processo):
 
 
 def listar(usuario, sequencia=None):
-    consulta = LinhaControleRelatorio.objects.filter(processo__isnull=False)
+    consulta = (LinhaControleRelatorio.objects
+                .filter(processo__isnull=False)
+                .select_related('processo'))
     if perm.eh_administrador(usuario) or perm.is_gestao(usuario):
         pass
     elif perm.is_analista(usuario):
