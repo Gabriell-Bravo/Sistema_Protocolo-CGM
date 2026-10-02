@@ -341,6 +341,15 @@ def pode_editar_linha_relatorio(user, processo=None):
     return pode_consultar_processo(user, processo)
 
 
+def pode_cancelar_linha_relatorio(user):
+    """Cancela linha no Controle: guarda o número ou exclui da sequência."""
+    return (
+        eh_administrador(user)
+        or is_gestao(user)
+        or grupo_do_analista(user) == GRUPO_LIQUIDACOES
+    )
+
+
 def pode_resolver_pendencia(user, pendencia):
     """item 30: quem conclui tecnicamente é o responsável técnico."""
     return is_analista(user) and pendencia.responsavel_tecnico_id == user.id
@@ -462,6 +471,7 @@ def contexto_de_permissoes(user):
         'pode_alterar_sequencia_relatorio': pode_alterar_sequencia_relatorio(user),
         'pode_editar_numero_relatorio': pode_editar_numero_relatorio(user),
         'pode_editar_linha_relatorio': pode_editar_linha_relatorio(user),
+        'pode_cancelar_linha_relatorio': pode_cancelar_linha_relatorio(user),
         'pode_desfazer_tramite': pode_desfazer_tramite(user),
         'pode_devolver_da_assinatura': pode_devolver_da_assinatura(user),
         'pode_acessar_fila_gestao': pode_acessar_fila_gestao(user),
@@ -493,6 +503,7 @@ def contexto_processor(request):
             'pode_alterar_sequencia_relatorio': False,
             'pode_editar_numero_relatorio': False,
             'pode_editar_linha_relatorio': False,
+            'pode_cancelar_linha_relatorio': False,
             'pode_desfazer_tramite': False,
             'pode_devolver_da_assinatura': False,
             'pode_acessar_fila_gestao': False,

@@ -98,13 +98,15 @@
                             <th>Analista</th>
                             <th>Status da análise</th>
                             <th>Observação</th>
-                            <th class="col-actions col-actions--compact">Ações</th>
+                            <th class="col-actions{% if not pode_cancelar_linha_relatorio %} col-actions--compact{% endif %}">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for linha in linhas %}
-                        <tr class="{% if linha.sem_relatorio %}tr-sem-relatorio{% endif %}"
-                            {% if linha.sem_relatorio %}title="Processo despachado sem relatório"{% endif %}>
+                        <tr class="{{ linha.linha_css_class }}"
+                            {% if linha.situacao_linha == 'RESERVADA' %}title="Número guardado após cancelamento"
+                            {% elif linha.situacao_linha == 'CANCELADA' %}title="Número excluído da sequência"
+                            {% elif linha.sem_relatorio %}title="Processo despachado sem relatório"{% endif %}>
                             <td>
                                 {% if linha.numero_relatorio %}
                                 <strong>{{ linha.numero_relatorio }}</strong>
@@ -131,13 +133,26 @@
                             <td>{{ linha.analista|default:"—" }}</td>
                             <td>{{ linha.status_analise_display }}</td>
                             <td class="cell-wrap">{{ linha.observacao|truncatechars:60|default:"—" }}</td>
-                            <td class="col-actions col-actions--compact">
-                                {% if linha.processo_id %}
-                                <a href="{% url 'analista_processo' linha.processo_id %}?next={% url 'controle_relatorio' %}%3Faba%3D{{ aba }}%26secao%3Danalises"
-                                   class="icon-btn icon-btn--primary" title="Editar análise">
-                                    <span class="material-symbols-rounded">edit</span>
-                                </a>
-                                {% endif %}
+                            <td class="col-actions {% if not pode_cancelar_linha_relatorio %}col-actions--compact{% endif %}">
+                                <div class="actions">
+                                    {% if linha.processo_id %}
+                                    <a href="{% url 'analista_processo' linha.processo_id %}?next={% url 'controle_relatorio' %}%3Faba%3D{{ aba }}%26secao%3Danalises"
+                                       class="icon-btn icon-btn--primary" title="Editar análise">
+                                        <span class="material-symbols-rounded">edit</span>
+                                    </a>
+                                    {% endif %}
+                                    {% if pode_cancelar_linha_relatorio and linha.situacao_linha == 'ATIVA' and linha.numero_relatorio %}
+                                    <button type="button" class="icon-btn icon-btn--danger"
+                                            title="Cancelar relatório"
+                                            data-modal-open="modalCancelarRelatorio"
+                                            data-cancelar-linha="{{ linha.id }}"
+                                            data-cancelar-numero="{{ linha.numero_relatorio }}"
+                                            data-cancelar-processo="{{ linha.numero_processo }}"
+                                            data-cancelar-grupo="{{ aba }}">
+                                        <span class="material-symbols-rounded">cancel</span>
+                                    </button>
+                                    {% endif %}
+                                </div>
                             </td>
                         </tr>
                         {% empty %}
@@ -156,6 +171,69 @@
             </div>
             {% include "includes/paginacao.html" with pagina=pagina %}
         </section>
+
+        {% if pode_cancelar_linha_relatorio %}
+        <div class="modal" id="modalCancelarRelatorio" role="dialog" aria-labelledby="tituloCancelarRelatorio">
+            <div class="modal__dialog modal__dialog--sm">
+                <div class="modal__header">
+                    <span class="modal__title" id="tituloCancelarRelatorio">
+                        Cancelar relatório <span data-cancelar-rotulo></span>
+                    </span>
+                    <button type="button" class="icon-btn" data-modal-close="modalCancelarRelatorio" aria-label="Fechar">
+                        <span class="material-symbols-rounded">close</span>
+                    </button>
+                </div>
+                <div class="modal__body">
+                    <p style="margin:0 0 14px; color:var(--text-muted); line-height:1.45;">
+                        O número e a data permanecem na planilha. Escolha o destino do número:
+                    </p>
+                    <form method="post" id="formCancelarRelatorio" data-acao="{% url 'controle_relatorio_cancelar_linha' 0 %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="grupo" value="{{ aba }}">
+                        <input type="hidden" name="destino_numero" id="destinoNumeroRelatorio" value="">
+                        <div class="form-actions" style="display:flex; flex-direction:column; gap:10px;">
+                            <button type="submit" class="btn btn--primary" data-destino="guardar">
+                                <span class="material-symbols-rounded">bookmark_add</span>
+                                Guardar número (linha verde)
+                            </button>
+                            <button type="submit" class="btn btn--danger" data-destino="excluir">
+                                <span class="material-symbols-rounded">delete_forever</span>
+                                Excluir da sequência (linha vermelha)
+                            </button>
+                            <button type="button" class="btn btn--outline" data-modal-close="modalCancelarRelatorio">
+                                Voltar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <script>
+        (function () {
+            var form = document.getElementById('formCancelarRelatorio');
+            if (!form) return;
+            var destino = document.getElementById('destinoNumeroRelatorio');
+            var rotulo = document.querySelector('[data-cancelar-rotulo]');
+            document.addEventListener('click', function (event) {
+                var botao = event.target.closest('[data-cancelar-linha]');
+                if (!botao) return;
+                var id = botao.getAttribute('data-cancelar-linha');
+                form.action = form.getAttribute('data-acao').replace('/0/', '/' + id + '/');
+                var grupo = botao.getAttribute('data-cancelar-grupo');
+                if (grupo) form.querySelector('[name="grupo"]').value = grupo;
+                if (rotulo) {
+                    rotulo.textContent = 'nº ' + (botao.getAttribute('data-cancelar-numero') || '')
+                        + ' · ' + (botao.getAttribute('data-cancelar-processo') || '');
+                }
+            });
+            form.querySelectorAll('button[data-destino]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    destino.value = btn.getAttribute('data-destino');
+                });
+            });
+        })();
+        </script>
+        {% endif %}
 
     {% elif secao == 'destinados' and pode_destinar_numeros %}
 

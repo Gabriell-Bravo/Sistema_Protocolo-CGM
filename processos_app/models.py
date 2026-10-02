@@ -756,6 +756,15 @@ class ReservaNumeroRelatorio(models.Model):
 class LinhaControleRelatorio(models.Model):
     """Linha da planilha Controle de relatório, gravada ao salvar a análise."""
 
+    SITUACAO_ATIVA = 'ATIVA'
+    SITUACAO_RESERVADA = 'RESERVADA'
+    SITUACAO_CANCELADA = 'CANCELADA'
+    SITUACAO_CHOICES = [
+        (SITUACAO_ATIVA, 'Ativa'),
+        (SITUACAO_RESERVADA, 'Número guardado'),
+        (SITUACAO_CANCELADA, 'Excluída da sequência'),
+    ]
+
     processo = models.OneToOneField(
         Processo, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='linha_relatorio', verbose_name="Processo")
@@ -765,6 +774,9 @@ class LinhaControleRelatorio(models.Model):
         max_length=50, blank=True, default='', verbose_name="Nº do relatório")
     sem_relatorio = models.BooleanField(
         default=False, verbose_name="Despachado sem relatório")
+    situacao_linha = models.CharField(
+        max_length=20, choices=SITUACAO_CHOICES, default=SITUACAO_ATIVA,
+        db_index=True, verbose_name="Situação na planilha")
     data_relatorio = models.DateField(verbose_name="Data do relatório")
     secretaria = models.CharField(max_length=255, blank=True, verbose_name="Secretaria")
     contratada = models.CharField(max_length=255, blank=True, verbose_name="Contratada")
@@ -790,6 +802,16 @@ class LinhaControleRelatorio(models.Model):
     def status_analise_display(self):
         return dict(Processo.STATUS_ANALISE_CHOICES).get(
             self.status_analise, self.status_analise or '—')
+
+    @property
+    def linha_css_class(self):
+        if self.situacao_linha == self.SITUACAO_RESERVADA:
+            return 'tr-relatorio-reservado'
+        if self.situacao_linha == self.SITUACAO_CANCELADA:
+            return 'tr-relatorio-cancelado'
+        if self.sem_relatorio:
+            return 'tr-sem-relatorio'
+        return ''
 
     class Meta:
         db_table = 'controle_relatorio'

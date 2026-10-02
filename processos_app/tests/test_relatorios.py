@@ -685,6 +685,84 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertContains(pagina, 'Selecione a secretaria')
         self.assertContains(pagina, 'Unidade de Teste')
 
+    def test_cancelar_linha_guarda_ou_exclui_numero(self):
+        admin = criar_usuario('admin_cancel', 'GESTAO', is_superuser=True)
+        relatorios.definir_ultimo_numero(admin, 5000)
+        guardado = self.novo_processo(self.especie_liq, numero_processo='c1/2026')
+        excluido = self.novo_processo(self.especie_liq, numero_processo='c2/2026')
+        self._salvar_liquidacao(guardado)
+        self._salvar_liquidacao(excluido)
+        self.assertEqual(guardado.numero_relatorio, '5001')
+        self.assertEqual(excluido.numero_relatorio, '5002')
+
+        self.client.force_login(admin)
+        pagina = self.client.get(reverse('controle_relatorio'))
+        self.assertContains(pagina, 'data-cancelar-linha')
+        self.assertContains(pagina, 'Guardar número')
+
+        linha_g = LinhaControleRelatorio.objects.get(processo=guardado)
+        resp_g = self.client.post(
+            reverse('controle_relatorio_cancelar_linha', args=[linha_g.id]), {
+                'destino_numero': 'guardar',
+                'grupo': 'LIQUIDACOES',
+            })
+        self.assertEqual(resp_g.status_code, 302)
+        linha_g.refresh_from_db()
+        guardado.refresh_from_db()
+        self.assertEqual(linha_g.situacao_linha, 'RESERVADA')
+        self.assertEqual(linha_g.numero_relatorio, '5001')
+        self.assertTrue(linha_g.data_relatorio)
+        self.assertIsNone(linha_g.processo_id)
+        self.assertFalse(guardado.numero_relatorio)
+        self.assertIn(5001, relatorios.numeros_usados('LIQUIDACOES'))
+
+        linha_e = LinhaControleRelatorio.objects.get(processo=excluido)
+        resp_e = self.client.post(
+            reverse('controle_relatorio_cancelar_linha', args=[linha_e.id]), {
+                'destino_numero': 'excluir',
+                'grupo': 'LIQUIDACOES',
+            })
+        self.assertEqual(resp_e.status_code, 302)
+        linha_e.refresh_from_db()
+        self.assertEqual(linha_e.situacao_linha, 'CANCELADA')
+        self.assertEqual(linha_e.numero_relatorio, '5002')
+        self.assertNotIn(5002, relatorios.numeros_usados('LIQUIDACOES'))
+
+        planilha = self.client.get(reverse('controle_relatorio'))
+        self.assertContains(planilha, 'tr-relatorio-reservado')
+        self.assertContains(planilha, 'tr-relatorio-cancelado')
+        self.assertContains(planilha, '5001')
+        self.assertContains(planilha, '5002')
+
+    def test_numero_especifico_reativa_linha_cancelada(self):
+        admin = criar_usuario('admin_reativa', 'GESTAO', is_superuser=True)
+        relatorios.definir_ultimo_numero(admin, 6100)
+        original = self.novo_processo(self.especie_liq, numero_processo='r1/2026')
+        self._salvar_liquidacao(original)
+        self.assertEqual(original.numero_relatorio, '6101')
+        linha = LinhaControleRelatorio.objects.get(processo=original)
+        relatorios.cancelar_linha(admin, linha.id, 'excluir')
+        linha.refresh_from_db()
+        self.assertEqual(linha.situacao_linha, 'CANCELADA')
+        self.assertIsNone(linha.processo_id)
+
+        novo = self.novo_processo(self.especie_liq, numero_processo='r2/2026')
+        tramitacao.assumir(novo.id, self.analista_liq)
+        relatorios.alterar_numero(self.analista_liq, novo.id, 6101, '2026-10-02')
+        novo.refresh_from_db()
+        linha.refresh_from_db()
+        self.assertEqual(novo.numero_relatorio, '6101')
+        self.assertEqual(linha.processo_id, novo.id)
+        self.assertEqual(linha.situacao_linha, 'ATIVA')
+        self.assertEqual(linha.numero_relatorio, '6101')
+        self.assertEqual(str(linha.data_relatorio), '2026-10-02')
+        self.assertEqual(
+            LinhaControleRelatorio.objects.filter(numero_relatorio='6101').count(), 1)
+        self.client.force_login(admin)
+        planilha = self.client.get(reverse('controle_relatorio'))
+        self.assertNotContains(planilha, 'tr-relatorio-cancelado')
+        self.assertContains(planilha, '6101')
+
     def test_protocolo_nao_acessa(self):
         self.client.force_login(self.protocolo)
         self.assertEqual(

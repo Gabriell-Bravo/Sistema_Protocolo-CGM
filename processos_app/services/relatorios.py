@@ -286,14 +286,18 @@ def _consumir_reserva(processo, numero):
 
 
 def numeros_usados(grupo, ignorar=None):
-    """Números ainda presos a uma análise nesta sequência."""
+    """Números ainda presos nesta sequência (ativos ou guardados)."""
     ignorar = set(ignorar or ())
     usados = set()
-    for bruto in (LinhaControleRelatorio.objects
-                  .filter(processo__isnull=False)
-                  .filter(filtro_sequencia(grupo))
-                  .exclude(numero_relatorio='')
-                  .values_list('numero_relatorio', flat=True)):
+    consulta = (LinhaControleRelatorio.objects
+                .filter(filtro_sequencia(grupo))
+                .exclude(numero_relatorio='')
+                .exclude(situacao_linha=LinhaControleRelatorio.SITUACAO_CANCELADA)
+                .filter(
+                    Q(situacao_linha=LinhaControleRelatorio.SITUACAO_RESERVADA)
+                    | Q(processo__isnull=False)
+                ))
+    for bruto in consulta.values_list('numero_relatorio', flat=True):
         numero = _inteiro(bruto)
         if numero:
             usados.add(numero)
@@ -306,6 +310,7 @@ def _numeros_devolvidos(grupo, usados):
     for bruto in (LinhaControleRelatorio.objects
                   .filter(processo__isnull=True)
                   .filter(filtro_sequencia(grupo))
+                  .filter(situacao_linha=LinhaControleRelatorio.SITUACAO_ATIVA)
                   .exclude(numero_relatorio='')
                   .values_list('numero_relatorio', flat=True)):
         numero = _inteiro(bruto)
@@ -334,7 +339,8 @@ def definir_ultimo_numero(usuario, ultimo, grupo=GRUPO_PADRAO):
     seq.proximo_numero = ultimo + 1
     seq.save(update_fields=['proximo_numero'])
     LinhaControleRelatorio.objects.filter(
-        processo__isnull=True
+        processo__isnull=True,
+        situacao_linha=LinhaControleRelatorio.SITUACAO_ATIVA,
     ).filter(filtro_sequencia(grupo)).delete()
     return estado_sequencia(grupo)
 
@@ -354,9 +360,10 @@ def proximo_numero(grupo):
     numero = int(seq.proximo_numero or 1)
     if numero < 1:
         numero = 1
-    # Limpa sobras antigas abaixo do contador para não confundir a planilha.
+    # Limpa sobras ativas órfãs abaixo do contador; preserva guardadas/canceladas.
     LinhaControleRelatorio.objects.filter(
-        processo__isnull=True
+        processo__isnull=True,
+        situacao_linha=LinhaControleRelatorio.SITUACAO_ATIVA,
     ).filter(filtro_sequencia(grupo)).exclude(numero_relatorio='').delete()
 
     while numero in usados:
@@ -513,14 +520,107 @@ def alterar_sequencia(usuario, processo_id, nova_sequencia):
 
 
 def registrar(processo):
-    """Cria ou atualiza a linha da planilha a partir do processo."""
+    """Cria ou atualiza a linha da planilha a partir do processo.
+
+    Se o número informado já existir em uma linha cancelada (verde/vermelha)
+    da mesma sequência, essa linha é reaproveitada e volta ao normal.
+    """
     sem_relatorio = bool(getattr(processo, 'sem_relatorio', False))
     if not processo.numero_relatorio and not sem_relatorio:
         return None
     dados = _dados_da_linha(processo)
     dados['sem_relatorio'] = sem_relatorio
+    dados['situacao_linha'] = LinhaControleRelatorio.SITUACAO_ATIVA
+
+    numero_txt = str(processo.numero_relatorio or '').strip()
+    sequencia = sequencia_do_processo(processo) or GRUPO_PADRAO
+    reaproveitar = None
+    if numero_txt and not sem_relatorio:
+        reaproveitar = (
+            LinhaControleRelatorio.objects
+            .filter(filtro_sequencia(sequencia), numero_relatorio=numero_txt)
+            .filter(situacao_linha__in=[
+                LinhaControleRelatorio.SITUACAO_RESERVADA,
+                LinhaControleRelatorio.SITUACAO_CANCELADA,
+            ])
+            .order_by('-atualizado_em', '-id')
+            .first()
+        )
+
+    if reaproveitar is not None:
+        antiga = LinhaControleRelatorio.objects.filter(processo=processo).first()
+        if antiga is not None and antiga.id != reaproveitar.id:
+            antiga.delete()
+        for campo, valor in dados.items():
+            setattr(reaproveitar, campo, valor)
+        reaproveitar.processo = processo
+        reaproveitar.situacao_linha = LinhaControleRelatorio.SITUACAO_ATIVA
+        obs = (reaproveitar.observacao or '').strip()
+        if obs.startswith('Relatório cancelado'):
+            reaproveitar.observacao = processo.observacao or ''
+        reaproveitar.save()
+        return reaproveitar
+
     linha, _ = LinhaControleRelatorio.objects.update_or_create(
         processo=processo, defaults=dados)
+    return linha
+
+
+@transaction.atomic
+def cancelar_linha(usuario, linha_id, destino_numero):
+    """Cancela a linha na planilha, mantendo número e data.
+
+    destino_numero:
+      - 'guardar': número fica reservado (linha verde)
+      - 'excluir': número sai da sequência (linha vermelha)
+    """
+    perm.assert_permissao(
+        perm.pode_cancelar_linha_relatorio(usuario),
+        'Somente analista de Liquidações, a Gestão e o administrador '
+        'cancelam linha no Controle de relatório.')
+    linha = (LinhaControleRelatorio.objects
+             .select_for_update()
+             .select_related('processo')
+             .filter(id=linha_id)
+             .first())
+    if linha is None:
+        raise RelatorioInvalido('Linha não encontrada.')
+    if linha.situacao_linha != LinhaControleRelatorio.SITUACAO_ATIVA:
+        raise RelatorioInvalido('Esta linha já foi cancelada.')
+    if not linha.numero_relatorio and not linha.sem_relatorio:
+        raise RelatorioInvalido('Não há número de relatório nesta linha.')
+
+    destino = (destino_numero or '').strip().lower()
+    if destino in ('guardar', 'reservar', 'reserva'):
+        situacao = LinhaControleRelatorio.SITUACAO_RESERVADA
+    elif destino in ('excluir', 'cancelar', 'excluir_sequencia'):
+        situacao = LinhaControleRelatorio.SITUACAO_CANCELADA
+    else:
+        raise RelatorioInvalido(
+            'Escolha se o número será guardado ou excluído da sequência.')
+
+    processo = linha.processo
+    if processo is not None:
+        campos = []
+        if processo.numero_relatorio:
+            processo.numero_relatorio = None
+            campos.append('numero_relatorio')
+        if getattr(processo, 'sem_relatorio', False):
+            processo.sem_relatorio = False
+            campos.append('sem_relatorio')
+        if campos:
+            processo.save(update_fields=campos)
+        _liberar_reservas_do_processo(processo)
+
+    linha.processo = None
+    linha.situacao_linha = situacao
+    if not linha.observacao:
+        if situacao == LinhaControleRelatorio.SITUACAO_RESERVADA:
+            linha.observacao = 'Relatório cancelado — número guardado.'
+        else:
+            linha.observacao = 'Relatório cancelado — número excluído da sequência.'
+    linha.save(update_fields=[
+        'processo', 'situacao_linha', 'observacao', 'atualizado_em'])
     return linha
 
 
@@ -533,6 +633,8 @@ def remover_do_processo(processo):
     """
     linhas = list(LinhaControleRelatorio.objects.filter(processo=processo))
     for linha in linhas:
+        if linha.situacao_linha != LinhaControleRelatorio.SITUACAO_ATIVA:
+            continue
         numero = _inteiro(linha.numero_relatorio)
         sequencia = (linha.sequencia or '').strip() or GRUPO_PADRAO
         if numero:
@@ -607,7 +709,13 @@ def filtrar_por_termo(consulta, termo):
 
 def listar(usuario, sequencia=None):
     consulta = (LinhaControleRelatorio.objects
-                .filter(processo__isnull=False)
+                .filter(
+                    Q(processo__isnull=False)
+                    | Q(situacao_linha__in=[
+                        LinhaControleRelatorio.SITUACAO_RESERVADA,
+                        LinhaControleRelatorio.SITUACAO_CANCELADA,
+                    ])
+                )
                 .select_related('processo'))
     if perm.eh_administrador(usuario) or perm.is_gestao(usuario):
         pass

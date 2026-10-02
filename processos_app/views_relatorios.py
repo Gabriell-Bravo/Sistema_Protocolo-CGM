@@ -241,3 +241,27 @@ def cancelar_destino(request, reserva_id):
     except (PermissionDenied, ValidationError) as exc:
         messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
     return redirect(_voltar_controle(grupo, 'destinados'))
+
+
+@login_required
+@require_POST
+def cancelar_linha(request, linha_id):
+    grupo = request.POST.get('grupo') or svc.GRUPO_PADRAO
+    try:
+        linha = svc.cancelar_linha(
+            request.user, linha_id, request.POST.get('destino_numero'))
+        if linha.situacao_linha == 'RESERVADA':
+            messages.success(
+                request,
+                f'Relatório {linha.numero_relatorio} cancelado. '
+                f'Número guardado na planilha.')
+        else:
+            messages.success(
+                request,
+                f'Relatório {linha.numero_relatorio} cancelado. '
+                f'Número excluído da sequência.')
+        if linha.sequencia:
+            grupo = linha.sequencia
+    except (PermissionDenied, ValidationError) as exc:
+        messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
+    return redirect(_voltar_controle(grupo, 'analises'))

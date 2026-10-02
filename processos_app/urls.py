@@ -142,4 +142,6 @@ urlpatterns = [
          rel.destinar_numeros, name='controle_relatorio_destinar'),
     path('controle-relatorio/destinar/<int:reserva_id>/cancelar/',
          rel.cancelar_destino, name='controle_relatorio_cancelar_destino'),
+    path('controle-relatorio/linha/<int:linha_id>/cancelar/',
+         rel.cancelar_linha, name='controle_relatorio_cancelar_linha'),
 ]

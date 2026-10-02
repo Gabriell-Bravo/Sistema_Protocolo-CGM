@@ -1012,6 +1012,62 @@ input[type="password"].form-control {
     background: #6b5a18;
 }
 
+.table tbody tr.tr-relatorio-reservado > td,
+.table tbody tr.tr-relatorio-reservado:hover > td,
+.table tbody tr.tr-relatorio-reservado > td.col-sticky,
+.table tbody tr.tr-relatorio-reservado:hover > td.col-sticky,
+.table tbody tr.tr-relatorio-reservado > td.col-actions,
+.table tbody tr.tr-relatorio-reservado:hover > td.col-actions {
+    background: #d1fae5;
+}
+
+.table tbody tr.tr-relatorio-reservado:hover > td,
+.table tbody tr.tr-relatorio-reservado:hover > td.col-sticky,
+.table tbody tr.tr-relatorio-reservado:hover > td.col-actions {
+    background: #a7f3d0;
+}
+
+[data-theme="dark"] .table tbody tr.tr-relatorio-reservado > td,
+[data-theme="dark"] .table tbody tr.tr-relatorio-reservado > td.col-sticky,
+[data-theme="dark"] .table tbody tr.tr-relatorio-reservado > td.col-actions {
+    background: #14532d;
+    color: #dcfce7;
+}
+
+[data-theme="dark"] .table tbody tr.tr-relatorio-reservado:hover > td,
+[data-theme="dark"] .table tbody tr.tr-relatorio-reservado:hover > td.col-sticky,
+[data-theme="dark"] .table tbody tr.tr-relatorio-reservado:hover > td.col-actions {
+    background: #166534;
+}
+
+.table tbody tr.tr-relatorio-cancelado > td,
+.table tbody tr.tr-relatorio-cancelado:hover > td,
+.table tbody tr.tr-relatorio-cancelado > td.col-sticky,
+.table tbody tr.tr-relatorio-cancelado:hover > td.col-sticky,
+.table tbody tr.tr-relatorio-cancelado > td.col-actions,
+.table tbody tr.tr-relatorio-cancelado:hover > td.col-actions {
+    background: #fee2e2;
+}
+
+.table tbody tr.tr-relatorio-cancelado:hover > td,
+.table tbody tr.tr-relatorio-cancelado:hover > td.col-sticky,
+.table tbody tr.tr-relatorio-cancelado:hover > td.col-actions {
+    background: #fecaca;
+}
+
+[data-theme="dark"] .table tbody tr.tr-relatorio-cancelado > td,
+[data-theme="dark"] .table tbody tr.tr-relatorio-cancelado > td.col-sticky,
+[data-theme="dark"] .table tbody tr.tr-relatorio-cancelado > td.col-actions {
+    background: #7f1d1d;
+    color: #fee2e2;
+}
+
+[data-theme="dark"] .table tbody tr.tr-relatorio-cancelado:hover > td,
+[data-theme="dark"] .table tbody tr.tr-relatorio-cancelado:hover > td.col-sticky,
+[data-theme="dark"] .table tbody tr.tr-relatorio-cancelado:hover > td.col-actions {
+    background: #991b1b;
+}
+
 .form-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
