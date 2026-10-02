@@ -578,9 +578,10 @@ def cancelar_linha(usuario, linha_id, destino_numero):
         perm.pode_cancelar_linha_relatorio(usuario),
         'Somente analista de Liquidações, a Gestão e o administrador '
         'cancelam linha no Controle de relatório.')
+    # Não usar select_related('processo'): o FK é nullable e o PostgreSQL
+    # rejeita FOR UPDATE no lado nullable de um OUTER JOIN.
     linha = (LinhaControleRelatorio.objects
              .select_for_update()
-             .select_related('processo')
              .filter(id=linha_id)
              .first())
     if linha is None:
