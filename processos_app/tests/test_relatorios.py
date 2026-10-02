@@ -51,6 +51,49 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertContains(tela, 'name="sem_relatorio"')
         self.assertContains(tela, 'Sem relatório')
 
+    def test_admin_marca_sem_relatorio_em_processo_ja_numerado(self):
+        admin = criar_usuario('admin_sr', 'GESTAO', is_superuser=True)
+        processo = self.novo_processo(self.especie_liq, numero_processo='sr-adm/2026')
+        self._salvar_liquidacao(processo)
+        self.assertTrue(processo.numero_relatorio)
+
+        self.client.force_login(admin)
+        tela = self.client.get(
+            reverse('analista_processo', args=[processo.id])
+            + f'?next={reverse("controle_relatorio")}')
+        self.assertTrue(tela.context['pode_editar'])
+        self.assertContains(tela, 'name="sem_relatorio"')
+        self.assertContains(tela, 'Edição do administrador')
+
+        resposta = self.client.post(
+            reverse('analista_processo', args=[processo.id]), {
+                'destino': 'Unidade de Teste',
+                'valor': '1000',
+                'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+                'sem_relatorio': '1',
+                'next': reverse('controle_relatorio'),
+            })
+        self.assertRedirects(resposta, reverse('controle_relatorio'))
+        processo.refresh_from_db()
+        self.assertTrue(processo.sem_relatorio)
+        self.assertFalse(processo.numero_relatorio)
+        linha = LinhaControleRelatorio.objects.get(processo=processo)
+        self.assertTrue(linha.sem_relatorio)
+        self.assertEqual(linha.numero_relatorio, '')
+
+        pagina = self.client.get(reverse('controle_relatorio'))
+        self.assertContains(pagina, 'sr-adm/2026')
+        self.assertContains(pagina, 'aviso-sem-relatorio')
+
+        self.client.force_login(self.gestao)
+        negado = self.client.post(
+            reverse('analista_processo', args=[processo.id]), {
+                'sem_relatorio': '1',
+                'destino': 'Unidade de Teste',
+                'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+            })
+        self.assertEqual(negado.status_code, 403)
+
     def test_admin_define_ultimo_e_proximo_salvo_continua(self):
         admin = criar_usuario('admin_rel', 'GESTAO', is_superuser=True)
         relatorios.definir_ultimo_numero(admin, 2000)

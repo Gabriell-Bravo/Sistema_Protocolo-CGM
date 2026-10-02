@@ -1519,18 +1519,26 @@ def analista_processo(request, process_id):
         return HttpResponse(
             "Você não tem permissão para analisar este processo.", status=403)
 
-    if request.method == 'POST' and not perm.is_analista(request.user):
-        raise PermissionDenied(
-            'A Gestão e o administrador consultam o processo; atos de '
-            'análise são do analista.')
-
     anotar_situacao_fila([processo], request.user)
     eh_responsavel = processo.analista_responsavel_id == request.user.id
-    pode_editar = perm.is_analista(request.user) and (
-        (processo.situacao_tramite == 'EM_ANALISE' and eh_responsavel)
-        or ((bool(processo.numero_relatorio) or processo.sem_relatorio)
-            and perm.pode_editar_linha_relatorio(request.user, processo))
+    ja_no_controle = bool(processo.numero_relatorio) or processo.sem_relatorio
+    pode_editar_controle = (
+        ja_no_controle
+        and perm.pode_editar_linha_relatorio(request.user, processo))
+    pode_editar = (
+        (perm.is_analista(request.user) and (
+            (processo.situacao_tramite == 'EM_ANALISE' and eh_responsavel)
+            or pode_editar_controle))
+        or (perm.eh_administrador(request.user) and pode_editar_controle)
     )
+
+    if request.method == 'POST' and not perm.is_analista(request.user):
+        if not (perm.eh_administrador(request.user) and pode_editar):
+            raise PermissionDenied(
+                'A Gestão consulta o processo; atos de análise são do '
+                'analista. O administrador só edita quando o processo já '
+                'está no Controle de relatório.')
+
     # itens 8, 10 e 11
     pode_direcionar = perm.pode_direcionar_assinatura(request.user, processo) and (
         processo.situacao_tramite in ('EM_ANALISE', 'ASSINATURA_DIRECIONADA'))
@@ -1545,7 +1553,9 @@ def analista_processo(request, process_id):
 
     next_controle = ''
     destino_next = request.POST.get('next') or request.GET.get('next') or ''
-    if destino_next == reverse('controle_relatorio'):
+    controle_base = reverse('controle_relatorio')
+    if (destino_next == controle_base
+            or destino_next.startswith(controle_base + '?')):
         next_controle = destino_next
 
     if request.method == 'POST':
@@ -1627,7 +1637,11 @@ def analista_processo(request, process_id):
             'cancelada_por').all(),
         'pendencias_anteriores': svc_pendencias.abertas_de_passagens_anteriores(
             processo),
-        'somente_leitura': not perm.is_analista(request.user),
+        'somente_leitura': (
+            not pode_editar
+            and (perm.is_gestao(request.user) or perm.eh_administrador(request.user))
+            and not perm.is_analista(request.user)
+        ),
         'all_status_analise': Processo.STATUS_ANALISE_CHOICES,
         'secretarias': [u.nome for u in svc_cadastros.unidades_ativas()],
         'valor_exibicao': svc_processos.formatar_valor(processo.valor),

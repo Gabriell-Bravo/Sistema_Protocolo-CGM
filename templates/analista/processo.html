@@ -131,7 +131,12 @@
     {% if somente_leitura %}
         <div class="alert alert--info">
             <span class="material-symbols-rounded">visibility</span>
-            <span>{% if user.is_superuser %}Consulta do administrador. Use desfazer para recuar a tramitação.{% else %}Consulta da Gestão. A análise, o direcionamento e a liberação são atos do analista.{% endif %}</span>
+            <span>{% if user.is_superuser %}Consulta do administrador. Use desfazer para recuar a tramitação. Processos já no Controle de relatório podem ser editados pelo lápis da planilha.{% else %}Consulta da Gestão. A análise, o direcionamento e a liberação são atos do analista.{% endif %}</span>
+        </div>
+    {% elif user.is_superuser and pode_editar and not processo.eh_meu %}
+        <div class="alert alert--info">
+            <span class="material-symbols-rounded">edit</span>
+            <span>Edição do administrador neste processo do Controle de relatório. Marque <strong>Sem relatório</strong> se o número não deve permanecer.</span>
         </div>
     {% endif %}
 

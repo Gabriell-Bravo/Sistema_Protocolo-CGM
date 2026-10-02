@@ -65,6 +65,14 @@ def campos_editaveis(usuario, processo=None):
     """Campos que este usuário pode gravar neste processo."""
     if perm.is_protocolo(usuario):
         return set(CAMPOS_PROTOCOLO)
+    if perm.eh_administrador(usuario):
+        if processo is None:
+            return set(CAMPOS_ANALISTA)
+        if processo.numero_relatorio or processo.sem_relatorio:
+            return set(CAMPOS_ANALISTA)
+        if perm.is_gestao(usuario):
+            return set(CAMPOS_GESTAO)
+        return set()
     if perm.is_analista(usuario):
         if processo is None:
             return set(CAMPOS_ANALISTA)
@@ -375,7 +383,7 @@ def aplicar_analise(processo, dados, usuario):
             processo.destino_fk = cadastros.resolver_unidade(novo)
     from .relatorios import (
         alterar_numero, atribuir_se_preciso, especie_gera_relatorio,
-        registrar as registrar_relatorio,
+        registrar as registrar_relatorio, _liberar_reservas_do_processo,
     )
     if alteracoes:
         processo.save()
@@ -399,6 +407,7 @@ def aplicar_analise(processo, dados, usuario):
             campos_extra.append('numero_relatorio')
             registrar_diff(processo, 'numero_relatorio', anterior, '', usuario)
             alteracoes += 1
+            _liberar_reservas_do_processo(processo)
         if campos_extra:
             processo.save(update_fields=campos_extra)
         if not processo.data_analise:

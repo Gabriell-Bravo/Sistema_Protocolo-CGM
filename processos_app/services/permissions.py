@@ -320,7 +320,10 @@ def pode_editar_numero_relatorio(user, processo=None):
 
 
 def pode_editar_linha_relatorio(user, processo=None):
-    """Analista do grupo corrige a análise já numerada; administrador consulta."""
+    """Corrige a análise já numerada (ou marcada sem relatório).
+
+    Analista do grupo e administrador.
+    """
     if eh_administrador(user):
         return True
     if not is_analista(user):
