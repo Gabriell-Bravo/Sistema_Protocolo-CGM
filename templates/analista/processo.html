@@ -196,7 +196,7 @@
                                {% if not pode_editar %}disabled{% endif %}>
                         <span>Sem relatório</span>
                     </label>
-                    <span class="field__hint">Marque se o processo for despachado sem gerar número de relatório. Ele ainda entra no Controle com aviso.</span>
+                    <span class="field__hint">Marque se o processo foi despachado sem relatório. Se já houver número, ele permanece na planilha e o aviso aparece ao lado da linha.</span>
                 </div>
                 <div class="field" id="blocoNumeroRelatorio" {% if processo.sem_relatorio %}hidden{% endif %}>
                     <label class="field__label" for="numero_relatorio_exibicao">Número do relatório</label>

@@ -383,7 +383,7 @@ def aplicar_analise(processo, dados, usuario):
             processo.destino_fk = cadastros.resolver_unidade(novo)
     from .relatorios import (
         alterar_numero, atribuir_se_preciso, especie_gera_relatorio,
-        registrar as registrar_relatorio, _liberar_reservas_do_processo,
+        registrar as registrar_relatorio,
     )
     if alteracoes:
         processo.save()
@@ -401,13 +401,6 @@ def aplicar_analise(processo, dados, usuario):
             processo.sem_relatorio = True
             campos_extra.append('sem_relatorio')
             alteracoes += 1
-        if processo.numero_relatorio:
-            anterior = processo.numero_relatorio
-            processo.numero_relatorio = None
-            campos_extra.append('numero_relatorio')
-            registrar_diff(processo, 'numero_relatorio', anterior, '', usuario)
-            alteracoes += 1
-            _liberar_reservas_do_processo(processo)
         if campos_extra:
             processo.save(update_fields=campos_extra)
         if not processo.data_analise:

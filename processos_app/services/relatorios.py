@@ -468,8 +468,6 @@ def registrar(processo):
         return None
     dados = _dados_da_linha(processo)
     dados['sem_relatorio'] = sem_relatorio
-    if sem_relatorio:
-        dados['numero_relatorio'] = ''
     linha, _ = LinhaControleRelatorio.objects.update_or_create(
         processo=processo, defaults=dados)
     return linha
@@ -497,7 +495,6 @@ def listar(usuario, sequencia=None):
         consulta = consulta.filter(filtro_sequencia(sequencia))
     return consulta.annotate(
         numero_ordem=Case(
-            When(sem_relatorio=True, then=Value(None)),
             When(numero_relatorio='', then=Value(None)),
             default=Cast('numero_relatorio', IntegerField()),
             output_field=IntegerField(null=True),
@@ -521,9 +518,7 @@ def _dados_da_linha(processo):
     return {
         'numero_processo': processo.numero_processo or '',
         'volume': processo.volume or '',
-        'numero_relatorio': (
-            '' if getattr(processo, 'sem_relatorio', False)
-            else (processo.numero_relatorio or '')),
+        'numero_relatorio': processo.numero_relatorio or '',
         'sem_relatorio': bool(getattr(processo, 'sem_relatorio', False)),
         'data_relatorio': data,
         'secretaria': processo.secretaria or '',

@@ -75,12 +75,12 @@
             </div>
         </section>
 
-        <section class="table-card">
+        <section class="table-card table-card--avisos">
             <div class="table-card__header">
                 <span class="table-card__title">Planilha — {{ info_aba.nome }}</span>
                 <span class="table-card__count">{{ total }} linha{{ total|pluralize:"s" }}</span>
             </div>
-            <div class="table-scroll">
+            <div class="table-scroll table-scroll--avisos">
                 <table class="table">
                     <thead>
                         <tr>
@@ -103,15 +103,18 @@
                     <tbody>
                         {% for linha in linhas %}
                         <tr>
-                            <td>
+                            <td class="col-numero-relatorio">
                                 {% if linha.sem_relatorio %}
-                                <span class="aviso-sem-relatorio"
+                                <span class="aviso-sem-relatorio aviso-sem-relatorio--fora"
                                       title="Processo despachado sem relatório"
                                       aria-label="Processo despachado sem relatório">
                                     <span class="material-symbols-rounded">warning</span>
                                 </span>
-                                {% else %}
+                                {% endif %}
+                                {% if linha.numero_relatorio %}
                                 <strong>{{ linha.numero_relatorio }}</strong>
+                                {% else %}
+                                —
                                 {% endif %}
                             </td>
                             <td>{{ linha.data_relatorio|date:"d/m/Y" }}</td>

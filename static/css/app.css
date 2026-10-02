@@ -1001,6 +1001,26 @@ input[type="password"].form-control {
     font-size: 20px;
 }
 
+.table-card--avisos {
+    overflow: visible;
+}
+
+.table-scroll--avisos {
+    padding-left: 44px;
+}
+
+.col-numero-relatorio {
+    position: relative;
+}
+
+.aviso-sem-relatorio--fora {
+    position: absolute;
+    left: -40px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+}
+
 .form-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));

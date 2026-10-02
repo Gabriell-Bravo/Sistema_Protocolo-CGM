@@ -45,7 +45,7 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         pagina = self.client.get(reverse('controle_relatorio'))
         self.assertContains(pagina, 'sr-1/2026')
         self.assertContains(pagina, 'Processo despachado sem relatório')
-        self.assertContains(pagina, 'aviso-sem-relatorio')
+        self.assertContains(pagina, 'aviso-sem-relatorio--fora')
 
         tela = self.client.get(reverse('analista_processo', args=[processo.id]))
         self.assertContains(tela, 'name="sem_relatorio"')
@@ -64,6 +64,7 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertTrue(tela.context['pode_editar'])
         self.assertContains(tela, 'name="sem_relatorio"')
         self.assertContains(tela, 'Edição do administrador')
+        numero_antes = processo.numero_relatorio
 
         resposta = self.client.post(
             reverse('analista_processo', args=[processo.id]), {
@@ -76,14 +77,15 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertRedirects(resposta, reverse('controle_relatorio'))
         processo.refresh_from_db()
         self.assertTrue(processo.sem_relatorio)
-        self.assertFalse(processo.numero_relatorio)
+        self.assertEqual(processo.numero_relatorio, numero_antes)
         linha = LinhaControleRelatorio.objects.get(processo=processo)
         self.assertTrue(linha.sem_relatorio)
-        self.assertEqual(linha.numero_relatorio, '')
+        self.assertEqual(linha.numero_relatorio, numero_antes)
 
         pagina = self.client.get(reverse('controle_relatorio'))
         self.assertContains(pagina, 'sr-adm/2026')
-        self.assertContains(pagina, 'aviso-sem-relatorio')
+        self.assertContains(pagina, numero_antes)
+        self.assertContains(pagina, 'aviso-sem-relatorio--fora')
 
         self.client.force_login(self.gestao)
         negado = self.client.post(
