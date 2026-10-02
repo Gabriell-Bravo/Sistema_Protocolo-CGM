@@ -395,7 +395,25 @@ def aplicar_analise(processo, dados, usuario):
         and especie_gera_relatorio(processo)
     )
 
-    if pode_mexer_relatorio and marcado_sem_relatorio:
+    if numero_manual and perm.pode_editar_numero_relatorio(usuario, processo):
+        anterior = processo.numero_relatorio or ''
+        anterior_data = (
+            processo.data_analise.isoformat() if processo.data_analise else '')
+        alterar_numero(
+            usuario, processo.id, numero_manual, dados.get('data_relatorio'))
+        processo.refresh_from_db()
+        if marcado_sem_relatorio and not processo.sem_relatorio:
+            processo.sem_relatorio = True
+            processo.save(update_fields=['sem_relatorio'])
+            registrar_relatorio(processo)
+            alteracoes += 1
+        if (processo.numero_relatorio or '') != anterior:
+            alteracoes += 1
+        nova_data = (
+            processo.data_analise.isoformat() if processo.data_analise else '')
+        if nova_data != anterior_data:
+            alteracoes += 1
+    elif pode_mexer_relatorio and marcado_sem_relatorio:
         campos_extra = []
         if not processo.sem_relatorio:
             processo.sem_relatorio = True
@@ -408,23 +426,6 @@ def aplicar_analise(processo, dados, usuario):
             processo.save(update_fields=['data_analise'])
             alteracoes += 1
         registrar_relatorio(processo)
-    elif numero_manual and perm.pode_editar_numero_relatorio(usuario, processo):
-        if processo.sem_relatorio:
-            processo.sem_relatorio = False
-            processo.save(update_fields=['sem_relatorio'])
-            alteracoes += 1
-        anterior = processo.numero_relatorio or ''
-        anterior_data = (
-            processo.data_analise.isoformat() if processo.data_analise else '')
-        alterar_numero(
-            usuario, processo.id, numero_manual, dados.get('data_relatorio'))
-        processo.refresh_from_db()
-        if (processo.numero_relatorio or '') != anterior:
-            alteracoes += 1
-        nova_data = (
-            processo.data_analise.isoformat() if processo.data_analise else '')
-        if nova_data != anterior_data:
-            alteracoes += 1
     elif campos_editaveis(usuario, processo):
         if processo.sem_relatorio and not marcado_sem_relatorio:
             processo.sem_relatorio = False

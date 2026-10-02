@@ -196,13 +196,13 @@
                                {% if not pode_editar %}disabled{% endif %}>
                         <span>Sem relatório</span>
                     </label>
-                    <span class="field__hint">Marque se o processo foi despachado sem relatório. Se já houver número, ele permanece na planilha e o aviso aparece ao lado da linha.</span>
+                    <span class="field__hint">Marque se o processo foi despachado sem relatório. O aviso aparece ao lado da linha. O número pode ser informado ou gerado mesmo com esta opção marcada.</span>
                 </div>
-                <div class="field" id="blocoNumeroRelatorio" {% if processo.sem_relatorio %}hidden{% endif %}>
+                <div class="field" id="blocoNumeroRelatorio">
                     <label class="field__label" for="numero_relatorio_exibicao">Número do relatório</label>
                     {% if pode_editar_numero_relatorio %}
                     <div class="pendencia-add__row" id="numeroRelatorioExibicao">
-                        <input type="text" id="numero_relatorio_exibicao" class="input" value="{% if processo.numero_relatorio %}Relatório {{ processo.numero_relatorio }}{% else %}Sequencial ao salvar{% endif %}" readonly>
+                        <input type="text" id="numero_relatorio_exibicao" class="input" value="{% if processo.numero_relatorio %}Relatório {{ processo.numero_relatorio }}{% else %}Clique no lápis para informar, ou salve para gerar o sequencial{% endif %}" readonly>
                         <button type="button" class="icon-btn icon-btn--primary" id="btnEditarNumero" title="Informar número específico">
                             <span class="material-symbols-rounded">edit</span>
                         </button>
@@ -256,7 +256,7 @@
                     <span class="field__hint">{% if processo.numero_relatorio %}Número gerado ao salvar a análise.{% else %}Será gerado automaticamente ao salvar a análise.{% endif %}</span>
                     {% endif %}
                 </div>
-                <div class="field" id="dataRelatorioExibicaoCampo" {% if processo.sem_relatorio %}hidden{% endif %}>
+                <div class="field" id="dataRelatorioExibicaoCampo">
                     <label class="field__label" for="data_relatorio_exibicao">Data do relatório</label>
                     <input type="date" id="data_relatorio_exibicao" class="input"
                            value="{% if processo.data_analise %}{{ processo.data_analise|date:'Y-m-d' }}{% else %}{% now 'Y-m-d' %}{% endif %}"
@@ -712,33 +712,6 @@
     if (campoNumeroRelatorio) {
         campoNumeroRelatorio.addEventListener('input', aplicarDataDestinada);
         campoNumeroRelatorio.addEventListener('change', aplicarDataDestinada);
-    }
-
-    var checkSemRelatorio = document.getElementById('sem_relatorio');
-    var blocoNumeroRelatorio = document.getElementById('blocoNumeroRelatorio');
-
-    function atualizarSemRelatorio() {
-        if (!checkSemRelatorio) return;
-        var marcado = checkSemRelatorio.checked;
-        if (blocoNumeroRelatorio) {
-            blocoNumeroRelatorio.hidden = marcado;
-        }
-        if (dataRelatorioExibicaoCampo) {
-            dataRelatorioExibicaoCampo.hidden = marcado;
-        }
-        if (marcado) {
-            fecharNumeroEspecifico();
-            if (campoNumeroRelatorio) {
-                campoNumeroRelatorio.required = false;
-                campoNumeroRelatorio.disabled = true;
-                campoNumeroRelatorio.value = '';
-            }
-        }
-    }
-
-    if (checkSemRelatorio) {
-        checkSemRelatorio.addEventListener('change', atualizarSemRelatorio);
-        atualizarSemRelatorio();
     }
 
     document.addEventListener('click', function (event) {

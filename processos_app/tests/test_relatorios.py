@@ -96,6 +96,53 @@ class ControleRelatorioTest(BaseProcessoTestCase):
             })
         self.assertEqual(negado.status_code, 403)
 
+    def test_admin_informa_numero_em_processo_sem_relatorio(self):
+        admin = criar_usuario('admin_num', 'GESTAO', is_superuser=True)
+        processo = self.novo_processo(self.especie_liq, numero_processo='sr-num/2026')
+        tramitacao.assumir(processo.id, self.analista_liq)
+        processo.refresh_from_db()
+        svc_processos.aplicar_analise(processo, {
+            'destino': 'Unidade de Teste',
+            'valor': '1000',
+            'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+            'sem_relatorio': '1',
+        }, self.analista_liq)
+        processo.refresh_from_db()
+        self.assertTrue(processo.sem_relatorio)
+        self.assertFalse(processo.numero_relatorio)
+
+        self.client.force_login(admin)
+        resposta = self.client.post(
+            reverse('analista_processo', args=[processo.id]), {
+                'destino': 'Unidade de Teste',
+                'valor': '1000',
+                'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+                'numero_relatorio': '1912',
+                'data_relatorio': '2026-10-01',
+                'next': reverse('controle_relatorio'),
+            })
+        self.assertRedirects(resposta, reverse('controle_relatorio'))
+        processo.refresh_from_db()
+        self.assertEqual(processo.numero_relatorio, '1912')
+        self.assertFalse(processo.sem_relatorio)
+        linha = LinhaControleRelatorio.objects.get(processo=processo)
+        self.assertEqual(linha.numero_relatorio, '1912')
+        self.assertFalse(linha.sem_relatorio)
+
+        resposta = self.client.post(
+            reverse('analista_processo', args=[processo.id]), {
+                'destino': 'Unidade de Teste',
+                'valor': '1000',
+                'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+                'sem_relatorio': '1',
+                'numero_relatorio': '1912',
+                'data_relatorio': '2026-10-01',
+            })
+        self.assertEqual(resposta.status_code, 302)
+        processo.refresh_from_db()
+        self.assertEqual(processo.numero_relatorio, '1912')
+        self.assertTrue(processo.sem_relatorio)
+
     def test_admin_define_ultimo_e_proximo_salvo_continua(self):
         admin = criar_usuario('admin_rel', 'GESTAO', is_superuser=True)
         relatorios.definir_ultimo_numero(admin, 2000)
