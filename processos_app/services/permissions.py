@@ -299,6 +299,11 @@ def pode_definir_ultimo_relatorio(user):
     return eh_administrador(user)
 
 
+def pode_alterar_sequencia_relatorio(user):
+    """Só o administrador troca o grupo de numeração de um processo."""
+    return eh_administrador(user)
+
+
 def pode_destinar_numeros_relatorio(user):
     """Administrador e analista de Liquidações guardam números para usar depois."""
     return eh_administrador(user) or grupo_do_analista(user) == GRUPO_LIQUIDACOES
@@ -451,6 +456,7 @@ def contexto_de_permissoes(user):
         'pode_consultar_controle_relatorio': pode_consultar_controle_relatorio(user),
         'pode_definir_ultimo_relatorio': pode_definir_ultimo_relatorio(user),
         'pode_destinar_numeros_relatorio': pode_destinar_numeros_relatorio(user),
+        'pode_alterar_sequencia_relatorio': pode_alterar_sequencia_relatorio(user),
         'pode_editar_numero_relatorio': pode_editar_numero_relatorio(user),
         'pode_editar_linha_relatorio': pode_editar_linha_relatorio(user),
         'pode_desfazer_tramite': pode_desfazer_tramite(user),
@@ -481,6 +487,7 @@ def contexto_processor(request):
             'pode_consultar_controle_relatorio': False,
             'pode_definir_ultimo_relatorio': False,
             'pode_destinar_numeros_relatorio': False,
+            'pode_alterar_sequencia_relatorio': False,
             'pode_editar_numero_relatorio': False,
             'pode_editar_linha_relatorio': False,
             'pode_desfazer_tramite': False,

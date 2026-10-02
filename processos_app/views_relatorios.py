@@ -186,6 +186,33 @@ def alterar_numero(request, process_id):
 
 @login_required
 @require_POST
+def alterar_sequencia(request, process_id):
+    destino = request.POST.get('next') or ''
+    if not (destino.startswith('/') and not destino.startswith('//')):
+        destino = reverse('analista_processo', args=[process_id])
+    try:
+        processo = svc.alterar_sequencia(
+            request.user, process_id, request.POST.get('sequencia'))
+        grupo = svc.sequencia_do_processo(processo) or svc.GRUPO_PADRAO
+        nome = svc.info_sequencia(grupo)['nome']
+        if processo.numero_relatorio:
+            messages.success(
+                request,
+                f'{processo.numero_processo} passou para {nome}. '
+                f'Novo número do relatório: {processo.numero_relatorio}.')
+        else:
+            messages.success(
+                request,
+                f'{processo.numero_processo} passou para {nome}.')
+    except PermissionDenied:
+        raise
+    except ValidationError as exc:
+        messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
+    return redirect(destino)
+
+
+@login_required
+@require_POST
 def destinar_numeros(request):
     perm.assert_permissao(
         perm.pode_destinar_numeros_relatorio(request.user),

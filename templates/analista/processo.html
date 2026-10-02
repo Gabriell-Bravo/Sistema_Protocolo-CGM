@@ -189,15 +189,6 @@
             {% endif %}
             <div class="form-grid form-grid--full">
                 {% if eh_liquidacao %}
-                <div class="field field--checkbox">
-                    <label class="check">
-                        <input type="checkbox" id="sem_relatorio" name="sem_relatorio" value="1"
-                               {% if processo.sem_relatorio %}checked{% endif %}
-                               {% if not pode_editar %}disabled{% endif %}>
-                        <span>Sem relatório</span>
-                    </label>
-                    <span class="field__hint">Marque se o processo foi despachado sem relatório. A linha fica amarela no Controle. O número pode ser informado ou gerado mesmo com esta opção marcada.</span>
-                </div>
                 <div class="field" id="blocoNumeroRelatorio">
                     <label class="field__label" for="numero_relatorio_exibicao">Número do relatório</label>
                     {% if pode_editar_numero_relatorio %}
@@ -263,6 +254,11 @@
                            readonly>
                     <span class="field__hint">Data que será gravada no Controle de relatório. Só fica editável se você informar um número específico.</span>
                 </div>
+                <div class="field">
+                    <label class="field__label">Grupo de numeração</label>
+                    <input type="text" class="input" value="{{ sequencia_relatorio_nome }}" readonly>
+                    <span class="field__hint">Definido pela espécie do processo{% if processo.sequencia_relatorio %} (ajustado pelo administrador){% endif %}.</span>
+                </div>
                 {% endif %}
                 <div class="field">
                     <label class="field__label" for="valor">{% if eh_liquidacao %}Valor analisado{% else %}Valor{% endif %}</label>
@@ -307,6 +303,17 @@
                     <label class="field__label" for="observacao">Observação</label>
                     <textarea id="observacao" name="observacao" class="textarea" rows="4" {% if not pode_editar %}readonly{% endif %}>{{ processo.observacao|default:'' }}</textarea>
                 </div>
+                {% if eh_liquidacao %}
+                <div class="field field--checkbox field--wide">
+                    <label class="check">
+                        <input type="checkbox" id="sem_relatorio" name="sem_relatorio" value="1"
+                               {% if processo.sem_relatorio %}checked{% endif %}
+                               {% if not pode_editar %}disabled{% endif %}>
+                        <span>Sem relatório</span>
+                    </label>
+                    <span class="field__hint">Marque se o processo foi despachado sem relatório. A linha fica amarela no Controle. O número pode ser informado ou gerado mesmo com esta opção marcada.</span>
+                </div>
+                {% endif %}
             </div>
             {% if pode_editar or pode_liberar or pode_direcionar or pode_declinar or desfazer %}
             <div class="form-actions" style="margin-top:14px;">
@@ -329,6 +336,52 @@
             {% endif %}
         </div>
     </form>
+
+    {% if pode_alterar_sequencia_relatorio and eh_liquidacao %}
+    <section class="card" style="margin-top:14px;">
+        <div class="card__header">
+            <span class="card__title">Trocar grupo de numeração</span>
+            <span class="card__hint">Somente administrador</span>
+        </div>
+        <div class="card__body">
+            <p class="field__hint" style="margin:0 0 12px;">
+                Use quando a espécie levou o processo para o grupo errado.
+                O número antigo fica livre e, se já havia relatório, o processo recebe o próximo número do grupo novo.
+            </p>
+            <form method="post" action="{% url 'controle_relatorio_alterar_sequencia' processo.id %}">
+                {% csrf_token %}
+                {% if next_controle %}
+                <input type="hidden" name="next" value="{{ next_controle }}">
+                {% else %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                {% endif %}
+                <div class="form-grid">
+                    <div class="field">
+                        <label class="field__label" for="sequenciaRelatorioAdmin">Grupo</label>
+                        <select id="sequenciaRelatorioAdmin" name="sequencia" class="select">
+                            <option value="" {% if not processo.sequencia_relatorio %}selected{% endif %}>
+                                Pela espécie (automático) — {{ sequencia_relatorio_nome }}
+                            </option>
+                            {% for item in sequencias_relatorio %}
+                            <option value="{{ item.codigo }}"
+                                {% if processo.sequencia_relatorio == item.codigo %}selected{% endif %}>
+                                {{ item.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-actions" style="margin-top:14px;">
+                    <button type="submit" class="btn btn--primary"
+                            onclick="return confirm('Trocar o grupo de numeração deste processo? Se já houver número, ele será substituído pelo próximo do grupo novo.');">
+                        <span class="material-symbols-rounded">swap_horiz</span>
+                        Aplicar grupo
+                    </button>
+                </div>
+            </form>
+        </div>
+    </section>
+    {% endif %}
 
     {% if ja_direcionado or assinatura_para_mim %}
     <div class="form-section">

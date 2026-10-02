@@ -1670,6 +1670,21 @@ def analista_processo(request, process_id):
         'next_controle': next_controle,
         'pode_editar_numero_relatorio': perm.pode_editar_numero_relatorio(
             request.user, processo),
+        'pode_alterar_sequencia_relatorio': perm.pode_alterar_sequencia_relatorio(
+            request.user),
+        'sequencia_relatorio_codigo': (
+            svc_relatorios.sequencia_do_processo(processo)
+            or svc_relatorios.GRUPO_PADRAO
+            if processo.genero == 'LIQUIDACOES' else ''),
+        'sequencia_relatorio_nome': (
+            svc_relatorios.info_sequencia(
+                svc_relatorios.sequencia_do_processo(processo)
+                or svc_relatorios.GRUPO_PADRAO)['nome']
+            if processo.genero == 'LIQUIDACOES' else ''),
+        'sequencias_relatorio': [
+            item for item in svc_relatorios.sequencias_disponiveis()
+            if svc_relatorios.sequencia_ativa(item['codigo'])
+        ],
         'reservas_numero_mapa': json.dumps(
             svc_relatorios.reservas_abertas_mapa(
                 svc_relatorios.sequencia_do_processo(processo)

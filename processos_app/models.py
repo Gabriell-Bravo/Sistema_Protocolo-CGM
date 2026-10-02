@@ -131,6 +131,12 @@ class Processo(models.Model):
         default=False,
         verbose_name="Despachado sem relatório",
     )
+    sequencia_relatorio = models.CharField(
+        max_length=50,
+        blank=True,
+        default='',
+        verbose_name="Sequência de relatório (ajuste do administrador)",
+    )
 
     # --- Assinatura -------------------------------------------------------
     # Encaminhar a outro analista transfere o responsável. O campo

@@ -123,10 +123,18 @@ _ESPECIE_PARA_SEQUENCIA = {
     for nome in item['especies']
 }
 
-# Por enquanto só Liquidação gera/consome número. As outras abas e o mapa
-# de espécies ficam prontos; inclua o código em SEQUENCIAS_ATIVAS quando
-# for liberar a numeração própria de cada grupo.
-SEQUENCIAS_ATIVAS = frozenset({GRUPO_PADRAO})
+# Sequências que já geram número próprio pela espécie.
+# Auxílio Competição fica de fora até a espécie ser cadastrada.
+SEQUENCIAS_ATIVAS = frozenset({
+    GRUPO_PADRAO,
+    'ADIANTAMENTO',
+    'COTA_PATROCINIO',
+    'SUBVENCAO',
+    'ALUGUEL_SOCIAL',
+    'BOLSA_ATLETA',
+    'DIARIA',
+    'BLOCOS_CARNAVALESCOS',
+})
 
 
 class RelatorioInvalido(ValidationError):
@@ -165,12 +173,17 @@ def sequencia_ativa(codigo):
 
 
 def sequencia_do_processo(processo):
-    """Código da sequência de numeração conforme a espécie.
+    """Código da sequência de numeração conforme a espécie do processo.
 
-    Espécies de grupos ainda não liberados entram na sequência Liquidação.
+    O administrador pode gravar um ajuste em `sequencia_relatorio`.
+    Espécie mapeada e ativa → sequência própria.
+    Demais Liquidações → Liquidação (legado).
     """
     if not especie_gera_relatorio(processo):
         return None
+    ajuste = (getattr(processo, 'sequencia_relatorio', None) or '').strip()
+    if ajuste and sequencia_ativa(ajuste):
+        return ajuste
     mapeada = _ESPECIE_PARA_SEQUENCIA.get(_chave(nome_especie_processo(processo)))
     if mapeada and sequencia_ativa(mapeada):
         return mapeada
@@ -458,6 +471,56 @@ def alterar_numero(usuario, processo_id, novo, data=None):
     else:
         registrar(processo)
     _consumir_reserva(processo, novo)
+    return processo
+
+
+@transaction.atomic
+def alterar_sequencia(usuario, processo_id, nova_sequencia):
+    """Administrador troca o grupo de numeração do processo.
+
+    O número antigo fica livre na sequência de origem. Se o processo já
+    tinha relatório, recebe o próximo número do grupo novo.
+    """
+    processo = (Processo.objects.select_for_update()
+                .filter(id=processo_id).first())
+    if processo is None:
+        raise RelatorioInvalido('Processo não encontrado.')
+    perm.assert_permissao(
+        perm.pode_alterar_sequencia_relatorio(usuario),
+        'Somente o administrador troca o grupo de numeração.')
+    if not especie_gera_relatorio(processo):
+        raise RelatorioInvalido('Esta espécie não gera número de relatório.')
+
+    nova = (nova_sequencia or '').strip()
+    if nova and not sequencia_ativa(nova):
+        raise RelatorioInvalido('Escolha um grupo de numeração válido.')
+
+    anterior = sequencia_do_processo(processo) or GRUPO_PADRAO
+    anterior_nome = info_sequencia(anterior)['nome']
+    anterior_numero = processo.numero_relatorio or ''
+
+    processo.sequencia_relatorio = nova
+    processo.save(update_fields=['sequencia_relatorio'])
+    destino = sequencia_do_processo(processo) or GRUPO_PADRAO
+    destino_nome = info_sequencia(destino)['nome']
+
+    if destino == anterior:
+        registrar(processo)
+        return processo
+
+    _liberar_reservas_do_processo(processo)
+    if processo.numero_relatorio and not processo.sem_relatorio:
+        processo.numero_relatorio = None
+        processo.save(update_fields=['numero_relatorio'])
+        processo.numero_relatorio = proximo_numero(destino)
+        processo.save(update_fields=['numero_relatorio'])
+        registrar_diff(
+            processo, 'numero_relatorio', anterior_numero,
+            processo.numero_relatorio or '', usuario)
+
+    registrar(processo)
+    registrar_diff(
+        processo, 'sequencia_relatorio', anterior_nome, destino_nome, usuario)
     return processo
 
 

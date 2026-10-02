@@ -136,6 +136,8 @@ urlpatterns = [
          rel.definir_ultimo_numero, name='controle_relatorio_ultimo'),
     path('controle-relatorio/processo/<int:process_id>/numero/',
          rel.alterar_numero, name='controle_relatorio_alterar_numero'),
+    path('controle-relatorio/processo/<int:process_id>/sequencia/',
+         rel.alterar_sequencia, name='controle_relatorio_alterar_sequencia'),
     path('controle-relatorio/destinar/',
          rel.destinar_numeros, name='controle_relatorio_destinar'),
     path('controle-relatorio/destinar/<int:reserva_id>/cancelar/',
