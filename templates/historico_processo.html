@@ -135,10 +135,10 @@
 
     <section class="table-card">
         <div class="table-card__header">
-            <span class="table-card__title">Pendências</span>
+            <span class="table-card__title">Diligências</span>
             <span class="table-card__count">
-                {% if tem_pendencia_aberta %}Com pendência aberta{% else %}Sem pendência aberta{% endif %}
-                · {{ pendencias|length }} item{{ pendencias|length|pluralize:"ns" }}
+                {% if tem_pendencia_aberta %}Com diligência aberta{% else %}Sem diligência aberta{% endif %}
+                · {{ pendencias|length }} {{ pendencias|length|pluralize:"item,itens" }}
             </span>
         </div>
         {% if pendencias %}
@@ -172,8 +172,8 @@
         {% else %}
             <div class="empty">
                 <span class="material-symbols-rounded">playlist_add_check</span>
-                <div class="empty__title">Nenhuma pendência listada</div>
-                <div>O analista ainda não descreveu pendências neste processo.</div>
+                <div class="empty__title">Nenhuma diligência listada</div>
+                <div>O analista ainda não descreveu diligências neste processo.</div>
             </div>
         {% endif %}
     </section>

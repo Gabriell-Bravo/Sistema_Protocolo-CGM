@@ -50,23 +50,31 @@ def processo_e_da_cgm(processo):
     return eh_secretaria_cgm(processo.secretaria)
 
 
-def q_processos_cgm():
+def q_processos_cgm(via=''):
+    """Filtro de processos CGM.
+
+    `via` aponta o relacionamento até o Processo (ex.: 'processo' em
+    Pendencia). Vazio = o próprio queryset já é de Processo.
+    """
+    def campo(nome):
+        return f'{via}__{nome}' if via else nome
+
     return (
-        Q(secretaria__iexact=SECRETARIA_CGM) |
-        Q(secretaria_fk__nome__iexact=SECRETARIA_CGM) |
-        Q(genero=GRUPO_CONTABILIDADE) |
-        Q(especie__iexact=ESPECIE_CONTABILIDADE) |
-        Q(especie_fk__nome__iexact=ESPECIE_CONTABILIDADE) |
-        Q(especie_fk__grupo=GRUPO_CONTABILIDADE)
+        Q(**{f'{campo("secretaria")}__iexact': SECRETARIA_CGM}) |
+        Q(**{f'{campo("secretaria_fk")}__nome__iexact': SECRETARIA_CGM}) |
+        Q(**{campo('genero'): GRUPO_CONTABILIDADE}) |
+        Q(**{f'{campo("especie")}__iexact': ESPECIE_CONTABILIDADE}) |
+        Q(**{f'{campo("especie_fk")}__nome__iexact': ESPECIE_CONTABILIDADE}) |
+        Q(**{f'{campo("especie_fk")}__grupo': GRUPO_CONTABILIDADE})
     )
 
 
-def excluir_processos_cgm(queryset):
-    return queryset.exclude(q_processos_cgm())
+def excluir_processos_cgm(queryset, via=''):
+    return queryset.exclude(q_processos_cgm(via=via))
 
 
-def apenas_processos_cgm(queryset):
-    return queryset.filter(q_processos_cgm())
+def apenas_processos_cgm(queryset, via=''):
+    return queryset.filter(q_processos_cgm(via=via))
 
 
 def pode_ver_processos_cgm(user):

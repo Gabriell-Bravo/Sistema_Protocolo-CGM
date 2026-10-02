@@ -873,12 +873,35 @@ def disponiveis_para_retirada(usuario=None):
 
 
 def liberados_para_assinatura():
-    """item 12: o que a Gestão precisa coletar para assinatura física."""
+    """item 12: o que a Gestão precisa coletar para assinatura física.
+
+    Ordem: Urgente → Prioritário → Normal, e dentro de cada faixa a
+    entrada mais antiga (data/hora de chegada na CGM).
+    """
+    from django.db.models import Case, IntegerField, Value, When
+    from django.db.models.functions import Coalesce
+
     return (Processo.objects
             .filter(situacao_tramite='AGUARDANDO_ASSINATURA',
                     cancelado_em__isnull=True)
-            .select_related('analista_responsavel', 'liberado_assinatura_por')
-            .order_by('liberado_assinatura_em'))
+            .select_related(
+                'analista_responsavel', 'liberado_assinatura_por',
+                'prioridade_fk')
+            .annotate(
+                _ordem_prioridade=Coalesce(
+                    'prioridade_fk__ordem',
+                    Case(
+                        When(prioridade='URGENTE', then=Value(10)),
+                        When(prioridade__in=['PRIORITARIO', 'SIM'], then=Value(20)),
+                        When(prioridade__in=['NORMAL', 'NAO'], then=Value(30)),
+                        default=Value(999),
+                        output_field=IntegerField(),
+                    ),
+                    output_field=IntegerField(),
+                ))
+            .order_by(
+                '_ordem_prioridade', 'data_entrada', 'hora_entrada',
+                'liberado_assinatura_em', 'numero_processo'))
 
 
 def ativos():

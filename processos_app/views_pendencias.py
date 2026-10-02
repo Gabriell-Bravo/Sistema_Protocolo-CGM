@@ -75,7 +75,7 @@ def indicar_atendimento(request, pendencia_id):
         svc.indicar_atendimento(pendencia_id, request.user)
         messages.success(
             request,
-            'Atendimento indicado. A pendência foi para o analista avaliar.')
+            'Atendimento indicado. A diligência foi para o analista avaliar.')
     except (PermissionDenied, ValidationError) as exc:
         _erro(request, exc)
     return redirect('gestao_diligencias')
@@ -104,7 +104,7 @@ def confirmar_resolucao(request, pendencia_id):
     destino = request.POST.get('next')
     try:
         svc.confirmar_resolucao(pendencia_id, request.user)
-        messages.success(request, 'Pendência resolvida.')
+        messages.success(request, 'Diligência resolvida.')
     except (PermissionDenied, ValidationError) as exc:
         _erro(request, exc)
     return redirect(destino) if destino else _voltar_para_processo(pendencia_id)
@@ -120,7 +120,7 @@ def atendimento_insuficiente(request, pendencia_id):
             pendencia_id, request.user, request.POST.get('o_que_falta'))
         messages.success(
             request,
-            'Pendência devolvida. Ela reapareceu na fila de Diligências.')
+            'Diligência devolvida. Ela reapareceu na fila de Diligências.')
     except (PermissionDenied, ValidationError) as exc:
         _erro(request, exc)
     return redirect(destino) if destino else _voltar_para_processo(pendencia_id)
@@ -129,11 +129,11 @@ def atendimento_insuficiente(request, pendencia_id):
 @login_required
 @require_POST
 def cancelar_pendencia(request, pendencia_id):
-    """item 32: cancelar exige motivo; a pendência não é apagada."""
+    """item 32: cancelar exige motivo; a diligência não é apagada."""
     destino = request.POST.get('next')
     try:
         svc.cancelar(pendencia_id, request.user, request.POST.get('motivo'))
-        messages.success(request, 'Pendência cancelada.')
+        messages.success(request, 'Diligência cancelada.')
     except (PermissionDenied, ValidationError) as exc:
         _erro(request, exc)
     return redirect(destino) if destino else _voltar_para_processo(pendencia_id)

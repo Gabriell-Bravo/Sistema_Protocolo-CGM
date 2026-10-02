@@ -1735,7 +1735,7 @@ def adicionar_pendencia(request, process_id):
             svc_processos.aplicar_analise(processo, request.POST, request.user)
         svc_pendencias.criar(
             processo.id, request.user, request.POST.get('descricao'))
-        messages.success(request, "Pendência adicionada.")
+        messages.success(request, "Diligência adicionada.")
     except (PermissionDenied, ValidationError) as exc:
         messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
     return redirect('analista_processo', process_id=processo.id)
@@ -1759,7 +1759,7 @@ def remover_pendencia(request, pendencia_id):
     try:
         svc_pendencias.cancelar(
             pendencia.id, request.user, request.POST.get('motivo'))
-        messages.success(request, "Pendência cancelada. O registro foi preservado.")
+        messages.success(request, "Diligência cancelada. O registro foi preservado.")
     except (PermissionDenied, ValidationError) as exc:
         messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
     return redirect('analista_processo', process_id=processo.id)

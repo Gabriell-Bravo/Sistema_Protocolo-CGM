@@ -2,7 +2,7 @@
 
 {% block title %}Diligências{% endblock %}
 {% block page_title %}Diligências{% endblock %}
-{% block page_subtitle %}{% if is_analista %}Consulta das pendências do seu grupo. A indicação de atendimento é da Gestão.{% else %}Pendências levantadas pelos analistas, aguardando atendimento da Secretaria.{% endif %}{% endblock %}
+{% block page_subtitle %}{% if is_analista %}Consulta das diligências do seu grupo. A indicação de atendimento é da Gestão.{% else %}Diligências levantadas pelos analistas, aguardando atendimento da Secretaria.{% endif %}{% endblock %}
 
 {% block content %}
 <div class="stack">
@@ -26,7 +26,7 @@
                 {% endfor %}
                 {% if status_atual == 'ABERTAS' %}Todas as abertas{% endif %}
             </span>
-            <span class="table-card__count">{{ total }} pendência{{ total|pluralize:"s" }}</span>
+            <span class="table-card__count">{{ total }} diligência{{ total|pluralize:"s" }}</span>
         </div>
 
         <div class="table-scroll">
@@ -35,7 +35,7 @@
                     <tr>
                         <th>Processo</th>
                         <th>Secretaria</th>
-                        <th>Pendência</th>
+                        <th>Diligência</th>
                         <th>Analista responsável</th>
                         <th>Tempo decorrido</th>
                         <th class="col-actions">Ação</th>
@@ -77,7 +77,7 @@
                         <td colspan="6">
                             <div class="empty empty--compact">
                                 <span class="material-symbols-rounded">inbox</span>
-                                <div class="empty__title">Nenhuma pendência nesta situação</div>
+                                <div class="empty__title">Nenhuma diligência nesta situação</div>
                             </div>
                         </td>
                     </tr>

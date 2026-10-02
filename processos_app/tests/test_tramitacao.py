@@ -514,3 +514,43 @@ class DevolverAssinaturaGestaoTest(BaseProcessoTestCase):
         self.client.force_login(self.analista_lic)
         consulta = self.client.get(reverse('gestao_liberados_assinatura'))
         self.assertNotContains(consulta, 'modalDevolver')
+
+
+class LiberadosAssinaturaOrdemTest(BaseProcessoTestCase):
+
+    def _para_assinar(self, numero, prioridade, data, hora):
+        processo = self.novo_processo(
+            numero_processo=numero,
+            data_entrada=data,
+            hora_entrada=hora,
+        )
+        if prioridade != processo.prioridade:
+            tramitacao.alterar_prioridade(processo.id, self.gestao, prioridade)
+        tramitacao.assumir(processo.id, self.analista_lic)
+        self.preencher_analise(processo)
+        self.anexar_teste(processo)
+        tramitacao.liberar_assinatura(processo.id, self.analista_lic)
+        processo.refresh_from_db()
+        return processo
+
+    def test_ordem_por_prioridade_e_entrada(self):
+        # Liberados em ordem invertida de prioridade/entrada para garantir
+        # que a listagem não segue liberado_assinatura_em.
+        normal_tarde = self._para_assinar(
+            '5101/2026', 'NORMAL', '2026-09-10', '14:00')
+        prioritario = self._para_assinar(
+            '5102/2026', 'PRIORITARIO', '2026-09-12', '09:00')
+        normal_cedo = self._para_assinar(
+            '5103/2026', 'NORMAL', '2026-09-08', '08:00')
+        urgente = self._para_assinar(
+            '5104/2026', 'URGENTE', '2026-09-15', '18:00')
+
+        ordem = list(
+            tramitacao.liberados_para_assinatura().values_list(
+                'numero_processo', flat=True))
+        self.assertEqual(ordem, [
+            urgente.numero_processo,
+            prioritario.numero_processo,
+            normal_cedo.numero_processo,
+            normal_tarde.numero_processo,
+        ])

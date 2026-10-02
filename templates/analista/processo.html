@@ -501,8 +501,8 @@
 
     <section class="card" id="blocoPendencias">
         <div class="card__header">
-            <span class="card__title">Lista de pendências</span>
-            <span class="card__hint">{{ pendencias|length }} item{{ pendencias|length|pluralize:"ns" }}</span>
+            <span class="card__title">Lista de diligências</span>
+            <span class="card__hint">{{ pendencias|length }} {{ pendencias|length|pluralize:"item,itens" }}</span>
         </div>
 
         {% if pendencias %}
@@ -554,7 +554,7 @@
                               onsubmit="return pedirMotivoCancelamento(this);">
                             {% csrf_token %}
                             <input type="hidden" name="motivo" value="">
-                            <button type="submit" class="icon-btn icon-btn--danger" title="Cancelar pendência (cadastrada indevidamente)">
+                            <button type="submit" class="icon-btn icon-btn--danger" title="Cancelar diligência (cadastrada indevidamente)">
                                 <span class="material-symbols-rounded">cancel</span>
                             </button>
                         </form>
@@ -565,17 +565,17 @@
         {% else %}
             <div class="empty empty--compact">
                 <span class="material-symbols-rounded">playlist_add</span>
-                <div class="empty__title">Nenhuma pendência registrada</div>
-                <div>Descreva cada item que precisa ser atendido pela Secretaria. A existência de pendência é calculada a partir desta lista.</div>
+                <div class="empty__title">Nenhuma diligência registrada</div>
+                <div>Descreva cada item que precisa ser atendido pela Secretaria. A existência de diligência é calculada a partir desta lista.</div>
             </div>
         {% endif %}
 
         {% if pode_editar %}
         <div class="pendencia-add" id="formPendencia">
-            <label class="field__label" for="descricaoPendencia">Nova pendência</label>
+            <label class="field__label" for="descricaoPendencia">Nova diligência</label>
             <div class="pendencia-add__row">
                 <textarea id="descricaoPendencia" name="descricao" form="formAnalise"
-                          class="textarea" rows="2" placeholder="Descreva a pendência…"></textarea>
+                          class="textarea" rows="2" placeholder="Descreva a diligência…"></textarea>
                 <button type="submit" form="formAnalise"
                         formaction="{% url 'adicionar_pendencia' processo.id %}"
                         class="btn btn--primary">
@@ -591,7 +591,7 @@
     {% if pendencias_anteriores %}
     <section class="card">
         <div class="card__header">
-            <span class="card__title">Pendências abertas de passagens anteriores — {{ pendencias_anteriores|length }}</span>
+            <span class="card__title">Diligências abertas de passagens anteriores — {{ pendencias_anteriores|length }}</span>
             <span class="card__hint">Somente leitura</span>
         </div>
         <ul class="pendencia-list">
@@ -657,7 +657,7 @@
 <script>
     // item 32: cancelar pendência exige motivo.
     function pedirMotivoCancelamento(form) {
-        const motivo = prompt('Motivo do cancelamento desta pendência:');
+        const motivo = prompt('Motivo do cancelamento desta diligência:');
         if (!motivo || !motivo.trim()) { return false; }
         form.querySelector('input[name="motivo"]').value = motivo.trim();
         return true;

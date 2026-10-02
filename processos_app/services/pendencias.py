@@ -38,11 +38,11 @@ def criar(processo_id, usuario, descricao):
 
     perm.assert_permissao(
         perm.pode_criar_pendencia(usuario, processo),
-        'Só o analista responsável pode incluir pendências.')
+        'Só o analista responsável pode incluir diligências.')
 
     descricao = (descricao or '').strip()
     if not descricao:
-        raise TransicaoInvalida('Descreva a pendência antes de adicionar.')
+        raise TransicaoInvalida('Descreva a diligência antes de adicionar.')
 
     pendencia = Pendencia.objects.create(
         processo=processo,
@@ -77,7 +77,7 @@ def indicar_atendimento(pendencia_id, usuario):
 
     if pendencia.status != 'AGUARDANDO_ATENDIMENTO':
         raise TransicaoInvalida(
-            f'Pendência em "{pendencia.get_status_display()}" não aguarda '
+            f'Diligência em "{pendencia.get_status_display()}" não aguarda '
             'atendimento.')
 
     pendencia.status = 'ATENDIMENTO_INDICADO'
@@ -110,7 +110,7 @@ def confirmar_resolucao(pendencia_id, usuario):
 
     if pendencia.status != 'ATENDIMENTO_INDICADO':
         raise TransicaoInvalida(
-            f'Pendência em "{pendencia.get_status_display()}" não pode ser '
+            f'Diligência em "{pendencia.get_status_display()}" não pode ser '
             'resolvida agora.')
 
     pendencia.status = 'RESOLVIDA'
@@ -139,7 +139,7 @@ def atendimento_insuficiente(pendencia_id, usuario, o_que_falta):
 
     if pendencia.status != 'ATENDIMENTO_INDICADO':
         raise TransicaoInvalida(
-            'Só é possível avaliar uma pendência com atendimento indicado.')
+            'Só é possível avaliar uma diligência com atendimento indicado.')
 
     o_que_falta = (o_que_falta or '').strip()
     if not o_que_falta:
@@ -171,14 +171,14 @@ def cancelar(pendencia_id, usuario, motivo):
     )
     perm.assert_permissao(
         autorizado,
-        'Só o responsável técnico ou a Gestão podem cancelar a pendência.')
+        'Só o responsável técnico ou a Gestão podem cancelar a diligência.')
 
     motivo = (motivo or '').strip()
     if not motivo:
         raise TransicaoInvalida('Informe o motivo do cancelamento.')
     if pendencia.status in ('RESOLVIDA', 'CANCELADA'):
         raise TransicaoInvalida(
-            f'Pendência já está em "{pendencia.get_status_display()}".')
+            f'Diligência já está em "{pendencia.get_status_display()}".')
 
     pendencia.status = 'CANCELADA'
     pendencia.cancelada_em = timezone.now()
@@ -245,5 +245,5 @@ def _travar(pendencia_id):
     pendencia = (Pendencia.objects.select_for_update()
                  .filter(id=pendencia_id).first())
     if pendencia is None:
-        raise TransicaoInvalida('Pendência não encontrada.')
+        raise TransicaoInvalida('Diligência não encontrada.')
     return pendencia

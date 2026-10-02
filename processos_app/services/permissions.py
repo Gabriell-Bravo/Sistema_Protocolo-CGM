@@ -169,18 +169,21 @@ def pode_analisar_grupo(user, grupo):
 
 
 def filtrar_por_grupo(user, queryset, campo='genero'):
-    """Restringe um queryset de Processo ao que o usuário pode ver.
+    """Restringe um queryset ao que o usuário pode ver por grupo.
 
-    Processos da CGM ficam de fora das listas comuns; a aba própria usa
-    `apenas_processos_cgm`.
+    `campo` indica onde está o gênero (ex.: 'genero' em Processo,
+    'processo__genero' em Pendencia). Processos da CGM ficam de fora das
+    listas comuns; a aba própria usa `apenas_processos_cgm`.
     """
     from .secretaria_cgm import excluir_processos_cgm
 
+    via = campo.rsplit('__', 1)[0] if '__' in campo else ''
+
     if eh_administrador(user) or is_protocolo(user) or is_gestao(user):
-        return excluir_processos_cgm(queryset)
+        return excluir_processos_cgm(queryset, via=via)
     if is_analista(user):
         return excluir_processos_cgm(
-            queryset.filter(**{campo: grupo_do_analista(user)}))
+            queryset.filter(**{campo: grupo_do_analista(user)}), via=via)
     return queryset.none()
 
 

@@ -108,3 +108,32 @@ class ProcessosCgmTest(BaseProcessoTestCase):
         self.assertContains(aba, 'cont-3/2026')
         self.assertTrue(perm.pode_consultar_processo(self.gestao, cgm))
         self.assertTrue(perm.pode_consultar_processo(self.gestao, contab))
+
+    def test_diligencias_abre_e_esconde_cgm(self):
+        from processos_app.models import Pendencia
+        from processos_app.services import pendencias
+
+        comum = self.processo_em_analise()
+        pendencias.criar(comum.id, self.analista_lic, 'Falta certidão')
+
+        cgm = self.novo_processo(
+            numero_processo='cgm-dil/2026',
+            secretaria=svc_cgm.SECRETARIA_CGM)
+        Pendencia.objects.create(
+            processo=cgm,
+            descricao='Diligência CGM',
+            criada_por=self.analista_lic,
+            responsavel_tecnico=self.analista_lic,
+            status='AGUARDANDO_ATENDIMENTO',
+        )
+
+        self.client.force_login(self.gestao)
+        pagina = self.client.get(reverse('gestao_diligencias'))
+        self.assertEqual(pagina.status_code, 200)
+        self.assertContains(pagina, 'Falta certidão')
+        self.assertNotContains(pagina, 'Diligência CGM')
+
+        self.client.force_login(self.analista_lic)
+        consulta = self.client.get(reverse('gestao_diligencias'))
+        self.assertEqual(consulta.status_code, 200)
+        self.assertContains(consulta, 'Falta certidão')

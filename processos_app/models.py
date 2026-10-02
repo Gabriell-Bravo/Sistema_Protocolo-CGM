@@ -270,7 +270,7 @@ class Processo(models.Model):
         max_length=3,
         default='NAO',
         choices=PENDENCIA_CHOICES,
-        verbose_name="Tem Pendência"
+        verbose_name="Tem Diligência"
     )
 
     GENERO_LABELS = {
@@ -489,7 +489,7 @@ class Pendencia(models.Model):
 
     processo = models.ForeignKey(
         Processo, on_delete=models.CASCADE, related_name='pendencias', verbose_name="Processo")
-    descricao = models.TextField(verbose_name="Descrição da Pendência")
+    descricao = models.TextField(verbose_name="Descrição da Diligência")
     criada_em = models.DateTimeField(
         auto_now_add=True, verbose_name="Criada em")
     criada_por = models.ForeignKey(
@@ -546,7 +546,7 @@ class Pendencia(models.Model):
         null=True, blank=True, verbose_name="Motivo do cancelamento")
 
     def __str__(self):
-        return f"Pendência de {self.processo.numero_processo}"
+        return f"Diligência de {self.processo.numero_processo}"
 
     @property
     def esta_aberta(self):
@@ -564,8 +564,8 @@ class Pendencia(models.Model):
     class Meta:
         db_table = 'pendencias'
         ordering = ['criada_em']
-        verbose_name = "Pendência"
-        verbose_name_plural = "Pendências"
+        verbose_name = "Diligência"
+        verbose_name_plural = "Diligências"
         indexes = [
             # item 57: fila de Diligências e "Atendimentos indicados"
             models.Index(fields=['status', 'responsavel_tecnico'],
@@ -689,7 +689,7 @@ class EventoPendencia(models.Model):
 
     pendencia = models.ForeignKey(
         Pendencia, on_delete=models.CASCADE, related_name='eventos',
-        verbose_name="Pendência")
+        verbose_name="Diligência")
     tipo = models.CharField(
         max_length=30, choices=TIPO_CHOICES, verbose_name="Evento")
     usuario = models.ForeignKey(
@@ -700,13 +700,13 @@ class EventoPendencia(models.Model):
     descricao = models.TextField(blank=True, verbose_name="Descrição")
 
     def __str__(self):
-        return f"{self.get_tipo_display()} — pendência {self.pendencia_id}"
+        return f"{self.get_tipo_display()} — diligência {self.pendencia_id}"
 
     class Meta:
         db_table = 'eventos_pendencia'
         ordering = ['-criado_em', '-id']
-        verbose_name = "Evento da Pendência"
-        verbose_name_plural = "Eventos das Pendências"
+        verbose_name = "Evento da Diligência"
+        verbose_name_plural = "Eventos das Diligências"
 
 
 class SequenciaRelatorio(models.Model):
