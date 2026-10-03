@@ -6,10 +6,10 @@ import json
 from django.test import override_settings
 from django.urls import reverse
 
-from processos_app.models import EventoProcesso, ProcessHistory, Processo
+from processos_app.models import EspecieProcesso, EventoProcesso, ProcessHistory, Processo
 from processos_app.services import tramitacao
 
-from .base import BaseProcessoTestCase, criar_usuario
+from .base import LIQ, BaseProcessoTestCase, criar_usuario
 
 STATIC = {'STORAGES': {
     'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
@@ -568,3 +568,36 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         resposta = self.client.get(reverse('area_analista') + '?filtro=liberados')
         self.assertContains(resposta, '1004/2026')
         self.assertContains(resposta, 'A assinatura do Controlador é fora do sistema')
+
+    def test_fila_liquidacoes_separa_por_aba_de_sequencia(self):
+        especie_bolsa, _ = EspecieProcesso.objects.get_or_create(
+            nome='Concessão Aux. Bolsa Atleta', grupo=LIQ,
+            defaults={'ativo': True, 'gera_relatorio': True,
+                      'sequencia_numeracao': 'BOLSA_ATLETA'})
+        if especie_bolsa.sequencia_numeracao != 'BOLSA_ATLETA':
+            especie_bolsa.sequencia_numeracao = 'BOLSA_ATLETA'
+            especie_bolsa.gera_relatorio = True
+            especie_bolsa.ativo = True
+            especie_bolsa.save(update_fields=[
+                'sequencia_numeracao', 'gera_relatorio', 'ativo'])
+        liquidacao = self.novo_processo(
+            especie=self.especie_liq, numero_processo='2001/2026')
+        bolsa = self.novo_processo(
+            especie=especie_bolsa, numero_processo='2002/2026')
+
+        self.client.force_login(self.analista_liq)
+        padrao = self.client.get(reverse('area_analista'))
+        self.assertContains(padrao, 'Liquidação')
+        self.assertContains(padrao, 'Bolsa Atleta')
+        self.assertContains(padrao, '2001/2026')
+        self.assertNotContains(padrao, '2002/2026')
+        self.assertEqual(padrao.context['seq_atual'], 'LIQUIDACOES')
+
+        aba_bolsa = self.client.get(
+            reverse('area_analista') + '?seq=BOLSA_ATLETA')
+        self.assertContains(aba_bolsa, '2002/2026')
+        self.assertNotContains(aba_bolsa, '2001/2026')
+        self.assertEqual(aba_bolsa.context['seq_atual'], 'BOLSA_ATLETA')
+        self.assertEqual(len(aba_bolsa.context['liquidacoes']), 1)
+        self.assertEqual(aba_bolsa.context['liquidacoes'][0].id, bolsa.id)
+        self.assertEqual(padrao.context['liquidacoes'][0].id, liquidacao.id)

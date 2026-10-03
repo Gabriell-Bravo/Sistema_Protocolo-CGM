@@ -22,44 +22,70 @@
 {% block content %}
 <div class="stack">
 
-    <section class="meta-grid" id="metaProcesso" {% if pode_editar %}data-editavel="1"{% endif %}>
+    <div class="meta-processo">
+        <div class="meta-processo__head">
+            <h2 class="meta-processo__title">Dados do processo</h2>
+            {% if pode_editar %}
+            <div class="meta-processo__actions">
+                <button type="button" class="icon-btn icon-btn--primary" id="btnEditarMeta"
+                        title="Editar dados do processo" aria-label="Editar dados do processo">
+                    <span class="material-symbols-rounded">edit</span>
+                </button>
+                <button type="button" class="icon-btn" id="btnCancelarMeta" hidden
+                        title="Cancelar edição" aria-label="Cancelar edição">
+                    <span class="material-symbols-rounded">close</span>
+                </button>
+            </div>
+            {% endif %}
+        </div>
+        <section class="meta-grid" id="metaProcesso"{% if pode_editar %} data-editavel="1"{% endif %}>
+
         <div class="meta-item">
             <span class="meta-item__label">Grupo</span>
+            <div class="meta-view">
+                <span class="badge {% if processo.genero == 'LICITACOES_E_CONTRATOS' %}badge--grupo-licitacoes{% else %}badge--grupo-liquidacoes{% endif %}">
+                    {{ processo.genero_display }}
+                </span>
+            </div>
             {% if pode_editar %}
-            <select id="meta_genero" name="genero" form="formAnalise" class="select">
-                {% for item in dados_formulario.grupos %}
-                <option value="{{ item.valor }}" {% if processo.genero == item.valor %}selected{% endif %}>{{ item.rotulo }}</option>
-                {% endfor %}
-            </select>
-            {% else %}
-            <span class="badge {% if processo.genero == 'LICITACOES_E_CONTRATOS' %}badge--grupo-licitacoes{% else %}badge--grupo-liquidacoes{% endif %}">
-                {{ processo.genero_display }}
-            </span>
+            <div class="meta-edit" hidden>
+                <select id="meta_genero" name="genero" form="formAnalise" class="select" disabled>
+                    {% for item in dados_formulario.grupos %}
+                    <option value="{{ item.valor }}" {% if processo.genero == item.valor %}selected{% endif %}>{{ item.rotulo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
             {% endif %}
         </div>
         <div class="meta-item">
             <span class="meta-item__label">Espécie</span>
+            <div class="meta-view">
+                <span class="meta-item__value">{{ processo.especie|default:"—" }}</span>
+            </div>
             {% if pode_editar %}
-            <select id="meta_especie" name="especie" form="formAnalise" class="select" required>
-                <option value="">Selecione</option>
-            </select>
-            <input type="text" id="meta_especie_outros" name="especie_outros" form="formAnalise"
-                   class="input" style="margin-top:8px;display:none;"
-                   placeholder="Digite a espécie" value="">
-            {% else %}
-            <span class="meta-item__value">{{ processo.especie|default:"—" }}</span>
+            <div class="meta-edit" hidden>
+                <select id="meta_especie" name="especie" form="formAnalise" class="select" required disabled>
+                    <option value="">Selecione</option>
+                </select>
+                <input type="text" id="meta_especie_outros" name="especie_outros" form="formAnalise"
+                       class="input" style="margin-top:8px;display:none;"
+                       placeholder="Digite a espécie" value="" disabled>
+            </div>
             {% endif %}
         </div>
         <div class="meta-item">
             <span class="meta-item__label">Prioridade</span>
+            <div class="meta-view">
+                {% include "includes/badge_prioridade.html" with processo=processo %}
+            </div>
             {% if pode_editar %}
-            <select id="meta_prioridade" name="prioridade" form="formAnalise" class="select">
-                {% for codigo, nome in prioridades %}
-                <option value="{{ codigo }}" {% if processo.prioridade == codigo %}selected{% endif %}>{{ nome }}</option>
-                {% endfor %}
-            </select>
-            {% else %}
-            {% include "includes/badge_prioridade.html" with processo=processo %}
+            <div class="meta-edit" hidden>
+                <select id="meta_prioridade" name="prioridade" form="formAnalise" class="select" disabled>
+                    {% for codigo, nome in prioridades %}
+                    <option value="{{ codigo }}" {% if processo.prioridade == codigo %}selected{% endif %}>{{ nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
             {% endif %}
         </div>
         <div class="meta-item">
@@ -72,24 +98,33 @@
         </div>
         <div class="meta-item">
             <span class="meta-item__label">Volume</span>
+            <div class="meta-view">
+                <span class="meta-item__value">{{ processo.volume|default:'—' }}</span>
+            </div>
             {% if pode_editar %}
-            <input type="text" name="volume" form="formAnalise" class="input"
-                   value="{{ processo.volume|default:'' }}" required>
-            {% else %}
-            <span class="meta-item__value">{{ processo.volume|default:'—' }}</span>
+            <div class="meta-edit" hidden>
+                <input type="text" name="volume" form="formAnalise" class="input"
+                       value="{{ processo.volume|default:'' }}" required disabled
+                       data-inicial="{{ processo.volume|default:'' }}">
+            </div>
             {% endif %}
         </div>
         <div class="meta-item">
             <span class="meta-item__label">Entrada</span>
-            {% if pode_editar %}
-            <div class="meta-item__row">
-                <input type="date" name="data_entrada" form="formAnalise" class="input"
-                       value="{{ processo.data_entrada|date:'Y-m-d' }}" required>
-                <input type="time" name="hora_entrada" form="formAnalise" class="input"
-                       value="{% if processo.hora_entrada %}{{ processo.hora_entrada|time:'H:i' }}{% endif %}" required>
+            <div class="meta-view">
+                <span class="meta-item__value">{{ processo.data_entrada|date:"d/m/Y" }}{% if processo.hora_entrada %} às {{ processo.hora_entrada|time:"H:i" }}{% endif %}</span>
             </div>
-            {% else %}
-            <span class="meta-item__value">{{ processo.data_entrada|date:"d/m/Y" }} {% if processo.hora_entrada %}às {{ processo.hora_entrada|time:"H:i" }}{% endif %}</span>
+            {% if pode_editar %}
+            <div class="meta-edit" hidden>
+                <div class="meta-item__row">
+                    <input type="date" name="data_entrada" form="formAnalise" class="input"
+                           value="{{ processo.data_entrada|date:'Y-m-d' }}" required disabled
+                           data-inicial="{{ processo.data_entrada|date:'Y-m-d' }}">
+                    <input type="time" name="hora_entrada" form="formAnalise" class="input"
+                           value="{% if processo.hora_entrada %}{{ processo.hora_entrada|time:'H:i' }}{% endif %}" required disabled
+                           data-inicial="{% if processo.hora_entrada %}{{ processo.hora_entrada|time:'H:i' }}{% endif %}">
+                </div>
+            </div>
             {% endif %}
         </div>
         {% if processo.data_hora_assumido %}
@@ -104,48 +139,65 @@
                 {{ processo.prazo_formatado }}
             </span>
         </div>
-        {# item 40: exibido nos dois grupos, com rótulo geral #}
         <div class="meta-item">
             <span class="meta-item__label">Contratada / Favorecido / Interessado</span>
+            <div class="meta-view">
+                <span class="meta-item__value">{{ processo.contratada|default:'—' }}</span>
+            </div>
             {% if pode_editar %}
-            <input type="text" name="contratada" form="formAnalise" class="input"
-                   value="{{ processo.contratada|default:'' }}">
-            {% else %}
-            <span class="meta-item__value">{{ processo.contratada|default:'—' }}</span>
+            <div class="meta-edit" hidden>
+                <input type="text" name="contratada" form="formAnalise" class="input" disabled
+                       value="{{ processo.contratada|default:'' }}"
+                       data-inicial="{{ processo.contratada|default:'' }}">
+            </div>
+            {% endif %}
+        </div>
+        <div class="meta-item">
+            <span class="meta-item__label">Secretaria</span>
+            <div class="meta-view">
+                <span class="meta-item__value">{{ processo.secretaria|default:'—' }}</span>
+            </div>
+            {% if pode_editar %}
+            <div class="meta-edit" hidden>
+                <select name="secretaria" form="formAnalise" class="select" required disabled data-inicial="{{ processo.secretaria|default:'' }}">
+                    {% for nome in secretarias %}
+                    <option value="{{ nome }}" {% if processo.secretaria == nome %}selected{% endif %}>{{ nome }}</option>
+                    {% endfor %}
+                    {% if processo.secretaria and processo.secretaria not in secretarias %}
+                    <option value="{{ processo.secretaria }}" selected>{{ processo.secretaria }}</option>
+                    {% endif %}
+                </select>
+            </div>
             {% endif %}
         </div>
         <div class="meta-item meta-item--wide">
             <span class="meta-item__label">Objeto</span>
+            <div class="meta-view">
+                <span class="meta-item__value">{{ processo.objeto }}</span>
+            </div>
             {% if pode_editar %}
-            <textarea name="objeto" form="formAnalise" class="textarea" rows="2" required>{{ processo.objeto }}</textarea>
-            {% else %}
-            <span class="meta-item__value">{{ processo.objeto }}</span>
+            <div class="meta-edit" hidden>
+                <textarea name="objeto" form="formAnalise" class="textarea" rows="2" required disabled
+                          data-inicial="{{ processo.objeto }}">{{ processo.objeto }}</textarea>
+            </div>
             {% endif %}
         </div>
         {% if pode_editar or processo.observacao_protocolo %}
         <div class="meta-item meta-item--wide">
             <span class="meta-item__label">Observação do Protocolo</span>
+            <div class="meta-view">
+                <span class="meta-item__value">{{ processo.observacao_protocolo|default:'—' }}</span>
+            </div>
             {% if pode_editar %}
-            <textarea name="observacao_protocolo" form="formAnalise" class="textarea" rows="2">{{ processo.observacao_protocolo|default:'' }}</textarea>
-            {% else %}
-            <span class="meta-item__value">{{ processo.observacao_protocolo }}</span>
+            <div class="meta-edit" hidden>
+                <textarea name="observacao_protocolo" form="formAnalise" class="textarea" rows="2" disabled
+                          data-inicial="{{ processo.observacao_protocolo|default:'' }}">{{ processo.observacao_protocolo|default:'' }}</textarea>
+            </div>
             {% endif %}
         </div>
         {% endif %}
-        {% if pode_editar %}
-        <div class="meta-item meta-item--wide">
-            <span class="meta-item__label">Secretaria</span>
-            <select name="secretaria" form="formAnalise" class="select" required>
-                {% for nome in secretarias %}
-                <option value="{{ nome }}" {% if processo.secretaria == nome %}selected{% endif %}>{{ nome }}</option>
-                {% endfor %}
-                {% if processo.secretaria and processo.secretaria not in secretarias %}
-                <option value="{{ processo.secretaria }}" selected>{{ processo.secretaria }}</option>
-                {% endif %}
-            </select>
-        </div>
-        {% endif %}
-    </section>
+        </section>
+    </div>
     {% if pode_editar %}
     {{ dados_formulario|json_script:"dados-formulario-meta" }}
     {% endif %}
@@ -208,7 +260,7 @@
     {% elif user.is_superuser and pode_editar and not processo.eh_meu %}
         <div class="alert alert--info">
             <span class="material-symbols-rounded">edit</span>
-            <span>Edição do administrador. Altere os dados do processo e a análise; use <strong>Salvar análise</strong> para gravar. Marque <strong>Sem relatório</strong> se o número não deve permanecer.</span>
+            <span>Edição do administrador. Altere os dados do processo e a análise; use <strong>Salvar análise</strong> para gravar os campos e <strong>Gerar número</strong> para emitir o relatório. Marque <strong>Sem relatório</strong> se não houve peça — o número e a data continuam obrigatórios para encaminhar.</span>
         </div>
     {% endif %}
 
@@ -265,7 +317,7 @@
                     <label class="field__label" for="numero_relatorio_exibicao">Número do relatório</label>
                     {% if pode_editar_numero_relatorio %}
                     <div class="pendencia-add__row" id="numeroRelatorioExibicao">
-                        <input type="text" id="numero_relatorio_exibicao" class="input" value="{% if processo.numero_relatorio %}Relatório {{ processo.numero_relatorio }}{% else %}Clique no lápis para informar, ou salve para gerar o sequencial{% endif %}" readonly>
+                        <input type="text" id="numero_relatorio_exibicao" class="input" value="{% if processo.numero_relatorio %}Relatório {{ processo.numero_relatorio }}{% else %}Ainda sem número — use Gerar número, o lápis, ou vincule no Controle{% endif %}" readonly>
                         <button type="button" class="icon-btn icon-btn--primary" id="btnEditarNumero" title="Informar número específico">
                             <span class="material-symbols-rounded">edit</span>
                         </button>
@@ -306,9 +358,11 @@
                     <span class="field__hint" id="hintNumeroRelatorio">
                         {% if pode_editar %}
                             {% if processo.numero_relatorio %}
-                            Use o lápis para trocar o número e a data. O botão Salvar análise grava tudo. O X desfaz e mantém o sequencial.
+                            Use o lápis para trocar o número e a data. Salvar análise grava os demais campos sem alterar o número.
                             {% else %}
-                            Sem o lápis, o número sequencial e a data abaixo são gravados ao Salvar análise. Com o lápis, informe número e data e use o mesmo Salvar análise. O X cancela o número específico.
+                            <strong>Salvar análise</strong> grava os dados sem emitir número.
+                            <strong>Gerar número</strong> emite o sequencial.
+                            Com o lápis, informe um número específico. Ou vincule um número cancelado no Controle de relatório.
                             {% endif %}
                         {% else %}
                             Use o lápis para informar o número e a data.
@@ -316,7 +370,7 @@
                     </span>
                     {% else %}
                     <input type="text" id="numero_relatorio" class="input" value="{% if processo.numero_relatorio %}Relatório {{ processo.numero_relatorio }}{% endif %}" readonly>
-                    <span class="field__hint">{% if processo.numero_relatorio %}Número gerado ao salvar a análise.{% else %}Será gerado automaticamente ao salvar a análise.{% endif %}</span>
+                    <span class="field__hint">{% if processo.numero_relatorio %}Número do relatório.{% else %}Use Gerar número ou vincule no Controle.{% endif %}</span>
                     {% endif %}
                 </div>
                 <div class="field" id="dataRelatorioExibicaoCampo">
@@ -383,29 +437,10 @@
                                {% if not pode_editar %}disabled{% endif %}>
                         <span>Sem relatório</span>
                     </label>
-                    <span class="field__hint">Marque se o processo foi despachado sem relatório. A linha fica amarela no Controle. O número pode ser informado ou gerado mesmo com esta opção marcada.</span>
+                    <span class="field__hint">Marque se não houve peça de relatório. Mesmo assim é obrigatório ter número e data antes de encaminhar ao Controlador (use Gerar número, o lápis ou vincule no Controle).</span>
                 </div>
                 {% endif %}
             </div>
-            {% if pode_editar or pode_liberar or pode_direcionar or pode_declinar or desfazer %}
-            <div class="form-actions" style="margin-top:14px;">
-                {% if pode_editar %}
-                <button type="submit" name="acao" value="salvar" class="btn btn--outline">
-                    <span class="material-symbols-rounded">save</span>
-                    Salvar análise
-                </button>
-                {% endif %}
-                {% if pode_liberar or pode_direcionar or pode_declinar %}
-                <button type="button" class="btn btn--primary" data-modal-open="modalEncaminhar">
-                    <span class="material-symbols-rounded">send</span>
-                    Encaminhar
-                </button>
-                {% endif %}
-                {% if desfazer and not pode_declinar %}
-                    {% include "includes/botao_desfazer.html" %}
-                {% endif %}
-            </div>
-            {% endif %}
         </div>
     </form>
 
@@ -718,6 +753,40 @@
         </div>
     </section>
     {% endif %}
+
+    {% if pode_editar or pode_liberar or pode_direcionar or pode_declinar or desfazer %}
+    <section class="card" id="acoesAnalise" style="margin-top:14px;">
+        <div class="card__header">
+            <span class="card__title">Finalizar</span>
+            <span class="card__hint">Salve, gere o número e encaminhe</span>
+        </div>
+        <div class="card__body">
+            <div class="form-actions" style="margin:0; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+                {% if pode_editar %}
+                <button type="submit" form="formAnalise" name="acao" value="salvar" class="btn btn--outline">
+                    <span class="material-symbols-rounded">save</span>
+                    Salvar análise
+                </button>
+                {% if eh_liquidacao and not processo.numero_relatorio and not processo.sem_relatorio %}
+                <button type="submit" form="formAnalise" name="acao" value="gerar_numero" class="btn btn--primary" id="btnGerarNumero">
+                    <span class="material-symbols-rounded">pin</span>
+                    Gerar número
+                </button>
+                {% endif %}
+                {% endif %}
+                {% if pode_liberar or pode_direcionar or pode_declinar %}
+                <button type="button" class="btn btn--primary" data-modal-open="modalEncaminhar">
+                    <span class="material-symbols-rounded">send</span>
+                    Encaminhar
+                </button>
+                {% endif %}
+                {% if desfazer and not pode_declinar %}
+                    {% include "includes/botao_desfazer.html" %}
+                {% endif %}
+            </div>
+        </div>
+    </section>
+    {% endif %}
 </div>
 {% endblock %}
 
@@ -855,12 +924,16 @@
         var genero = document.getElementById('meta_genero');
         var especie = document.getElementById('meta_especie');
         var outros = document.getElementById('meta_especie_outros');
-        if (!dadosEl || !genero || !especie || !outros) return;
+        var meta = document.getElementById('metaProcesso');
+        var btnEditar = document.getElementById('btnEditarMeta');
+        var btnCancelar = document.getElementById('btnCancelarMeta');
+        if (!dadosEl || !genero || !especie || !outros || !meta) return;
 
         var dados = JSON.parse(dadosEl.textContent);
         var OUTROS = '__OUTROS__';
         var especieAtual = "{{ processo.especie|default:''|escapejs }}";
         var generoAtual = "{{ processo.genero|default:''|escapejs }}";
+        var prioridadeAtual = "{{ processo.prioridade|default:''|escapejs }}";
 
         function especiesDoGrupo(grupo) {
             return (dados.especies || []).filter(function (e) {
@@ -918,6 +991,32 @@
             }
         }
 
+        function restaurarIniciais() {
+            meta.querySelectorAll('[data-inicial]').forEach(function (campo) {
+                campo.value = campo.getAttribute('data-inicial') || '';
+            });
+            if (generoAtual) genero.value = generoAtual;
+            var prioridade = document.getElementById('meta_prioridade');
+            if (prioridade && prioridadeAtual) prioridade.value = prioridadeAtual;
+            preencherEspecies(genero.value || generoAtual, especieAtual);
+            aoMudarEspecie();
+        }
+
+        function setEditando(ativo) {
+            meta.classList.toggle('is-editing', !!ativo);
+            meta.querySelectorAll('.meta-edit').forEach(function (bloco) {
+                bloco.hidden = !ativo;
+            });
+            meta.querySelectorAll('.meta-view').forEach(function (bloco) {
+                bloco.hidden = !!ativo;
+            });
+            if (btnEditar) btnEditar.hidden = !!ativo;
+            if (btnCancelar) btnCancelar.hidden = !ativo;
+            meta.querySelectorAll('.meta-edit input, .meta-edit select, .meta-edit textarea').forEach(function (campo) {
+                campo.disabled = !ativo;
+            });
+        }
+
         genero.addEventListener('change', function () {
             preencherEspecies(genero.value, '');
             aoMudarEspecie();
@@ -927,13 +1026,28 @@
         if (generoAtual) genero.value = generoAtual;
         preencherEspecies(genero.value || generoAtual, especieAtual);
         aoMudarEspecie();
+        setEditando(false);
+
+        if (btnEditar) {
+            btnEditar.addEventListener('click', function () {
+                setEditando(true);
+            });
+        }
+        if (btnCancelar) {
+            btnCancelar.addEventListener('click', function () {
+                restaurarIniciais();
+                setEditando(false);
+            });
+        }
 
         var form = document.getElementById('formAnalise');
         if (form) {
             form.addEventListener('submit', function () {
+                if (especie.disabled) return;
                 if (especie.value === OUTROS) {
                     especie.name = '';
                     outros.name = 'especie';
+                    outros.disabled = false;
                 } else {
                     outros.name = 'especie_outros';
                     outros.disabled = true;
@@ -941,5 +1055,47 @@
             });
         }
     })();
+</script>
+<script>
+(function () {
+    // Mantém a posição da página após Salvar / Gerar número (reload não sobe).
+    var chave = 'analista-processo-scroll:' + location.pathname;
+    var salvo = sessionStorage.getItem(chave);
+    if (salvo !== null) {
+        sessionStorage.removeItem(chave);
+        var y = parseInt(salvo, 10);
+        if (!isNaN(y)) {
+            var restaurar = function () { window.scrollTo(0, y); };
+            if (document.readyState === 'complete') {
+                restaurar();
+            } else {
+                window.addEventListener('load', restaurar);
+            }
+            // Layout ainda muda com fontes/mensagens — reforça no próximo frame.
+            requestAnimationFrame(function () {
+                requestAnimationFrame(restaurar);
+            });
+        }
+    }
+
+    function acaoQueSai(event) {
+        var botao = event.submitter;
+        if (!botao) return false;
+        if (botao.name === 'acao' && (botao.value === 'concluir' || botao.value === 'direcionar')) {
+            return true;
+        }
+        return false;
+    }
+
+    document.addEventListener('submit', function (event) {
+        var form = event.target;
+        if (!(form instanceof HTMLFormElement)) return;
+        if (acaoQueSai(event)) return;
+        // Só grava se o POST volta para esta tela (sem next externo).
+        var next = form.querySelector('[name="next"]');
+        if (next && next.value && next.value.indexOf('/controle-relatorio') === 0) return;
+        sessionStorage.setItem(chave, String(window.scrollY || window.pageYOffset || 0));
+    }, true);
+})();
 </script>
 {% endblock %}

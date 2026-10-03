@@ -377,9 +377,9 @@ def atribuir_se_preciso(processo):
     """Gera o número só se a espécie gera relatório e o processo ainda não tem.
 
     Não grava o processo: o chamador inclui `numero_relatorio` no save.
+    Funciona também com "sem relatório" — o nº e a data são obrigatórios
+    para encaminhar ao Controlador.
     """
-    if getattr(processo, 'sem_relatorio', False):
-        return False
     if not especie_gera_relatorio(processo):
         return False
     if processo.numero_relatorio:
@@ -389,6 +389,8 @@ def atribuir_se_preciso(processo):
     if not sequencia:
         return False
     processo.numero_relatorio = proximo_numero(sequencia)
+    if not processo.data_analise:
+        processo.data_analise = timezone.localdate()
     registrar(processo)
     return True
 
@@ -400,9 +402,195 @@ def _inteiro_atual(processo):
         return None
 
 
+def registrar(processo):
+    """Cria ou atualiza a linha da planilha a partir do processo.
+
+    Se o número informado já existir em uma linha cancelada (verde/vermelha)
+    da mesma sequência, essa linha é reaproveitada e volta ao normal.
+
+    Se o número já estiver ATIVO em outro processo, esse processo é
+    desvinculado (perde o número) e a linha passa para o processo atual.
+
+    Se o processo trocar de número, o número antigo permanece na planilha
+    como linha verde (reservada), com número e data, para reuso posterior.
+    """
+    sem_relatorio = bool(getattr(processo, 'sem_relatorio', False))
+    if not processo.numero_relatorio and not sem_relatorio:
+        return None
+    dados = _dados_da_linha(processo)
+    dados['sem_relatorio'] = sem_relatorio
+    dados['situacao_linha'] = LinhaControleRelatorio.SITUACAO_ATIVA
+
+    numero_txt = str(processo.numero_relatorio or '').strip()
+    sequencia = sequencia_do_processo(processo) or GRUPO_PADRAO
+
+    # Número antigo deste processo: não some da planilha.
+    antiga = LinhaControleRelatorio.objects.filter(processo=processo).first()
+    if (
+        antiga is not None
+        and numero_txt
+        and not sem_relatorio
+        and (antiga.numero_relatorio or '').strip()
+        and (antiga.numero_relatorio or '').strip() != numero_txt
+    ):
+        _preservar_numero_liberado(antiga)
+        antiga = None
+
+    reaproveitar = None
+    if numero_txt and not sem_relatorio:
+        reaproveitar = (
+            LinhaControleRelatorio.objects
+            .filter(filtro_sequencia(sequencia), numero_relatorio=numero_txt)
+            .filter(situacao_linha__in=[
+                LinhaControleRelatorio.SITUACAO_RESERVADA,
+                LinhaControleRelatorio.SITUACAO_CANCELADA,
+            ])
+            .order_by('-atualizado_em', '-id')
+            .first()
+        )
+        if reaproveitar is None:
+            reaproveitar = (
+                LinhaControleRelatorio.objects
+                .filter(filtro_sequencia(sequencia), numero_relatorio=numero_txt)
+                .filter(situacao_linha=LinhaControleRelatorio.SITUACAO_ATIVA)
+                .exclude(processo=processo)
+                .exclude(processo__isnull=True)
+                .order_by('-atualizado_em', '-id')
+                .first()
+            )
+            if reaproveitar is not None:
+                _desvincular_processo_do_numero(reaproveitar.processo, numero_txt)
+
+    if reaproveitar is not None:
+        antiga = LinhaControleRelatorio.objects.filter(processo=processo).first()
+        if antiga is not None and antiga.id != reaproveitar.id:
+            # Sem número próprio diferente (já preservado acima) — remove sobra.
+            if (
+                (antiga.numero_relatorio or '').strip()
+                and (antiga.numero_relatorio or '').strip() != numero_txt
+            ):
+                _preservar_numero_liberado(antiga)
+            else:
+                antiga.delete()
+        for campo, valor in dados.items():
+            setattr(reaproveitar, campo, valor)
+        reaproveitar.processo = processo
+        reaproveitar.situacao_linha = LinhaControleRelatorio.SITUACAO_ATIVA
+        obs = (reaproveitar.observacao or '').strip()
+        if obs.startswith('Relatório cancelado') or obs.startswith('Número liberado'):
+            reaproveitar.observacao = processo.observacao or ''
+        reaproveitar.save()
+        _limpar_outros_donos_do_numero(processo, numero_txt, sequencia)
+        return reaproveitar
+
+    _limpar_outros_donos_do_numero(processo, numero_txt, sequencia)
+    linha, _ = LinhaControleRelatorio.objects.update_or_create(
+        processo=processo, defaults=dados)
+    return linha
+
+
+def _preservar_numero_liberado(linha):
+    """Mantém número e data na planilha (vermelho) quando o processo troca de nº."""
+    if linha is None:
+        return
+    numero = (linha.numero_relatorio or '').strip()
+    if not numero and not linha.sem_relatorio:
+        linha.delete()
+        return
+    linha.processo = None
+    linha.situacao_linha = LinhaControleRelatorio.SITUACAO_CANCELADA
+    linha.observacao = 'Número liberado — disponível para uso com número específico.'
+    linha.save(update_fields=[
+        'processo', 'situacao_linha', 'observacao', 'atualizado_em'])
+
+
+def liberar_numero_ao_marcar_sem_relatorio(processo):
+    """Processo passa a ser sem relatório: o nº antigo fica vermelho na planilha.
+
+    A linha do processo deixa de carregar o número; quem precisar usa o
+    número específico depois. O processo fica amarelo sem nº.
+    """
+    numero = str(processo.numero_relatorio or '').strip()
+    if not numero:
+        return None
+    linha = LinhaControleRelatorio.objects.filter(processo=processo).first()
+    if linha is not None and (linha.numero_relatorio or '').strip():
+        _preservar_numero_liberado(linha)
+    else:
+        # Garante o número na planilha mesmo sem linha previa.
+        LinhaControleRelatorio.objects.create(
+            processo=None,
+            numero_processo=processo.numero_processo or '',
+            volume=processo.volume or '',
+            numero_relatorio=numero,
+            sem_relatorio=False,
+            situacao_linha=LinhaControleRelatorio.SITUACAO_CANCELADA,
+            data_relatorio=processo.data_analise or timezone.localdate(),
+            secretaria=processo.secretaria or '',
+            contratada=processo.contratada or '',
+            objeto=processo.objeto or '',
+            valor=processo.valor or '',
+            periodo=processo.periodo or '',
+            destino=processo.destino or '',
+            analista=processo.nome_analista or '',
+            status_analise='',
+            observacao='Número liberado — disponível para uso com número específico.',
+            grupo=processo.genero or '',
+            sequencia=sequencia_do_processo(processo) or GRUPO_PADRAO,
+        )
+    processo.numero_relatorio = None
+    processo.save(update_fields=['numero_relatorio'])
+    return numero
+
+
+def _desvincular_processo_do_numero(processo, numero_txt):
+    """Tira o número do processo (cadastro), sem apagar a linha da planilha."""
+    if processo is None:
+        return
+    campos = []
+    atual = str(processo.numero_relatorio or '').strip()
+    if atual and atual == str(numero_txt).strip():
+        processo.numero_relatorio = None
+        campos.append('numero_relatorio')
+    if campos:
+        processo.save(update_fields=campos)
+
+
+def _limpar_outros_donos_do_numero(processo, numero_txt, sequencia):
+    """Garante que nenhum outro processo/linha ATIVA fique com o mesmo número."""
+    if not numero_txt:
+        return []
+    liberados = []
+    outras = list(
+        LinhaControleRelatorio.objects
+        .filter(filtro_sequencia(sequencia), numero_relatorio=numero_txt)
+        .filter(situacao_linha=LinhaControleRelatorio.SITUACAO_ATIVA)
+        .exclude(processo=processo)
+        .exclude(processo__isnull=True)
+    )
+    for linha in outras:
+        outro = linha.processo
+        if outro is not None:
+            liberados.append(outro.numero_processo or str(outro.id))
+            _desvincular_processo_do_numero(outro, numero_txt)
+        linha.delete()
+    # Cadastros órfãos (número no processo sem linha ATIVA nesta sequência).
+    for outro in (Processo.objects
+                  .filter(numero_relatorio=numero_txt)
+                  .exclude(id=processo.id)):
+        if sequencia_do_processo(outro) == sequencia:
+            liberados.append(outro.numero_processo or str(outro.id))
+            _desvincular_processo_do_numero(outro, numero_txt)
+    return liberados
+
+
 @transaction.atomic
 def alterar_numero(usuario, processo_id, novo, data=None):
-    """Analista do grupo ou administrador grava o número e a data do relatório."""
+    """Analista do grupo ou administrador grava o número e a data do relatório.
+
+    Se o número já estiver ativo em outro processo da mesma sequência, esse
+    processo é desvinculado automaticamente.
+    """
     processo = (Processo.objects.select_for_update()
                 .filter(id=processo_id).first())
     if processo is None:
@@ -433,6 +621,17 @@ def alterar_numero(usuario, processo_id, novo, data=None):
     if data_analise is None:
         raise RelatorioInvalido(
             'Informe a data deste número de relatório.')
+
+    # Quem já usa este número (para avisar depois do desvínculo).
+    numero_txt = str(novo)
+    donos_anteriores = list(
+        LinhaControleRelatorio.objects
+        .filter(filtro_sequencia(sequencia), numero_relatorio=numero_txt)
+        .filter(situacao_linha=LinhaControleRelatorio.SITUACAO_ATIVA)
+        .exclude(processo=processo)
+        .exclude(processo__isnull=True)
+        .values_list('numero_processo', flat=True)
+    )
 
     atual = _inteiro_atual(processo)
     campos = []
@@ -466,6 +665,8 @@ def alterar_numero(usuario, processo_id, novo, data=None):
     else:
         registrar(processo)
     _consumir_reserva(processo, novo)
+    processo._numeros_desvinculados = [
+        n for n in donos_anteriores if n]
     return processo
 
 
@@ -519,60 +720,12 @@ def alterar_sequencia(usuario, processo_id, nova_sequencia):
     return processo
 
 
-def registrar(processo):
-    """Cria ou atualiza a linha da planilha a partir do processo.
-
-    Se o número informado já existir em uma linha cancelada (verde/vermelha)
-    da mesma sequência, essa linha é reaproveitada e volta ao normal.
-    """
-    sem_relatorio = bool(getattr(processo, 'sem_relatorio', False))
-    if not processo.numero_relatorio and not sem_relatorio:
-        return None
-    dados = _dados_da_linha(processo)
-    dados['sem_relatorio'] = sem_relatorio
-    dados['situacao_linha'] = LinhaControleRelatorio.SITUACAO_ATIVA
-
-    numero_txt = str(processo.numero_relatorio or '').strip()
-    sequencia = sequencia_do_processo(processo) or GRUPO_PADRAO
-    reaproveitar = None
-    if numero_txt and not sem_relatorio:
-        reaproveitar = (
-            LinhaControleRelatorio.objects
-            .filter(filtro_sequencia(sequencia), numero_relatorio=numero_txt)
-            .filter(situacao_linha__in=[
-                LinhaControleRelatorio.SITUACAO_RESERVADA,
-                LinhaControleRelatorio.SITUACAO_CANCELADA,
-            ])
-            .order_by('-atualizado_em', '-id')
-            .first()
-        )
-
-    if reaproveitar is not None:
-        antiga = LinhaControleRelatorio.objects.filter(processo=processo).first()
-        if antiga is not None and antiga.id != reaproveitar.id:
-            antiga.delete()
-        for campo, valor in dados.items():
-            setattr(reaproveitar, campo, valor)
-        reaproveitar.processo = processo
-        reaproveitar.situacao_linha = LinhaControleRelatorio.SITUACAO_ATIVA
-        obs = (reaproveitar.observacao or '').strip()
-        if obs.startswith('Relatório cancelado'):
-            reaproveitar.observacao = processo.observacao or ''
-        reaproveitar.save()
-        return reaproveitar
-
-    linha, _ = LinhaControleRelatorio.objects.update_or_create(
-        processo=processo, defaults=dados)
-    return linha
-
-
 @transaction.atomic
-def cancelar_linha(usuario, linha_id, destino_numero):
-    """Cancela a linha na planilha, mantendo número e data.
+def cancelar_linha(usuario, linha_id, destino_numero=None):
+    """Cancela a linha na planilha (vermelha), mantendo número e data.
 
-    destino_numero:
-      - 'guardar': número fica reservado (linha verde)
-      - 'excluir': número sai da sequência (linha vermelha)
+    O número fica disponível para reuso com número específico ou na
+    reserva automática.
     """
     perm.assert_permissao(
         perm.pode_cancelar_linha_relatorio(usuario),
@@ -591,15 +744,6 @@ def cancelar_linha(usuario, linha_id, destino_numero):
     if not linha.numero_relatorio and not linha.sem_relatorio:
         raise RelatorioInvalido('Não há número de relatório nesta linha.')
 
-    destino = (destino_numero or '').strip().lower()
-    if destino in ('guardar', 'reservar', 'reserva'):
-        situacao = LinhaControleRelatorio.SITUACAO_RESERVADA
-    elif destino in ('excluir', 'cancelar', 'excluir_sequencia'):
-        situacao = LinhaControleRelatorio.SITUACAO_CANCELADA
-    else:
-        raise RelatorioInvalido(
-            'Escolha se o número será guardado ou excluído da sequência.')
-
     processo = linha.processo
     if processo is not None:
         campos = []
@@ -614,27 +758,142 @@ def cancelar_linha(usuario, linha_id, destino_numero):
         _liberar_reservas_do_processo(processo)
 
     linha.processo = None
-    linha.situacao_linha = situacao
-    if not linha.observacao:
-        if situacao == LinhaControleRelatorio.SITUACAO_RESERVADA:
-            linha.observacao = 'Relatório cancelado — número guardado.'
-        else:
-            linha.observacao = 'Relatório cancelado — número excluído da sequência.'
+    linha.situacao_linha = LinhaControleRelatorio.SITUACAO_CANCELADA
+    linha.observacao = 'Relatório cancelado — número disponível para reuso.'
     linha.save(update_fields=[
         'processo', 'situacao_linha', 'observacao', 'atualizado_em'])
     return linha
 
 
 @transaction.atomic
-def remover_do_processo(processo):
-    """Desvincula a linha. Se era o último número emitido, o contador volta.
+def vincular_processo_linha(usuario, linha_id, numero_processo):
+    """Liga um processo a um número cancelado (vermelho) da planilha.
 
-    Não deixa o número antigo solto para ser reaproveitado no meio da
-    sequência — o próximo automático continua no contador.
+    O número e a data da linha são mantidos; a linha volta a ficar ativa
+    com os dados do processo informado.
+    """
+    perm.assert_permissao(
+        perm.pode_cancelar_linha_relatorio(usuario),
+        'Somente analista de Liquidações, a Gestão e o administrador '
+        'vinculam processo a número cancelado.')
+    linha = (LinhaControleRelatorio.objects
+             .select_for_update()
+             .filter(id=linha_id)
+             .first())
+    if linha is None:
+        raise RelatorioInvalido('Linha não encontrada.')
+    if linha.situacao_linha not in (
+            LinhaControleRelatorio.SITUACAO_CANCELADA,
+            LinhaControleRelatorio.SITUACAO_RESERVADA):
+        raise RelatorioInvalido(
+            'Só é possível vincular processo a número cancelado.')
+    numero_txt = (linha.numero_relatorio or '').strip()
+    if not numero_txt:
+        raise RelatorioInvalido('Esta linha não tem número de relatório.')
+    grupo = (linha.sequencia or '').strip() or GRUPO_PADRAO
+    processo = _buscar_processo_para_destino(numero_processo, grupo)
+    if (
+        processo.numero_relatorio
+        and not processo.sem_relatorio
+        and str(processo.numero_relatorio).strip() == numero_txt
+        and LinhaControleRelatorio.objects.filter(
+            processo=processo, numero_relatorio=numero_txt,
+            situacao_linha=LinhaControleRelatorio.SITUACAO_ATIVA).exists()
+    ):
+        raise RelatorioInvalido(
+            f'O processo {numero_processo} já está vinculado a este número.')
+
+    data = linha.data_relatorio or timezone.localdate()
+    campos = []
+    if processo.sem_relatorio:
+        processo.sem_relatorio = False
+        campos.append('sem_relatorio')
+    if str(processo.numero_relatorio or '').strip() != numero_txt:
+        processo.numero_relatorio = numero_txt
+        campos.append('numero_relatorio')
+    if processo.data_analise != data:
+        processo.data_analise = data
+        campos.append('data_analise')
+    if campos:
+        processo.save(update_fields=campos)
+    registrar(processo)
+    linha.refresh_from_db()
+    return linha
+
+
+@transaction.atomic
+def apagar_linha(usuario, linha_id):
+    """Remove a linha do Controle de verdade — some da planilha.
+
+    Só o administrador. Se estiver ligada a um processo, limpa o número
+    nele. Se era o último número emitido da sequência, o contador volta.
+    """
+    perm.assert_permissao(
+        perm.pode_apagar_linha_relatorio(usuario),
+        'Somente o administrador apaga linha do Controle de relatório.')
+    linha = (LinhaControleRelatorio.objects
+             .select_for_update()
+             .filter(id=linha_id)
+             .first())
+    if linha is None:
+        raise RelatorioInvalido('Linha não encontrada.')
+
+    numero_txt = (linha.numero_relatorio or '').strip()
+    sequencia = (linha.sequencia or '').strip() or GRUPO_PADRAO
+    numero = _inteiro(numero_txt)
+    processo = linha.processo
+
+    if processo is not None:
+        campos = []
+        if processo.numero_relatorio:
+            processo.numero_relatorio = None
+            campos.append('numero_relatorio')
+        if getattr(processo, 'sem_relatorio', False):
+            processo.sem_relatorio = False
+            campos.append('sem_relatorio')
+        if campos:
+            processo.save(update_fields=campos)
+        _liberar_reservas_do_processo(processo)
+
+    if numero and linha.situacao_linha != LinhaControleRelatorio.SITUACAO_CANCELADA:
+        seq = (SequenciaRelatorio.objects
+               .select_for_update()
+               .filter(grupo=sequencia)
+               .first())
+        if seq and int(seq.proximo_numero or 0) == numero + 1:
+            seq.proximo_numero = numero
+            seq.save(update_fields=['proximo_numero'])
+
+    linha.delete()
+    return {
+        'numero_relatorio': numero_txt,
+        'sequencia': sequencia,
+        'numero_processo': (processo.numero_processo
+                            if processo is not None else ''),
+    }
+
+
+@transaction.atomic
+def remover_do_processo(processo, *, preservar_numero=False):
+    """Desvincula a linha do processo.
+
+    Por padrão (declinar): apaga a linha e, se era o último número emitido,
+    o contador volta — o próximo "Gerar número" reaproveita a sequência.
+
+    Com preservar_numero=True (excluir processo): a linha fica vermelha e o
+    número permanece disponível para vínculo no Controle.
     """
     linhas = list(LinhaControleRelatorio.objects.filter(processo=processo))
     for linha in linhas:
+        if (
+            preservar_numero
+            and linha.situacao_linha == LinhaControleRelatorio.SITUACAO_ATIVA
+            and (linha.numero_relatorio or '').strip()
+        ):
+            _preservar_numero_liberado(linha)
+            continue
         if linha.situacao_linha != LinhaControleRelatorio.SITUACAO_ATIVA:
+            linha.delete()
             continue
         numero = _inteiro(linha.numero_relatorio)
         sequencia = (linha.sequencia or '').strip() or GRUPO_PADRAO
@@ -773,26 +1032,19 @@ def _dados_da_linha(processo):
 
 
 @transaction.atomic
-def destinar_numeros(usuario, inicio, fim, data, grupo=GRUPO_PADRAO):
-    """Guarda uma faixa de números com a mesma data para uso posterior."""
+def destinar_numeros(usuario, inicio=None, fim=None, data=None, grupo=GRUPO_PADRAO,
+                     numeros_processo=None, quantidade_auto=None, pares=None):
+    """Reserva um número por processo e vincula (linha amarela no Controle).
+
+    Preferencial: `pares` = [(nº processo, nº relatório), ...].
+    Legado: faixa inicio/fim ou quantidade_auto + lista de processos.
+    """
     perm.assert_permissao(
         perm.pode_destinar_numeros_relatorio(usuario),
         'Somente analista de Liquidações e o administrador destinam números.')
     if not sequencia_valida(grupo):
         raise RelatorioInvalido('Sequência de relatório inválida.')
-    try:
-        inicio = int(str(inicio).strip())
-        fim = int(str(fim).strip())
-    except (TypeError, ValueError):
-        raise RelatorioInvalido('Informe o número inicial e o final.')
-    if inicio < 1 or fim < 1:
-        raise RelatorioInvalido('Os números devem ser maiores que zero.')
-    if fim < inicio:
-        inicio, fim = fim, inicio
-    quantidade = fim - inicio + 1
-    if quantidade > LIMITE_DESTINO:
-        raise RelatorioInvalido(
-            f'Destine no máximo {LIMITE_DESTINO} números por vez.')
+
     try:
         data_reserva = converter_data(data)
     except ValidationError as exc:
@@ -800,21 +1052,199 @@ def destinar_numeros(usuario, inicio, fim, data, grupo=GRUPO_PADRAO):
     if data_reserva is None:
         raise RelatorioInvalido('Informe a data desses números.')
 
-    faixa = set(range(inicio, fim + 1))
     ocupados = numeros_usados(grupo) | _numeros_reservados(grupo)
-    choque = sorted(faixa & ocupados)
+
+    if pares is not None:
+        numeros, processos_txt = _normalizar_pares(pares)
+    elif quantidade_auto not in (None, ''):
+        processos_txt = _parse_numeros_processo(numeros_processo)
+        if not processos_txt:
+            raise RelatorioInvalido('Informe ao menos um processo.')
+        numeros = sugerir_numeros_disponiveis(
+            grupo, len(processos_txt), ocupados)
+    else:
+        processos_txt = _parse_numeros_processo(numeros_processo)
+        try:
+            inicio = int(str(inicio).strip())
+            fim = int(str(fim).strip())
+        except (TypeError, ValueError):
+            raise RelatorioInvalido(
+                'Informe o número de relatório de cada processo.')
+        if inicio < 1 or fim < 1:
+            raise RelatorioInvalido('Os números devem ser maiores que zero.')
+        if fim < inicio:
+            inicio, fim = fim, inicio
+        numeros = list(range(inicio, fim + 1))
+        if len(processos_txt) != len(numeros):
+            raise RelatorioInvalido(
+                f'Informe {len(numeros)} processo'
+                f'{"s" if len(numeros) != 1 else ""} '
+                f'(um para cada número de {numeros[0]} a {numeros[-1]}).')
+
+    if not numeros:
+        raise RelatorioInvalido('Adicione ao menos um processo com número.')
+    if len(numeros) > LIMITE_DESTINO:
+        raise RelatorioInvalido(
+            f'Destine no máximo {LIMITE_DESTINO} números por vez.')
+    if len(processos_txt) != len(numeros):
+        raise RelatorioInvalido(
+            'Cada processo precisa de um número de relatório.')
+
+    choque = [n for n in numeros if n in ocupados]
     if choque:
+        if len(choque) == 1:
+            raise RelatorioInvalido(f'O número {choque[0]} já está em uso.')
         amostra = ', '.join(str(n) for n in choque[:8])
         extra = '…' if len(choque) > 8 else ''
         raise RelatorioInvalido(
-            f'Estes números já estão em uso ou destinados: {amostra}{extra}.')
+            f'Estes números já estão em uso: {amostra}{extra}.')
+    if len(set(numeros)) != len(numeros):
+        raise RelatorioInvalido('Há número de relatório repetido na lista.')
 
-    ReservaNumeroRelatorio.objects.bulk_create([
-        ReservaNumeroRelatorio(
-            grupo=grupo, numero=numero, data=data_reserva, criado_por=usuario)
-        for numero in range(inicio, fim + 1)
-    ])
-    return quantidade
+    processos = []
+    for numero, num_proc in zip(numeros, processos_txt):
+        processo = _buscar_processo_para_destino(num_proc, grupo)
+        if processo.numero_relatorio and not processo.sem_relatorio:
+            raise RelatorioInvalido(
+                f'O processo {num_proc} já tem relatório '
+                f'{processo.numero_relatorio}.')
+        if any(p.id == processo.id for p in processos):
+            raise RelatorioInvalido(
+                f'O processo {num_proc} foi informado mais de uma vez.')
+        processos.append(processo)
+
+    agora = timezone.now()
+    quantidade = len(numeros)
+    for numero, processo in zip(numeros, processos):
+        _remover_linha_cancelada_do_numero(grupo, numero)
+        ReservaNumeroRelatorio.objects.create(
+            grupo=grupo, numero=numero, data=data_reserva,
+            criado_por=usuario, processo=processo, usado_em=agora)
+        processo.numero_relatorio = str(numero)
+        processo.data_analise = data_reserva
+        processo.sem_relatorio = True
+        if not (processo.observacao or '').strip():
+            processo.observacao = 'Sem relatório — número reservado e vinculado.'
+        processo.save(update_fields=[
+            'numero_relatorio', 'data_analise', 'sem_relatorio', 'observacao'])
+        registrar(processo)
+    return {'quantidade': quantidade, 'numeros': numeros}
+
+
+def _normalizar_pares(pares):
+    """Converte [(processo, numero), ...] em listas paralelas validadas."""
+    if not pares:
+        raise RelatorioInvalido('Adicione ao menos um processo.')
+    processos_txt = []
+    numeros = []
+    for item in pares:
+        if item is None or len(item) != 2:
+            raise RelatorioInvalido('Cada linha precisa de processo e número.')
+        num_proc = str(item[0] or '').strip()
+        if not num_proc:
+            raise RelatorioInvalido('Informe o número do processo em cada linha.')
+        try:
+            numero = int(str(item[1]).strip())
+        except (TypeError, ValueError):
+            raise RelatorioInvalido(
+                f'Informe o número de relatório do processo {num_proc}.')
+        if numero < 1:
+            raise RelatorioInvalido(
+                f'O número de relatório do processo {num_proc} '
+                f'deve ser maior que zero.')
+        processos_txt.append(num_proc)
+        numeros.append(numero)
+    return numeros, processos_txt
+
+
+def sugerir_numeros_disponiveis(grupo, quantidade, ocupados=None, excluir=None):
+    """Próximos N números livres: usa cancelados (vermelho) e segue a sequência."""
+    try:
+        quantidade = int(str(quantidade).strip())
+    except (TypeError, ValueError):
+        raise RelatorioInvalido('Informe quantos números deseja gerar.')
+    if quantidade < 1:
+        raise RelatorioInvalido('A quantidade deve ser maior que zero.')
+    if quantidade > LIMITE_DESTINO:
+        raise RelatorioInvalido(
+            f'Destine no máximo {LIMITE_DESTINO} números por vez.')
+    if ocupados is None:
+        ocupados = numeros_usados(grupo) | _numeros_reservados(grupo)
+    else:
+        ocupados = set(ocupados)
+    if excluir:
+        for item in excluir:
+            numero = _inteiro(item)
+            if numero:
+                ocupados.add(numero)
+
+    escolhidos = []
+    # 1) Reaproveita números cancelados (vermelhos), em ordem.
+    for bruto in (LinhaControleRelatorio.objects
+                  .filter(filtro_sequencia(grupo),
+                          situacao_linha=LinhaControleRelatorio.SITUACAO_CANCELADA)
+                  .exclude(numero_relatorio='')
+                  .values_list('numero_relatorio', flat=True)):
+        numero = _inteiro(bruto)
+        if numero and numero not in ocupados and numero not in escolhidos:
+            escolhidos.append(numero)
+        if len(escolhidos) >= quantidade:
+            break
+    escolhidos.sort()
+    escolhidos = escolhidos[:quantidade]
+
+    # 2) Completa com a sequência a partir do próximo do contador.
+    if len(escolhidos) < quantidade:
+        atual = max(int(estado_sequencia(grupo)['proximo'] or 1), 1)
+        while len(escolhidos) < quantidade:
+            if atual not in ocupados and atual not in escolhidos:
+                escolhidos.append(atual)
+            atual += 1
+            if atual > 10_000_000:
+                raise RelatorioInvalido(
+                    'Não foi possível gerar tantos números disponíveis.')
+    return escolhidos
+
+
+def _remover_linha_cancelada_do_numero(grupo, numero):
+    """Tira a linha vermelha ao reaproveitar o número na reserva vinculada."""
+    (LinhaControleRelatorio.objects
+     .filter(filtro_sequencia(grupo), numero_relatorio=str(numero),
+             situacao_linha=LinhaControleRelatorio.SITUACAO_CANCELADA,
+             processo__isnull=True)
+     .delete())
+
+
+def _parse_numeros_processo(bruto):
+    if bruto is None:
+        return []
+    if isinstance(bruto, (list, tuple)):
+        itens = [str(x).strip() for x in bruto]
+    else:
+        itens = str(bruto).replace(';', '\n').replace(',', '\n').splitlines()
+    return [item for item in (x.strip() for x in itens) if item]
+
+
+def _buscar_processo_para_destino(numero_processo, grupo):
+    numero = (numero_processo or '').strip()
+    processo = (Processo.objects
+                .filter(numero_processo__iexact=numero)
+                .order_by('-id')
+                .first())
+    if processo is None:
+        raise RelatorioInvalido(
+            f'Processo {numero} não encontrado. Cadastre a entrada no '
+            f'Protocolo antes de vincular o número.')
+    if not especie_gera_relatorio(processo):
+        raise RelatorioInvalido(
+            f'A espécie de {numero} não gera número de relatório.')
+    sequencia = sequencia_do_processo(processo) or GRUPO_PADRAO
+    if sequencia != grupo:
+        nome = info_sequencia(sequencia)['nome']
+        raise RelatorioInvalido(
+            f'O processo {numero} pertence à sequência {nome}, '
+            f'não a {info_sequencia(grupo)["nome"]}.')
+    return processo
 
 
 @transaction.atomic
@@ -826,6 +1256,8 @@ def cancelar_destino(usuario, reserva_id):
     if reserva is None:
         raise RelatorioInvalido('Destino não encontrado.')
     if reserva.processo_id:
-        raise RelatorioInvalido('Este número já foi usado numa análise.')
+        raise RelatorioInvalido(
+            'Este número já está vinculado a um processo. '
+            'Use Apagar no Controle de relatório se precisar remover a linha.')
     reserva.delete()
     return reserva.numero

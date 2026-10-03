@@ -418,6 +418,7 @@ def aplicar_analise(processo, dados, usuario):
 
     numero_manual = texto(dados.get('numero_relatorio')) if dados else ''
     marcado_sem_relatorio = _marcado_sem_relatorio(dados)
+    pedir_numero = _pedido_gerar_numero(dados)
     pode_mexer_relatorio = (
         campos_editaveis(usuario, processo)
         and especie_gera_relatorio(processo)
@@ -443,24 +444,38 @@ def aplicar_analise(processo, dados, usuario):
             alteracoes += 1
     elif pode_mexer_relatorio and marcado_sem_relatorio:
         campos_extra = []
+        # "Sem relatório" = não houve peça de relatório, mas o número e a
+        # data continuam obrigatórios para encaminhar ao Controlador.
         if not processo.sem_relatorio:
             processo.sem_relatorio = True
             campos_extra.append('sem_relatorio')
             alteracoes += 1
-        if campos_extra:
-            processo.save(update_fields=campos_extra)
+        if pedir_numero and atribuir_se_preciso(processo):
+            campos_extra = list(dict.fromkeys(
+                campos_extra + ['numero_relatorio', 'data_analise']))
+            alteracoes += 1
         if not processo.data_analise:
             processo.data_analise = timezone.localdate()
-            processo.save(update_fields=['data_analise'])
+            campos_extra.append('data_analise')
             alteracoes += 1
+        if campos_extra:
+            processo.save(update_fields=list(dict.fromkeys(campos_extra)))
+        if not (processo.observacao or '').strip():
+            processo.observacao = 'Sem relatório.'
+            processo.save(update_fields=['observacao'])
         registrar_relatorio(processo)
     elif campos_editaveis(usuario, processo):
         if processo.sem_relatorio and not marcado_sem_relatorio:
             processo.sem_relatorio = False
             processo.save(update_fields=['sem_relatorio'])
             alteracoes += 1
-        if atribuir_se_preciso(processo):
-            processo.save(update_fields=['numero_relatorio'])
+        # Número sequencial só sob pedido explícito (botão Gerar número).
+        # Salvar análise grava os campos sem emitir relatório.
+        if pedir_numero and atribuir_se_preciso(processo):
+            campos_num = ['numero_relatorio']
+            if processo.data_analise:
+                campos_num.append('data_analise')
+            processo.save(update_fields=campos_num)
             alteracoes += 1
         elif processo.numero_relatorio or processo.sem_relatorio:
             registrar_relatorio(processo)
@@ -473,6 +488,18 @@ def _marcado_sem_relatorio(dados):
     if not dados:
         return False
     bruto = dados.get('sem_relatorio')
+    if isinstance(bruto, bool):
+        return bruto
+    return str(bruto or '').strip().lower() in ('1', 'true', 'on', 'sim')
+
+
+def _pedido_gerar_numero(dados):
+    """True se o usuário pediu emitir o número sequencial nesta gravação."""
+    if not dados:
+        return False
+    if str(dados.get('acao') or '').strip().lower() == 'gerar_numero':
+        return True
+    bruto = dados.get('gerar_numero')
     if isinstance(bruto, bool):
         return bruto
     return str(bruto or '').strip().lower() in ('1', 'true', 'on', 'sim')

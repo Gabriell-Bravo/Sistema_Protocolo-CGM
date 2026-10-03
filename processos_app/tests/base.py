@@ -73,9 +73,20 @@ class BaseProcessoTestCase(TestCase):
 
     def preencher_analise(self, processo, **campos):
         """Preenche direto no banco os campos exigidos para liberar."""
+        from django.utils import timezone
         valores = {'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
                    'numero_despacho': '10/2026', 'destino': 'Unidade de Teste'}
         valores.update(campos)
+        # Liquidações com espécie que gera relatório: nº e data são obrigatórios.
+        if (
+            processo.genero == LIQ
+            and getattr(processo.especie_fk, 'gera_relatorio', False)
+            and 'numero_relatorio' not in valores
+            and not (processo.numero_relatorio or '').strip()
+        ):
+            valores['numero_relatorio'] = valores.get(
+                'numero_relatorio', f'9{processo.id}')
+            valores.setdefault('data_analise', timezone.localdate())
         Processo.objects.filter(id=processo.id).update(**valores)
         processo.refresh_from_db()
         return processo

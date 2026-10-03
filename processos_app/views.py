@@ -1327,11 +1327,50 @@ def filtrar_fila(processos, filtro, usuario, vencidos_so_trabalho=False):
     return [p for p in processos if regra(p)] if regra else list(processos)
 
 
+def _sequencia_fila_liquidacao(processo):
+    """Sequência da aba na fila: espécies especiais vs Liquidação (padrão)."""
+    codigo = svc_relatorios.sequencia_do_processo(processo)
+    if codigo and svc_relatorios.sequencia_ativa(codigo):
+        return codigo
+    return svc_relatorios.GRUPO_PADRAO
+
+
+def montar_abas_liquidacoes(processos, seq_pedido=''):
+    """Abas das sequências de Liquidações e lista filtrada pela aba ativa."""
+    ativas = [
+        item for item in svc_relatorios.sequencias_disponiveis()
+        if svc_relatorios.sequencia_ativa(item['codigo'])
+    ]
+    totais = {item['codigo']: 0 for item in ativas}
+    por_seq = {item['codigo']: [] for item in ativas}
+    for processo in processos:
+        codigo = _sequencia_fila_liquidacao(processo)
+        if codigo not in totais:
+            codigo = svc_relatorios.GRUPO_PADRAO
+        totais[codigo] += 1
+        por_seq[codigo].append(processo)
+
+    codigos = {item['codigo'] for item in ativas}
+    seq = seq_pedido if seq_pedido in codigos else svc_relatorios.GRUPO_PADRAO
+    abas = [
+        {
+            'codigo': item['codigo'],
+            'nome': item['nome'],
+            'total': totais[item['codigo']],
+            'ativa': item['codigo'] == seq,
+        }
+        for item in ativas
+    ]
+    return por_seq.get(seq, []), abas, seq
+
+
 def consultar_fila_grupos(request, opcoes_filtro=FILTROS_ANALISTA):
     """Fila dos dois grupos de análise, com busca e filtro (item 37).
 
-    Devolve (todos, licitacoes, liquidacoes, termo, filtro, contagens).
+    Devolve (todos, licitacoes, liquidacoes, termo, filtro, contagens,
+    abas_liquidacoes, seq_atual).
     `todos` é o conjunto sem filtro — base dos totais do topo da tela.
+    Liquidações são filtradas pela aba de sequência (`?seq=`).
     """
     termo_pesquisa = request.GET.get('pesquisa', '').strip()
     padrao = opcoes_filtro[0][0]
@@ -1346,8 +1385,10 @@ def consultar_fila_grupos(request, opcoes_filtro=FILTROS_ANALISTA):
         genero__in=['LICITACOES_E_CONTRATOS', 'LIQUIDACOES'],
     ).exclude(
         situacao_tramite='DISPONIVEL_RETIRADA'
-    ).select_related('analista_responsavel', 'assinatura_direcionada_para',
-                     'prioridade_fk')
+    ).select_related(
+        'analista_responsavel', 'assinatura_direcionada_para',
+        'prioridade_fk', 'especie_fk',
+    )
     processos_query = filter_processes_by_user_level(request.user, base_query)
 
     if termo_pesquisa:
@@ -1372,8 +1413,13 @@ def consultar_fila_grupos(request, opcoes_filtro=FILTROS_ANALISTA):
     filtrados = filtrar_fila(
         processos, filtro, request.user, vencidos_so_trabalho)
     licitacoes = [p for p in filtrados if p.genero == 'LICITACOES_E_CONTRATOS']
-    liquidacoes = [p for p in filtrados if p.genero == 'LIQUIDACOES']
-    return processos, licitacoes, liquidacoes, termo_pesquisa, filtro, contagens
+    liquidacoes_todas = [p for p in filtrados if p.genero == 'LIQUIDACOES']
+    liquidacoes, abas_liquidacoes, seq_atual = montar_abas_liquidacoes(
+        liquidacoes_todas, request.GET.get('seq', '').strip())
+    return (
+        processos, licitacoes, liquidacoes, termo_pesquisa, filtro, contagens,
+        abas_liquidacoes, seq_atual,
+    )
 
 
 @login_required
@@ -1397,8 +1443,10 @@ def _inicio_legado(request):
 @login_required
 @user_passes_test(pode_usar_area_analista)
 def area_analista(request):
-    processos, licitacoes, liquidacoes, termo_pesquisa, filtro, contagens = (
-        consultar_fila_grupos(request, FILTROS_ANALISTA))
+    (
+        processos, licitacoes, liquidacoes, termo_pesquisa, filtro, contagens,
+        abas_liquidacoes, seq_atual,
+    ) = consultar_fila_grupos(request, FILTROS_ANALISTA)
 
     total_disponiveis = sum(1 for p in processos if p.situacao_fila == 'disponivel')
     total_comigo = sum(1 for p in processos if p.situacao_fila == 'voce')
@@ -1416,6 +1464,8 @@ def area_analista(request):
         'filtros_fila': contagens,
         'licitacoes': licitacoes,
         'liquidacoes': liquidacoes,
+        'abas_liquidacoes': abas_liquidacoes,
+        'seq_atual': seq_atual,
         'mostra_licitacoes': bool(licitacoes) or can_access_genero(
             request.user, 'LICITACOES_E_CONTRATOS'),
         'mostra_liquidacoes': bool(liquidacoes) or can_access_genero(
@@ -1434,8 +1484,10 @@ def area_analista(request):
 @login_required
 @user_passes_test(perm.pode_acessar_fila_gestao)
 def gestao_processos(request):
-    processos, licitacoes, liquidacoes, termo_pesquisa, filtro, contagens = (
-        consultar_fila_grupos(request, FILTROS_GESTAO))
+    (
+        processos, licitacoes, liquidacoes, termo_pesquisa, filtro, contagens,
+        abas_liquidacoes, seq_atual,
+    ) = consultar_fila_grupos(request, FILTROS_GESTAO)
 
     total_disponiveis = sum(1 for p in processos if p.situacao_fila == 'disponivel')
     total_em_analise = sum(1 for p in processos
@@ -1447,6 +1499,8 @@ def gestao_processos(request):
     return render(request, 'gestao/processos.html', {
         'licitacoes': licitacoes,
         'liquidacoes': liquidacoes,
+        'abas_liquidacoes': abas_liquidacoes,
+        'seq_atual': seq_atual,
         'mostra_licitacoes': True,
         'mostra_liquidacoes': True,
         'total_processos': len(processos),
@@ -1564,6 +1618,7 @@ def analista_processo(request, process_id):
         # para o Controlador continua exigindo permissão própria.
         permitido = {
             'salvar': pode_editar,
+            'gerar_numero': pode_editar,
             'concluir': pode_liberar,
             'direcionar': pode_direcionar,
         }.get(acao, False)
@@ -1605,7 +1660,21 @@ def analista_processo(request, process_id):
                 return redirect('analista_processo', process_id=processo.id)
             messages.success(request, "Processo encaminhado. Passou a ser do analista escolhido.")
             return redirect('area_analista')
-        if alteracoes:
+        if acao == 'gerar_numero':
+            processo.refresh_from_db()
+            if processo.numero_relatorio:
+                messages.success(
+                    request,
+                    f"Análise salva. Número do relatório: "
+                    f"{processo.numero_relatorio}.")
+            elif alteracoes:
+                messages.success(
+                    request,
+                    f"Análise salva. {alteracoes} campo(s) atualizado(s). "
+                    f"Número não gerado (sem relatório ou espécie sem numeração).")
+            else:
+                messages.info(request, "Nenhuma alteração para salvar.")
+        elif alteracoes:
             messages.success(
                 request, f"Análise salva. {alteracoes} campo(s) atualizado(s).")
         else:

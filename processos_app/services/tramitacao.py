@@ -51,8 +51,8 @@ class TransicaoInvalida(ValidationError):
 # "Direcionar para outro analista".
 #
 # Licitações e Contratos não exige esses campos: o registro da análise é
-# o arquivo anexado. Liquidações exige status e destino; o número do
-# relatório é gerado ao salvar a análise.
+# o arquivo anexado. Liquidações exige status, destino e, se a espécie
+# gera relatório, número e data (mesmo marcando "sem relatório").
 #
 # Para mudar a exigência, altere só estas listas.
 CAMPOS_OBRIGATORIOS_LIBERACAO = {
@@ -91,6 +91,13 @@ def campos_faltantes(processo):
         )
         if vazio:
             faltam.append(rotulo)
+
+    from .relatorios import especie_gera_relatorio
+    if especie_gera_relatorio(processo):
+        if not (processo.numero_relatorio or '').strip():
+            faltam.append('Número do relatório')
+        if not processo.data_analise:
+            faltam.append('Data do relatório')
     return faltam
 
 
@@ -851,7 +858,7 @@ def apagar_processo(processo_id, usuario):
             'Só é possível excluir um processo que ainda está ativo.')
 
     from .relatorios import remover_do_processo
-    remover_do_processo(processo)
+    remover_do_processo(processo, preservar_numero=True)
     for anexo in processo.anexos.all():
         if anexo.arquivo:
             anexo.arquivo.delete(save=False)

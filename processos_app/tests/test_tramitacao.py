@@ -50,6 +50,7 @@ class AssumirTest(BaseProcessoTestCase):
         svc_processos.aplicar_analise(processo, {
             'destino': 'Unidade de Teste',
             'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+            'gerar_numero': '1',
         }, self.analista_liq)
         processo.refresh_from_db()
         self.assertTrue(processo.numero_relatorio)
@@ -68,10 +69,12 @@ class AssumirTest(BaseProcessoTestCase):
         svc_processos.aplicar_analise(p1, {
             'destino': 'Unidade de Teste',
             'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+            'gerar_numero': '1',
         }, self.analista_liq)
         svc_processos.aplicar_analise(p2, {
             'destino': 'Unidade de Teste',
             'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+            'gerar_numero': '1',
         }, self.analista_liq)
         p1.refresh_from_db()
         p2.refresh_from_db()

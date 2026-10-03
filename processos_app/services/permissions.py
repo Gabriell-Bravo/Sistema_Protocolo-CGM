@@ -350,6 +350,11 @@ def pode_cancelar_linha_relatorio(user):
     )
 
 
+def pode_apagar_linha_relatorio(user):
+    """Apaga de verdade a linha do Controle (some da planilha). Só admin."""
+    return eh_administrador(user)
+
+
 def pode_resolver_pendencia(user, pendencia):
     """item 30: quem conclui tecnicamente é o responsável técnico."""
     return is_analista(user) and pendencia.responsavel_tecnico_id == user.id
@@ -472,6 +477,7 @@ def contexto_de_permissoes(user):
         'pode_editar_numero_relatorio': pode_editar_numero_relatorio(user),
         'pode_editar_linha_relatorio': pode_editar_linha_relatorio(user),
         'pode_cancelar_linha_relatorio': pode_cancelar_linha_relatorio(user),
+        'pode_apagar_linha_relatorio': pode_apagar_linha_relatorio(user),
         'pode_desfazer_tramite': pode_desfazer_tramite(user),
         'pode_devolver_da_assinatura': pode_devolver_da_assinatura(user),
         'pode_acessar_fila_gestao': pode_acessar_fila_gestao(user),
@@ -504,6 +510,7 @@ def contexto_processor(request):
             'pode_editar_numero_relatorio': False,
             'pode_editar_linha_relatorio': False,
             'pode_cancelar_linha_relatorio': False,
+            'pode_apagar_linha_relatorio': False,
             'pode_desfazer_tramite': False,
             'pode_devolver_da_assinatura': False,
             'pode_acessar_fila_gestao': False,

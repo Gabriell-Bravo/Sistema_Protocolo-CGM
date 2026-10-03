@@ -5,6 +5,20 @@
         <span class="fila-grupo__count">{{ processos|length }} processo{{ processos|length|pluralize:"s" }}</span>
     </div>
 
+    {% if abas_sequencia %}
+    <nav class="fila-grupo__subnav" aria-label="Grupos de Liquidações">
+        {% for item in abas_sequencia %}
+        <a href="?filtro={{ filtro_atual }}&seq={{ item.codigo }}{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}"
+           class="fila-grupo__chip {% if item.ativa %}is-active{% endif %}">
+            {{ item.nome }}
+            {% if item.total %}
+            <span class="fila-grupo__chip-count">{{ item.total }}</span>
+            {% endif %}
+        </a>
+        {% endfor %}
+    </nav>
+    {% endif %}
+
     <div class="table-scroll table-scroll--fila">
         <table class="table">
             <thead>

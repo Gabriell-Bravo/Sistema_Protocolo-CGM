@@ -98,14 +98,14 @@
                             <th>Analista</th>
                             <th>Status da análise</th>
                             <th>Observação</th>
-                            <th class="col-actions{% if not pode_cancelar_linha_relatorio %} col-actions--compact{% endif %}">Ações</th>
+                            <th class="col-actions{% if not pode_cancelar_linha_relatorio and not pode_apagar_linha_relatorio %} col-actions--compact{% endif %}">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for linha in linhas %}
                         <tr class="{{ linha.linha_css_class }}"
-                            {% if linha.situacao_linha == 'RESERVADA' %}title="Número guardado após cancelamento"
-                            {% elif linha.situacao_linha == 'CANCELADA' %}title="Número excluído da sequência"
+                            {% if linha.situacao_linha == 'RESERVADA' or linha.situacao_linha == 'CANCELADA' %}title="Número cancelado — disponível para reuso"
+                            {% elif linha.sem_relatorio and linha.numero_relatorio %}title="Número reservado e vinculado — permanece sem relatório (amarelo)"
                             {% elif linha.sem_relatorio %}title="Processo despachado sem relatório"{% endif %}>
                             <td>
                                 {% if linha.numero_relatorio %}
@@ -133,13 +133,24 @@
                             <td>{{ linha.analista|default:"—" }}</td>
                             <td>{{ linha.status_analise_display }}</td>
                             <td class="cell-wrap">{{ linha.observacao|truncatechars:60|default:"—" }}</td>
-                            <td class="col-actions {% if not pode_cancelar_linha_relatorio %}col-actions--compact{% endif %}">
+                            <td class="col-actions {% if not pode_cancelar_linha_relatorio and not pode_apagar_linha_relatorio %}col-actions--compact{% endif %}">
                                 <div class="actions">
                                     {% if linha.processo_id %}
                                     <a href="{% url 'analista_processo' linha.processo_id %}?next={% url 'controle_relatorio' %}%3Faba%3D{{ aba }}%26secao%3Danalises"
                                        class="icon-btn icon-btn--primary" title="Editar análise">
                                         <span class="material-symbols-rounded">edit</span>
                                     </a>
+                                    {% elif pode_cancelar_linha_relatorio and linha.numero_relatorio and not linha.processo_id %}
+                                        {% if linha.situacao_linha == 'CANCELADA' or linha.situacao_linha == 'RESERVADA' %}
+                                    <button type="button" class="icon-btn icon-btn--primary"
+                                            title="Vincular processo a este número"
+                                            data-modal-open="modalVincularProcesso"
+                                            data-vincular-linha="{{ linha.id }}"
+                                            data-vincular-numero="{{ linha.numero_relatorio }}"
+                                            data-vincular-grupo="{{ aba }}">
+                                        <span class="material-symbols-rounded">link</span>
+                                    </button>
+                                        {% endif %}
                                     {% endif %}
                                     {% if pode_cancelar_linha_relatorio and linha.situacao_linha == 'ATIVA' and linha.numero_relatorio %}
                                     <button type="button" class="icon-btn icon-btn--danger"
@@ -150,6 +161,17 @@
                                             data-cancelar-processo="{{ linha.numero_processo }}"
                                             data-cancelar-grupo="{{ aba }}">
                                         <span class="material-symbols-rounded">cancel</span>
+                                    </button>
+                                    {% endif %}
+                                    {% if pode_apagar_linha_relatorio %}
+                                    <button type="button" class="icon-btn icon-btn--danger"
+                                            title="Apagar linha do Controle"
+                                            data-modal-open="modalApagarLinha"
+                                            data-apagar-linha="{{ linha.id }}"
+                                            data-apagar-numero="{{ linha.numero_relatorio }}"
+                                            data-apagar-processo="{{ linha.numero_processo }}"
+                                            data-apagar-grupo="{{ aba }}">
+                                        <span class="material-symbols-rounded">delete</span>
                                     </button>
                                     {% endif %}
                                 </div>
@@ -185,20 +207,16 @@
                 </div>
                 <div class="modal__body">
                     <p style="margin:0 0 14px; color:var(--text-muted); line-height:1.45;">
-                        O número e a data permanecem na planilha. Escolha o destino do número:
+                        O número e a data permanecem na planilha em vermelho, disponíveis para reuso.
                     </p>
                     <form method="post" id="formCancelarRelatorio" data-acao="{% url 'controle_relatorio_cancelar_linha' 0 %}">
                         {% csrf_token %}
                         <input type="hidden" name="grupo" value="{{ aba }}">
-                        <input type="hidden" name="destino_numero" id="destinoNumeroRelatorio" value="">
+                        <input type="hidden" name="destino_numero" value="excluir">
                         <div class="form-actions" style="display:flex; flex-direction:column; gap:10px;">
-                            <button type="submit" class="btn btn--primary" data-destino="guardar">
-                                <span class="material-symbols-rounded">bookmark_add</span>
-                                Guardar número (linha verde)
-                            </button>
-                            <button type="submit" class="btn btn--danger" data-destino="excluir">
-                                <span class="material-symbols-rounded">delete_forever</span>
-                                Excluir da sequência (linha vermelha)
+                            <button type="submit" class="btn btn--danger">
+                                <span class="material-symbols-rounded">cancel</span>
+                                Cancelar relatório
                             </button>
                             <button type="button" class="btn btn--outline" data-modal-close="modalCancelarRelatorio">
                                 Voltar
@@ -212,7 +230,6 @@
         (function () {
             var form = document.getElementById('formCancelarRelatorio');
             if (!form) return;
-            var destino = document.getElementById('destinoNumeroRelatorio');
             var rotulo = document.querySelector('[data-cancelar-rotulo]');
             document.addEventListener('click', function (event) {
                 var botao = event.target.closest('[data-cancelar-linha]');
@@ -226,10 +243,114 @@
                         + ' · ' + (botao.getAttribute('data-cancelar-processo') || '');
                 }
             });
-            form.querySelectorAll('button[data-destino]').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    destino.value = btn.getAttribute('data-destino');
-                });
+        })();
+        </script>
+
+        <div class="modal" id="modalVincularProcesso" role="dialog" aria-labelledby="tituloVincularProcesso">
+            <div class="modal__dialog modal__dialog--sm">
+                <div class="modal__header">
+                    <span class="modal__title" id="tituloVincularProcesso">
+                        Vincular processo ao nº <span data-vincular-rotulo></span>
+                    </span>
+                    <button type="button" class="icon-btn" data-modal-close="modalVincularProcesso" aria-label="Fechar">
+                        <span class="material-symbols-rounded">close</span>
+                    </button>
+                </div>
+                <div class="modal__body">
+                    <p style="margin:0 0 14px; color:var(--text-muted); line-height:1.45;">
+                        Informe o nº de um processo já cadastrado. O número cancelado volta a ficar ativo nessa análise.
+                    </p>
+                    <form method="post" id="formVincularProcesso" data-acao="{% url 'controle_relatorio_vincular_linha' 0 %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="grupo" value="{{ aba }}">
+                        <div class="field">
+                            <label class="field__label" for="numero_processo_vincular">Nº do processo</label>
+                            <input type="text" id="numero_processo_vincular" name="numero_processo"
+                                   class="input" required placeholder="Ex.: 1234/2026" autocomplete="off">
+                        </div>
+                        <div class="form-actions" style="display:flex; flex-direction:column; gap:10px; margin-top:14px;">
+                            <button type="submit" class="btn btn--primary">
+                                <span class="material-symbols-rounded">link</span>
+                                Vincular processo
+                            </button>
+                            <button type="button" class="btn btn--outline" data-modal-close="modalVincularProcesso">
+                                Voltar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <script>
+        (function () {
+            var form = document.getElementById('formVincularProcesso');
+            if (!form) return;
+            var rotulo = document.querySelector('[data-vincular-rotulo]');
+            var campo = document.getElementById('numero_processo_vincular');
+            document.addEventListener('click', function (event) {
+                var botao = event.target.closest('[data-vincular-linha]');
+                if (!botao) return;
+                var id = botao.getAttribute('data-vincular-linha');
+                form.action = form.getAttribute('data-acao').replace('/0/', '/' + id + '/');
+                var grupo = botao.getAttribute('data-vincular-grupo');
+                if (grupo) form.querySelector('[name="grupo"]').value = grupo;
+                if (rotulo) rotulo.textContent = botao.getAttribute('data-vincular-numero') || '—';
+                if (campo) {
+                    campo.value = '';
+                    setTimeout(function () { campo.focus(); }, 50);
+                }
+            });
+        })();
+        </script>
+        {% endif %}
+
+        {% if pode_apagar_linha_relatorio %}
+        <div class="modal" id="modalApagarLinha" role="dialog" aria-labelledby="tituloApagarLinha">
+            <div class="modal__dialog modal__dialog--sm">
+                <div class="modal__header">
+                    <span class="modal__title" id="tituloApagarLinha">
+                        Apagar linha <span data-apagar-rotulo></span>
+                    </span>
+                    <button type="button" class="icon-btn" data-modal-close="modalApagarLinha" aria-label="Fechar">
+                        <span class="material-symbols-rounded">close</span>
+                    </button>
+                </div>
+                <div class="modal__body">
+                    <p style="margin:0 0 14px; color:var(--text-muted); line-height:1.45;">
+                        A linha some do Controle de relatório. Esta ação não pode ser desfeita por aqui.
+                    </p>
+                    <form method="post" id="formApagarLinha" data-acao="{% url 'controle_relatorio_apagar_linha' 0 %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="grupo" value="{{ aba }}">
+                        <div class="form-actions" style="display:flex; flex-direction:column; gap:10px;">
+                            <button type="submit" class="btn btn--danger">
+                                <span class="material-symbols-rounded">delete</span>
+                                Apagar de verdade
+                            </button>
+                            <button type="button" class="btn btn--outline" data-modal-close="modalApagarLinha">
+                                Voltar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <script>
+        (function () {
+            var form = document.getElementById('formApagarLinha');
+            if (!form) return;
+            var rotulo = document.querySelector('[data-apagar-rotulo]');
+            document.addEventListener('click', function (event) {
+                var botao = event.target.closest('[data-apagar-linha]');
+                if (!botao) return;
+                var id = botao.getAttribute('data-apagar-linha');
+                form.action = form.getAttribute('data-acao').replace('/0/', '/' + id + '/');
+                var grupo = botao.getAttribute('data-apagar-grupo');
+                if (grupo) form.querySelector('[name="grupo"]').value = grupo;
+                if (rotulo) {
+                    rotulo.textContent = 'nº ' + (botao.getAttribute('data-apagar-numero') || '—')
+                        + ' · ' + (botao.getAttribute('data-apagar-processo') || '');
+                }
             });
         })();
         </script>
@@ -239,10 +360,11 @@
 
         <section class="card">
             <div class="card__header">
-                <span class="card__title">Destinar números</span>
-                <span class="card__hint">Escolha o grupo, a faixa e a data para usar depois na análise</span>
+                <span class="card__title">Reservar e vincular números</span>
+                <span class="card__hint">Um número por processo — gera linha amarela no Controle</span>
             </div>
-            <form method="post" action="{% url 'controle_relatorio_destinar' %}" class="card__body">
+            <form method="post" action="{% url 'controle_relatorio_destinar' %}" class="card__body" id="formDestinarNumeros"
+                  data-sugerir-url="{% url 'controle_relatorio_sugerir_numeros' %}">
                 {% csrf_token %}
                 <div class="form-grid">
                     <div class="field">
@@ -254,17 +376,6 @@
                             </option>
                             {% endfor %}
                         </select>
-                        <span class="field__hint">O número só poderá ser usado em análises desse grupo.</span>
-                    </div>
-                    <div class="field">
-                        <label class="field__label" for="numero_inicial">Do número</label>
-                        <input type="number" min="1" id="numero_inicial" name="numero_inicial"
-                               class="input" required>
-                    </div>
-                    <div class="field">
-                        <label class="field__label" for="numero_final">Até o número</label>
-                        <input type="number" min="1" id="numero_final" name="numero_final"
-                               class="input" required>
                     </div>
                     <div class="field">
                         <label class="field__label" for="data_destino">Data desses números</label>
@@ -272,13 +383,151 @@
                                class="input" required>
                     </div>
                 </div>
-                <div class="form-actions" style="margin-top:14px;">
-                    <button type="submit" class="btn btn--primary">
-                        <span class="material-symbols-rounded">bookmark_add</span>
-                        Destinar números
-                    </button>
+
+                <div style="margin-top:18px;">
+                    <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:8px; flex-wrap:wrap;">
+                        <label class="field__label" style="margin:0;">Processos</label>
+                        <span class="field__hint" style="margin:0;">Preencha o nº do relatório ou use o preenchimento automático</span>
+                    </div>
+                    <div id="listaParesDestino" style="display:flex; flex-direction:column; gap:8px;"></div>
+                    <div class="form-actions" style="margin-top:12px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+                        <button type="button" class="btn btn--outline" id="btnAdicionarProcesso">
+                            <span class="material-symbols-rounded">add</span>
+                            Adicionar processo
+                        </button>
+                        <button type="button" class="btn btn--outline" id="btnPreencherAuto">
+                            <span class="material-symbols-rounded">auto_fix</span>
+                            Preencher números automaticamente
+                        </button>
+                        <button type="submit" class="btn btn--primary" style="margin-left:auto;">
+                            <span class="material-symbols-rounded">link</span>
+                            Reservar e vincular
+                        </button>
+                    </div>
+                    <p id="msgDestinarErro" style="display:none; margin:10px 0 0; color:var(--danger, #b42318); line-height:1.4;"></p>
                 </div>
             </form>
+            <template id="tplParDestino">
+                <div class="destino-par" style="display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) auto; gap:8px; align-items:end;">
+                    <div class="field" style="margin:0;">
+                        <label class="field__label">Nº do processo</label>
+                        <input type="text" name="processo" class="input" required
+                               placeholder="Ex.: 1234/2026" autocomplete="off">
+                    </div>
+                    <div class="field" style="margin:0;">
+                        <label class="field__label">Nº do relatório</label>
+                        <input type="number" name="numero" class="input" min="1" required
+                               placeholder="Ex.: 9101" autocomplete="off">
+                    </div>
+                    <button type="button" class="icon-btn icon-btn--danger" data-remover-par
+                            title="Remover" aria-label="Remover processo"
+                            style="margin-bottom:2px;">
+                        <span class="material-symbols-rounded">close</span>
+                    </button>
+                </div>
+            </template>
+            <script>
+            (function () {
+                var form = document.getElementById('formDestinarNumeros');
+                var lista = document.getElementById('listaParesDestino');
+                var tpl = document.getElementById('tplParDestino');
+                var msg = document.getElementById('msgDestinarErro');
+                if (!form || !lista || !tpl) return;
+
+                function mostrarErro(texto) {
+                    if (!msg) return;
+                    msg.textContent = texto || '';
+                    msg.style.display = texto ? 'block' : 'none';
+                }
+
+                function adicionarLinha(processo, numero) {
+                    var node = tpl.content.cloneNode(true);
+                    var row = node.querySelector('.destino-par');
+                    var inpProc = node.querySelector('[name="processo"]');
+                    var inpNum = node.querySelector('[name="numero"]');
+                    if (processo) inpProc.value = processo;
+                    if (numero) inpNum.value = numero;
+                    lista.appendChild(node);
+                    return row || lista.lastElementChild;
+                }
+
+                function linhas() {
+                    return Array.prototype.slice.call(lista.querySelectorAll('.destino-par'));
+                }
+
+                document.getElementById('btnAdicionarProcesso').addEventListener('click', function () {
+                    mostrarErro('');
+                    var row = adicionarLinha();
+                    var campo = row && row.querySelector('[name="processo"]');
+                    if (campo) campo.focus();
+                });
+
+                lista.addEventListener('click', function (event) {
+                    var botao = event.target.closest('[data-remover-par]');
+                    if (!botao) return;
+                    var row = botao.closest('.destino-par');
+                    if (!row) return;
+                    if (linhas().length <= 1) {
+                        row.querySelector('[name="processo"]').value = '';
+                        row.querySelector('[name="numero"]').value = '';
+                        mostrarErro('');
+                        return;
+                    }
+                    row.remove();
+                });
+
+                document.getElementById('btnPreencherAuto').addEventListener('click', function () {
+                    mostrarErro('');
+                    var rows = linhas();
+                    var vazios = rows.filter(function (row) {
+                        return !(row.querySelector('[name="numero"]').value || '').trim();
+                    });
+                    if (!vazios.length) {
+                        mostrarErro('Todos os números já estão preenchidos.');
+                        return;
+                    }
+                    var ocupados = rows.map(function (row) {
+                        return (row.querySelector('[name="numero"]').value || '').trim();
+                    }).filter(Boolean);
+                    var grupo = form.querySelector('[name="grupo"]').value;
+                    var url = form.getAttribute('data-sugerir-url')
+                        + '?grupo=' + encodeURIComponent(grupo)
+                        + '&quantidade=' + encodeURIComponent(vazios.length);
+                    if (ocupados.length) {
+                        url += '&excluir=' + encodeURIComponent(ocupados.join(','));
+                    }
+                    fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+                        .then(function (resp) {
+                            return resp.json().then(function (data) {
+                                if (!resp.ok) throw new Error(data.erro || 'Não foi possível sugerir números.');
+                                return data;
+                            });
+                        })
+                        .then(function (data) {
+                            var nums = data.numeros || [];
+                            vazios.forEach(function (row, i) {
+                                if (nums[i] != null) {
+                                    row.querySelector('[name="numero"]').value = nums[i];
+                                }
+                            });
+                        })
+                        .catch(function (err) {
+                            mostrarErro(err.message || 'Falha ao preencher automaticamente.');
+                        });
+                });
+
+                form.addEventListener('submit', function (event) {
+                    mostrarErro('');
+                    if (!linhas().length) {
+                        event.preventDefault();
+                        mostrarErro('Adicione ao menos um processo.');
+                        return;
+                    }
+                });
+
+                adicionarLinha();
+            })();
+            </script>
         </section>
 
         <section class="filters">
@@ -346,8 +595,8 @@
                             <td colspan="6">
                                 <div class="empty empty--compact">
                                     <span class="material-symbols-rounded">bookmark</span>
-                                    <div class="empty__title">Nenhum número destinado em {{ info_aba.nome }}</div>
-                                    <div>Escolha o grupo no formulário acima e destine uma faixa para ela aparecer aqui.</div>
+                                    <div class="empty__title">Nenhum número aguardando vínculo em {{ info_aba.nome }}</div>
+                                    <div>Ao reservar com o nº do processo, a linha amarela já aparece na planilha de análises.</div>
                                 </div>
                             </td>
                         </tr>

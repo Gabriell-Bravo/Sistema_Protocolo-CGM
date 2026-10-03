@@ -5,9 +5,10 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
+from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from .services import permissions as perm
 from .services import relatorios as svc
@@ -171,6 +172,13 @@ def alterar_numero(request, process_id):
             request,
             f'Número do relatório de {processo.numero_processo} '
             f'atualizado para {processo.numero_relatorio}.')
+        desvinculados = getattr(processo, '_numeros_desvinculados', None) or []
+        if desvinculados:
+            lista = ', '.join(desvinculados)
+            messages.warning(
+                request,
+                f'O número {processo.numero_relatorio} foi desvinculado '
+                f'do processo {lista}.')
     except (PermissionDenied, ValidationError) as exc:
         messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
     return redirect(destino)
@@ -211,21 +219,65 @@ def destinar_numeros(request):
         'Somente analista de Liquidações e o administrador destinam números.')
     grupo = request.POST.get('grupo') or svc.GRUPO_PADRAO
     try:
-        quantidade = svc.destinar_numeros(
+        processos = [
+            (p or '').strip()
+            for p in request.POST.getlist('processo')
+            if (p or '').strip()
+        ]
+        numeros_brutos = request.POST.getlist('numero')
+        pares = []
+        for i, num_proc in enumerate(processos):
+            bruto = numeros_brutos[i] if i < len(numeros_brutos) else ''
+            pares.append((num_proc, bruto))
+        resultado = svc.destinar_numeros(
             request.user,
-            request.POST.get('numero_inicial'),
-            request.POST.get('numero_final'),
-            request.POST.get('data_relatorio'),
+            data=request.POST.get('data_relatorio'),
             grupo=grupo,
+            pares=pares,
         )
+        quantidade = resultado['quantidade']
+        numeros = resultado['numeros']
         nome = svc.info_sequencia(grupo)['nome']
+        if quantidade == 1:
+            detalhe = f'nº {numeros[0]}'
+        elif numeros == list(range(numeros[0], numeros[-1] + 1)):
+            detalhe = f'nº {numeros[0]} a {numeros[-1]}'
+        else:
+            detalhe = 'nº ' + ', '.join(str(n) for n in numeros[:10])
+            if quantidade > 10:
+                detalhe += '…'
         messages.success(
             request,
-            f'{quantidade} número{"s" if quantidade != 1 else ""} destinado'
-            f'{"s" if quantidade != 1 else ""} em {nome}.')
+            f'{quantidade} número{"s" if quantidade != 1 else ""} vinculado'
+            f'{"s" if quantidade != 1 else ""} em {nome} ({detalhe}) '
+            f'— linha amarela no Controle.')
     except (PermissionDenied, ValidationError) as exc:
         messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
-    return redirect(_voltar_controle(grupo, 'destinados'))
+    return redirect(_voltar_controle(grupo, 'analises'))
+
+
+@login_required
+@require_GET
+def sugerir_numeros(request):
+    perm.assert_permissao(
+        perm.pode_destinar_numeros_relatorio(request.user),
+        'Somente analista de Liquidações e o administrador destinam números.')
+    grupo = request.GET.get('grupo') or svc.GRUPO_PADRAO
+    try:
+        quantidade = int(request.GET.get('quantidade') or 0)
+        excluir = [
+            item.strip()
+            for item in (request.GET.get('excluir') or '').split(',')
+            if item.strip()
+        ]
+        numeros = svc.sugerir_numeros_disponiveis(
+            grupo, quantidade, excluir=excluir or None)
+        return JsonResponse({'numeros': numeros})
+    except (PermissionDenied, ValidationError) as exc:
+        return JsonResponse(
+            {'erro': '; '.join(getattr(exc, 'messages', [str(exc)]))},
+            status=400,
+        )
 
 
 @login_required
@@ -250,18 +302,47 @@ def cancelar_linha(request, linha_id):
     try:
         linha = svc.cancelar_linha(
             request.user, linha_id, request.POST.get('destino_numero'))
-        if linha.situacao_linha == 'RESERVADA':
-            messages.success(
-                request,
-                f'Relatório {linha.numero_relatorio} cancelado. '
-                f'Número guardado na planilha.')
-        else:
-            messages.success(
-                request,
-                f'Relatório {linha.numero_relatorio} cancelado. '
-                f'Número excluído da sequência.')
+        messages.success(
+            request,
+            f'Relatório {linha.numero_relatorio} cancelado. '
+            f'Número disponível na planilha (linha vermelha).')
         if linha.sequencia:
             grupo = linha.sequencia
+    except (PermissionDenied, ValidationError) as exc:
+        messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
+    return redirect(_voltar_controle(grupo, 'analises'))
+
+
+@login_required
+@require_POST
+def vincular_processo_linha(request, linha_id):
+    grupo = request.POST.get('grupo') or svc.GRUPO_PADRAO
+    try:
+        linha = svc.vincular_processo_linha(
+            request.user, linha_id, request.POST.get('numero_processo'))
+        messages.success(
+            request,
+            f'Número {linha.numero_relatorio} vinculado ao processo '
+            f'{linha.numero_processo}.')
+        if linha.sequencia:
+            grupo = linha.sequencia
+    except (PermissionDenied, ValidationError) as exc:
+        messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
+    return redirect(_voltar_controle(grupo, 'analises'))
+
+
+@login_required
+@require_POST
+def apagar_linha(request, linha_id):
+    grupo = request.POST.get('grupo') or svc.GRUPO_PADRAO
+    try:
+        info = svc.apagar_linha(request.user, linha_id)
+        numero = info.get('numero_relatorio') or '—'
+        messages.success(
+            request,
+            f'Linha do relatório {numero} apagada do Controle.')
+        if info.get('sequencia'):
+            grupo = info['sequencia']
     except (PermissionDenied, ValidationError) as exc:
         messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
     return redirect(_voltar_controle(grupo, 'analises'))
