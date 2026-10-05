@@ -64,6 +64,36 @@ class ControleRelatorioTest(BaseProcessoTestCase):
             reverse('controle_relatorio') + '?termo=nao-existe-xyz')
         self.assertNotContains(vazia, 'busca-1/2026')
 
+    def test_desvincular_processo_mantem_numero_na_planilha(self):
+        admin = criar_usuario('admin_desvinc', 'GESTAO', is_superuser=True)
+        relatorios.definir_ultimo_numero(admin, 7000)
+        processo = self.novo_processo(
+            self.especie_liq, numero_processo='desv-1/2026')
+        self._salvar_liquidacao(processo)
+        self.assertEqual(processo.numero_relatorio, '7001')
+        linha = LinhaControleRelatorio.objects.get(processo=processo)
+
+        self.client.force_login(admin)
+        pagina = self.client.get(reverse('controle_relatorio'))
+        self.assertContains(pagina, 'Desvincular processo deste número')
+
+        resp = self.client.post(
+            reverse('controle_relatorio_desvincular_linha', args=[linha.id]), {
+                'grupo': 'LIQUIDACOES',
+            })
+        self.assertEqual(resp.status_code, 302)
+        linha.refresh_from_db()
+        processo.refresh_from_db()
+        self.assertIsNone(linha.processo_id)
+        self.assertEqual(linha.numero_relatorio, '7001')
+        self.assertEqual(linha.numero_processo, 'desv-1/2026')
+        self.assertEqual(linha.situacao_linha, 'HISTORICA')
+        self.assertFalse(processo.numero_relatorio)
+        self.assertIn('desvinculado', (linha.observacao or '').casefold())
+
+        planilha = self.client.get(reverse('controle_relatorio'))
+        self.assertContains(planilha, 'data-vincular-linha')
+
     def test_vincular_processo_finalizado_preenche_historico(self):
         admin = criar_usuario('admin_vinc_fim', 'GESTAO', is_superuser=True)
         processo = self.novo_processo(

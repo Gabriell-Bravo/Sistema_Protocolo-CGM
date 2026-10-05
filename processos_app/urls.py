@@ -154,6 +154,9 @@ urlpatterns = [
          rel.alternar_sem_relatorio, name='controle_relatorio_sem_relatorio'),
     path('controle-relatorio/linha/<int:linha_id>/vincular/',
          rel.vincular_processo_linha, name='controle_relatorio_vincular_linha'),
+    path('controle-relatorio/linha/<int:linha_id>/desvincular/',
+         rel.desvincular_processo_linha,
+         name='controle_relatorio_desvincular_linha'),
     path('controle-relatorio/linha/<int:linha_id>/apagar/',
          rel.apagar_linha, name='controle_relatorio_apagar_linha'),
 ]

@@ -407,6 +407,23 @@ def vincular_processo_linha(request, linha_id):
 
 @login_required
 @require_POST
+def desvincular_processo_linha(request, linha_id):
+    grupo = request.POST.get('grupo') or svc.GRUPO_PADRAO
+    try:
+        linha = svc.desvincular_processo_linha(request.user, linha_id)
+        messages.success(
+            request,
+            f'Processo {linha.numero_processo or "—"} desvinculado do nº '
+            f'{linha.numero_relatorio}. O número permanece na planilha.')
+        if linha.sequencia:
+            grupo = linha.sequencia
+    except (PermissionDenied, ValidationError) as exc:
+        messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
+    return redirect(_voltar_controle(grupo, 'analises'))
+
+
+@login_required
+@require_POST
 def apagar_linha(request, linha_id):
     grupo = request.POST.get('grupo') or svc.GRUPO_PADRAO
     try:

@@ -1059,6 +1059,55 @@ def vincular_processo_linha(usuario, linha_id, numero_processo):
 
 
 @transaction.atomic
+def desvincular_processo_linha(usuario, linha_id):
+    """Tira o processo do número de relatório, mantendo a linha na planilha.
+
+    Diferente de cancelar: o número não fica vermelho para reuso automático;
+    a linha vira histórica com os dados, e o processo perde o nº no cadastro.
+    """
+    perm.assert_permissao(
+        perm.pode_cancelar_linha_relatorio(usuario),
+        'Somente analista de Liquidações, a Gestão e o administrador '
+        'desvinculam processo no Controle de relatório.')
+    linha = (LinhaControleRelatorio.objects
+             .select_for_update()
+             .filter(id=linha_id)
+             .first())
+    if linha is None:
+        raise RelatorioInvalido('Linha não encontrada.')
+    numero_txt = (linha.numero_relatorio or '').strip()
+    if not numero_txt:
+        raise RelatorioInvalido('Esta linha não tem número de relatório.')
+    tem_vinculo = bool(linha.processo_id) or bool(
+        (linha.numero_processo or '').strip())
+    if not tem_vinculo:
+        raise RelatorioInvalido(
+            'Esta linha não tem processo vinculado para desvincular.')
+
+    processo = linha.processo
+    if processo is not None:
+        campos = []
+        if str(processo.numero_relatorio or '').strip() == numero_txt:
+            processo.numero_relatorio = None
+            campos.append('numero_relatorio')
+        if campos:
+            processo.save(update_fields=campos)
+        _liberar_reservas_do_processo(processo)
+
+    linha.processo = None
+    if linha.situacao_linha == LinhaControleRelatorio.SITUACAO_ATIVA:
+        linha.situacao_linha = LinhaControleRelatorio.SITUACAO_HISTORICA
+    obs = (linha.observacao or '').strip()
+    marca = 'Processo desvinculado'
+    if marca.casefold() not in obs.casefold():
+        linha.observacao = f'{obs} · {marca}'.strip(' ·') if obs else marca
+    linha.save(update_fields=[
+        'processo', 'situacao_linha', 'observacao', 'atualizado_em'])
+    # Mantém numero_processo e demais dados como histórico na planilha.
+    return linha
+
+
+@transaction.atomic
 def apagar_linha(usuario, linha_id):
     """Remove a linha do Controle de verdade — some da planilha.
 

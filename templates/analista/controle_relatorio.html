@@ -177,6 +177,19 @@
                                         {% endif %}
                                     {% endif %}
                                     {% if pode_cancelar_linha_relatorio and linha.numero_relatorio %}
+                                        {% if linha.processo_id or linha.numero_processo %}
+                                    <form method="post" action="{% url 'controle_relatorio_desvincular_linha' linha.id %}" style="display:inline;">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="grupo" value="{{ aba }}">
+                                        <button type="submit" class="icon-btn"
+                                                title="Desvincular processo deste número"
+                                                onclick="return confirm('Desvincular o processo {{ linha.numero_processo|default:'' }} do nº {{ linha.numero_relatorio }}?\n\nO número permanece na planilha; o processo deixa de ter esse relatório.');">
+                                            <span class="material-symbols-rounded">link_off</span>
+                                        </button>
+                                    </form>
+                                        {% endif %}
+                                    {% endif %}
+                                    {% if pode_cancelar_linha_relatorio and linha.numero_relatorio %}
                                         {% if linha.situacao_linha == 'ATIVA' or linha.situacao_linha == 'HISTORICA' %}
                                     <form method="post" action="{% url 'controle_relatorio_sem_relatorio' linha.id %}" style="display:inline;">
                                         {% csrf_token %}
@@ -772,6 +785,52 @@
 
         <section class="card">
             <div class="card__header">
+                <span class="card__title">Importar planilha antiga (Excel)</span>
+                <span class="card__hint">Coloca os números antigos na planilha de Análises</span>
+            </div>
+            <div class="card__body">
+                <p style="margin:0 0 14px; color:var(--text-muted, #5b6472); line-height:1.45;">
+                    Envie o .xlsx do Controle de Relatórios (ex.: Liquidações).
+                    As linhas entram como histórico; amarelas da planilha viram
+                    “sem relatório”. Números já ativos no sistema não são
+                    sobrescritos. O próximo número do grupo passa a ser depois
+                    do maior da planilha.
+                </p>
+                <form method="post" action="{% url 'controle_relatorio_importar' %}"
+                      enctype="multipart/form-data" class="stack" style="gap:12px;">
+                    {% csrf_token %}
+                    <div class="form-grid">
+                        <div class="field">
+                            <label class="field__label" for="grupoImportacao">Grupo de numeração</label>
+                            <select id="grupoImportacao" name="grupo" class="select" required>
+                                {% for item in estados_numeracao %}
+                                <option value="{{ item.codigo }}"
+                                    {% if item.codigo == aba %}selected{% endif %}>
+                                    {{ item.nome }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label class="field__label" for="arquivoPlanilha">Arquivo .xlsx</label>
+                            <input id="arquivoPlanilha" type="file" name="planilha"
+                                   class="input" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                   required>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn--primary"
+                                onclick="return confirm('Importar esta planilha para o grupo selecionado?');">
+                            <span class="material-symbols-rounded">upload_file</span>
+                            Importar Excel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <section class="card">
+            <div class="card__header">
                 <span class="card__title">Início da numeração por grupo</span>
                 <span class="card__hint">Somente o administrador altera</span>
             </div>
@@ -827,52 +886,6 @@
                         {% endfor %}
                     </tbody>
                 </table>
-            </div>
-        </section>
-
-        <section class="card">
-            <div class="card__header">
-                <span class="card__title">Importar planilha antiga (Excel)</span>
-                <span class="card__hint">Números históricos entram na planilha de análises</span>
-            </div>
-            <div class="card__body">
-                <p style="margin:0 0 14px; color:var(--text-muted, #5b6472); line-height:1.45;">
-                    Envie o .xlsx do Controle de Relatórios (ex.: Liquidações).
-                    As linhas aparecem como histórico; linhas amarelas da planilha
-                    entram como “sem relatório”. Números já ativos no sistema
-                    não são sobrescritos. O próximo número do grupo passa a ser
-                    depois do maior número da planilha.
-                </p>
-                <form method="post" action="{% url 'controle_relatorio_importar' %}"
-                      enctype="multipart/form-data" class="stack" style="gap:12px;">
-                    {% csrf_token %}
-                    <div class="form-grid">
-                        <div class="field">
-                            <label class="field__label" for="grupoImportacao">Grupo de numeração</label>
-                            <select id="grupoImportacao" name="grupo" class="select" required>
-                                {% for item in estados_numeracao %}
-                                <option value="{{ item.codigo }}"
-                                    {% if item.codigo == aba %}selected{% endif %}>
-                                    {{ item.nome }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="field">
-                            <label class="field__label" for="arquivoPlanilha">Arquivo .xlsx</label>
-                            <input id="arquivoPlanilha" type="file" name="planilha"
-                                   class="input" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                   required>
-                        </div>
-                    </div>
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn--primary"
-                                onclick="return confirm('Importar esta planilha para o grupo selecionado?');">
-                            <span class="material-symbols-rounded">upload_file</span>
-                            Importar Excel
-                        </button>
-                    </div>
-                </form>
             </div>
         </section>
 
