@@ -483,7 +483,7 @@ class AcoesHttpTest(BaseProcessoTestCase):
         self.client.force_login(admin)
         fila = self.client.get(reverse('gestao_processos'))
         self.assertEqual(fila.status_code, 200)
-        self.assertContains(fila, 'Fila sem análise')
+        self.assertContains(fila, 'Devolver à fila')
         self.client.post(
             reverse('tram_desfazer_tramite', args=[processo.id]),
             {'motivo': 'Desfeito pelo administrador'})
@@ -526,6 +526,38 @@ class AcoesHttpTest(BaseProcessoTestCase):
         self.assertEqual(processo.situacao_tramite, 'SAIDA_CONCLUIDA',
                          'verificar nome do campo do lote em views_tramitacao.registrar_saida')
         self.assertFalse(tramitacao.ativos().filter(id=processo.id).exists())
+
+
+@override_settings(**STATIC)
+class ProcessosAtivosOrdemTest(BaseProcessoTestCase):
+
+    def test_ordem_por_prioridade_e_entrada(self):
+        normal_tarde = self.novo_processo(
+            numero_processo='6101/2026',
+            data_entrada='2026-09-10', hora_entrada='14:00')
+        prioritario = self.novo_processo(
+            numero_processo='6102/2026',
+            data_entrada='2026-09-12', hora_entrada='09:00')
+        tramitacao.alterar_prioridade(prioritario.id, self.gestao, 'PRIORITARIO')
+        normal_cedo = self.novo_processo(
+            numero_processo='6103/2026',
+            data_entrada='2026-09-08', hora_entrada='08:00')
+        urgente = self.novo_processo(
+            numero_processo='6104/2026',
+            data_entrada='2026-09-15', hora_entrada='18:00')
+        tramitacao.alterar_prioridade(urgente.id, self.gestao, 'URGENTE')
+
+        self.client.force_login(self.protocolo)
+        resposta = self.client.get(reverse('listar_processos'))
+        numeros = [p.numero_processo for p in resposta.context['processos']]
+        # Ignora processos do setUp da base que possam aparecer na lista.
+        ordem = [n for n in numeros if n.startswith('610')]
+        self.assertEqual(ordem, [
+            urgente.numero_processo,
+            prioritario.numero_processo,
+            normal_cedo.numero_processo,
+            normal_tarde.numero_processo,
+        ])
 
 
 @override_settings(**STATIC)

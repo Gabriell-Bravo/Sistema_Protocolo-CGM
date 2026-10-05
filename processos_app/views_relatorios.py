@@ -159,6 +159,36 @@ def definir_ultimo_numero(request):
 
 @login_required
 @require_POST
+def importar_planilha(request):
+    """Admin importa Excel antigo para a planilha do Controle de relatório."""
+    perm.assert_permissao(
+        perm.pode_definir_ultimo_relatorio(request.user),
+        'Somente o administrador importa planilha de relatório.')
+    grupo = request.POST.get('grupo') or svc.GRUPO_PADRAO
+    try:
+        resultado = svc.importar_planilha_excel(
+            request.user,
+            request.FILES.get('planilha'),
+            grupo=grupo,
+        )
+    except (PermissionDenied, ValidationError) as exc:
+        messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
+        return redirect(_voltar_controle(grupo, 'numeracao'))
+    partes = [
+        f'{resultado["nome"]}: {resultado["criadas"]} linha(s) importada(s)',
+    ]
+    if resultado['atualizadas']:
+        partes.append(f'{resultado["atualizadas"]} atualizada(s)')
+    if resultado['ignoradas']:
+        partes.append(
+            f'{resultado["ignoradas"]} ignorada(s) (já ativas no sistema)')
+    partes.append(f'próximo nº {resultado["proximo"]}')
+    messages.success(request, '; '.join(partes) + '.')
+    return redirect(_voltar_controle(grupo, 'analises'))
+
+
+@login_required
+@require_POST
 def alterar_numero(request, process_id):
     destino = request.POST.get('next') or ''
     if not destino.startswith('/'):
@@ -315,15 +345,59 @@ def cancelar_linha(request, linha_id):
 
 @login_required
 @require_POST
+def editar_linha(request, linha_id):
+    grupo = request.POST.get('grupo') or svc.GRUPO_PADRAO
+    try:
+        linha = svc.editar_linha(request.user, linha_id, request.POST)
+        messages.success(
+            request,
+            f'Linha do nº {linha.numero_relatorio or "—"} atualizada.')
+        if linha.sequencia:
+            grupo = linha.sequencia
+    except (PermissionDenied, ValidationError) as exc:
+        messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
+    return redirect(_voltar_controle(grupo, 'analises'))
+
+
+@login_required
+@require_POST
+def alternar_sem_relatorio(request, linha_id):
+    grupo = request.POST.get('grupo') or svc.GRUPO_PADRAO
+    try:
+        linha = svc.alternar_sem_relatorio(request.user, linha_id)
+        if linha.sem_relatorio:
+            messages.success(
+                request,
+                f'Nº {linha.numero_relatorio} marcado como sem relatório '
+                f'(amarelo).')
+        else:
+            messages.success(
+                request,
+                f'Nº {linha.numero_relatorio}: marca de sem relatório removida.')
+        if linha.sequencia:
+            grupo = linha.sequencia
+    except (PermissionDenied, ValidationError) as exc:
+        messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
+    return redirect(_voltar_controle(grupo, 'analises'))
+
+
+@login_required
+@require_POST
 def vincular_processo_linha(request, linha_id):
     grupo = request.POST.get('grupo') or svc.GRUPO_PADRAO
     try:
         linha = svc.vincular_processo_linha(
             request.user, linha_id, request.POST.get('numero_processo'))
-        messages.success(
-            request,
-            f'Número {linha.numero_relatorio} vinculado ao processo '
-            f'{linha.numero_processo}.')
+        if linha.processo_id:
+            messages.success(
+                request,
+                f'Número {linha.numero_relatorio} vinculado ao processo '
+                f'{linha.numero_processo}.')
+        else:
+            messages.success(
+                request,
+                f'Nº {linha.numero_relatorio}: processo {linha.numero_processo} '
+                f'informado e dados preenchidos na planilha.')
         if linha.sequencia:
             grupo = linha.sequencia
     except (PermissionDenied, ValidationError) as exc:

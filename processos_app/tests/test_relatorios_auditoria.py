@@ -252,17 +252,18 @@ class AuditoriaNumeracaoTest(BaseProcessoTestCase):
         q = self._salvar(self.novo_processo(self.especie_liq, numero_processo='n2/26'))
         self.assertEqual(q.numero_relatorio, '1302')
 
-    def test_15_declinar_analise_remove_linha_e_pode_voltar_contador(self):
+    def test_15_declinar_analise_deixa_numero_verde_para_reuso(self):
         relatorios.definir_ultimo_numero(self.admin, 1400)
         p = self._salvar(self.novo_processo(self.especie_liq, numero_processo='o1/26'))
         self.assertEqual(p.numero_relatorio, '1401')
         tramitacao.declinar_analise(p.id, self.analista_liq, 'desistiu do relatório')
         p.refresh_from_db()
         self.assertFalse(p.numero_relatorio)
-        self.assertFalse(
-            LinhaControleRelatorio.objects.filter(processo=p).exists())
-        # remover_do_processo volta contador se era o último.
-        self.assertEqual(self._proximo(), 1401)
+        liberado = LinhaControleRelatorio.objects.get(numero_relatorio='1401')
+        self.assertIsNone(liberado.processo_id)
+        self.assertEqual(liberado.situacao_linha, 'RESERVADA')
+        # Contador não regride: o reuso vem da linha verde no mesmo dia.
+        self.assertEqual(self._proximo(), 1402)
         q = self._salvar(self.novo_processo(self.especie_liq, numero_processo='o2/26'))
         self.assertEqual(q.numero_relatorio, '1401')
 

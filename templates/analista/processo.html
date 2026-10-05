@@ -14,7 +14,7 @@
     {% else %}
     <a href="{% if is_gestao or user.is_superuser %}{% url 'gestao_processos' %}{% else %}{% url 'area_analista' %}{% endif %}" class="btn btn--outline">
         <span class="material-symbols-rounded">arrow_back</span>
-        Voltar à fila
+        Voltar à lista
     </a>
     {% endif %}
 {% endblock %}
@@ -289,7 +289,7 @@
     {% if pode_declinar %}
     <form id="formFilaSemAnalise" method="post" action="{% url 'tram_declinar_analise' processo.id %}" hidden>
         {% csrf_token %}
-        <input type="hidden" name="motivo" value="Encaminhado para a fila sem análise">
+        <input type="hidden" name="motivo" value="Devolvido à fila">
     </form>
     {% endif %}
     {% if pode_editar_numero_relatorio and not pode_editar %}
@@ -567,11 +567,11 @@
 
                     {% if pode_declinar %}
                     <button type="submit" form="formFilaSemAnalise" class="encaminhamento__opcao"
-                            onclick="return confirm('Devolver este processo à fila sem análise? Ele ficará disponível de novo.');">
+                            onclick="return confirm('Devolver este processo à fila?\n\nA análise em andamento será limpa (incluindo número de relatório, se houver) e o processo ficará disponível de novo.');">
                         <span class="material-symbols-rounded">undo</span>
                         <div class="encaminhamento__texto">
-                            <div class="encaminhamento__titulo">Encaminhar para fila (sem análise)</div>
-                            <div class="encaminhamento__hint">Volta a ficar disponível, sem analista.</div>
+                            <div class="encaminhamento__titulo">Devolver à fila</div>
+                            <div class="encaminhamento__hint">Limpa a análise em andamento e deixa o processo disponível de novo.</div>
                         </div>
                     </button>
                     {% endif %}

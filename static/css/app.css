@@ -1068,6 +1068,34 @@ input[type="password"].form-control {
     background: #991b1b;
 }
 
+.table tbody tr.tr-relatorio-historico > td,
+.table tbody tr.tr-relatorio-historico:hover > td,
+.table tbody tr.tr-relatorio-historico > td.col-sticky,
+.table tbody tr.tr-relatorio-historico:hover > td.col-sticky,
+.table tbody tr.tr-relatorio-historico > td.col-actions,
+.table tbody tr.tr-relatorio-historico:hover > td.col-actions {
+    background: #e8eef7;
+}
+
+.table tbody tr.tr-relatorio-historico:hover > td,
+.table tbody tr.tr-relatorio-historico:hover > td.col-sticky,
+.table tbody tr.tr-relatorio-historico:hover > td.col-actions {
+    background: #d9e4f5;
+}
+
+[data-theme="dark"] .table tbody tr.tr-relatorio-historico > td,
+[data-theme="dark"] .table tbody tr.tr-relatorio-historico > td.col-sticky,
+[data-theme="dark"] .table tbody tr.tr-relatorio-historico > td.col-actions {
+    background: #1e293b;
+    color: #e2e8f0;
+}
+
+[data-theme="dark"] .table tbody tr.tr-relatorio-historico:hover > td,
+[data-theme="dark"] .table tbody tr.tr-relatorio-historico:hover > td.col-sticky,
+[data-theme="dark"] .table tbody tr.tr-relatorio-historico:hover > td.col-actions {
+    background: #334155;
+}
+
 .form-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));

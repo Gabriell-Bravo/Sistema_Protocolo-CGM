@@ -1,5 +1,6 @@
 from django.core.exceptions import PermissionDenied
 from django.urls import reverse
+from django.utils import timezone
 
 from processos_app.models import LinhaControleRelatorio
 from processos_app.services import processos as svc_processos
@@ -62,6 +63,114 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         vazia = self.client.get(
             reverse('controle_relatorio') + '?termo=nao-existe-xyz')
         self.assertNotContains(vazia, 'busca-1/2026')
+
+    def test_vincular_processo_finalizado_preenche_historico(self):
+        admin = criar_usuario('admin_vinc_fim', 'GESTAO', is_superuser=True)
+        processo = self.novo_processo(
+            self.especie_liq, numero_processo='fim-1/2026',
+            secretaria='Secretaria Finalizada',
+            objeto='Objeto da última passagem',
+            contratada='Empresa X',
+            valor='R$ 10,00',
+        )
+        processo.situacao_tramite = 'SAIDA_CONCLUIDA'
+        processo.data_saida = datetime.date(2026, 2, 1)
+        processo.tecnico = 'Analista Z'
+        processo.save()
+
+        linha = LinhaControleRelatorio.objects.create(
+            processo=None,
+            numero_relatorio='888',
+            numero_processo='',
+            data_relatorio=datetime.date(2026, 1, 10),
+            situacao_linha='HISTORICA',
+            grupo='LIQUIDACOES',
+            sequencia='LIQUIDACOES',
+        )
+        self.client.force_login(admin)
+        resp = self.client.post(
+            reverse('controle_relatorio_vincular_linha', args=[linha.id]), {
+                'grupo': 'LIQUIDACOES',
+                'numero_processo': 'fim-1/2026',
+            })
+        self.assertEqual(resp.status_code, 302)
+        linha.refresh_from_db()
+        processo.refresh_from_db()
+        self.assertEqual(linha.numero_processo, 'fim-1/2026')
+        self.assertEqual(linha.secretaria, 'Secretaria Finalizada')
+        self.assertEqual(linha.objeto, 'Objeto da última passagem')
+        self.assertEqual(linha.contratada, 'Empresa X')
+        self.assertIsNone(linha.processo_id)
+        self.assertEqual(linha.situacao_linha, 'HISTORICA')
+        # Processo finalizado não recebe o número de relatório.
+        self.assertFalse(processo.numero_relatorio)
+
+    def test_editar_linha_historica_pela_planilha(self):
+        admin = criar_usuario('admin_edit_hist', 'GESTAO', is_superuser=True)
+        linha = LinhaControleRelatorio.objects.create(
+            processo=None,
+            numero_relatorio='777',
+            numero_processo='old/2026',
+            data_relatorio=datetime.date(2026, 1, 1),
+            secretaria='Sec antiga',
+            objeto='Objeto antigo',
+            situacao_linha='HISTORICA',
+            grupo='LIQUIDACOES',
+            sequencia='LIQUIDACOES',
+            observacao='Importado',
+        )
+        self.client.force_login(admin)
+        pagina = self.client.get(reverse('controle_relatorio'))
+        self.assertContains(pagina, 'Editar linha da planilha')
+        resp = self.client.post(
+            reverse('controle_relatorio_editar_linha', args=[linha.id]), {
+                'grupo': 'LIQUIDACOES',
+                'data_relatorio': '2026-03-15',
+                'numero_processo': 'novo/2026',
+                'secretaria': 'Sec nova',
+                'objeto': 'Objeto novo',
+                'valor': '1500',
+                'analista': 'Ana',
+                'sem_relatorio': '1',
+            })
+        self.assertEqual(resp.status_code, 302)
+        linha.refresh_from_db()
+        self.assertEqual(str(linha.data_relatorio), '2026-03-15')
+        self.assertEqual(linha.numero_processo, 'novo/2026')
+        self.assertEqual(linha.secretaria, 'Sec nova')
+        self.assertEqual(linha.objeto, 'Objeto novo')
+        self.assertTrue(linha.sem_relatorio)
+        self.assertTrue(linha.valor.startswith('R$'))
+
+    def test_marcar_sem_relatorio_pela_planilha_do_controle(self):
+        admin = criar_usuario('admin_sr_planilha', 'GESTAO', is_superuser=True)
+        processo = self.novo_processo(self.especie_liq, numero_processo='sr-plan/2026')
+        self._salvar_liquidacao(processo)
+        linha = LinhaControleRelatorio.objects.get(processo=processo)
+        self.assertFalse(linha.sem_relatorio)
+
+        self.client.force_login(admin)
+        pagina = self.client.get(reverse('controle_relatorio'))
+        self.assertContains(pagina, 'Marcar como sem relatório')
+        resp = self.client.post(
+            reverse('controle_relatorio_sem_relatorio', args=[linha.id]),
+            {'grupo': 'LIQUIDACOES'},
+        )
+        self.assertEqual(resp.status_code, 302)
+        linha.refresh_from_db()
+        processo.refresh_from_db()
+        self.assertTrue(linha.sem_relatorio)
+        self.assertTrue(processo.sem_relatorio)
+
+        resp = self.client.post(
+            reverse('controle_relatorio_sem_relatorio', args=[linha.id]),
+            {'grupo': 'LIQUIDACOES'},
+        )
+        self.assertEqual(resp.status_code, 302)
+        linha.refresh_from_db()
+        processo.refresh_from_db()
+        self.assertFalse(linha.sem_relatorio)
+        self.assertFalse(processo.sem_relatorio)
 
     def test_salvar_analise_sem_relatorio_aparece_no_controle(self):
         processo = self.novo_processo(self.especie_liq, numero_processo='sr-1/2026')
@@ -286,14 +395,22 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         tramitacao.declinar_analise(primeiro.id, self.analista_liq, 'Teste')
         primeiro.refresh_from_db()
         self.assertFalse(primeiro.numero_relatorio)
-        self.assertFalse(LinhaControleRelatorio.objects.filter(
-            processo=primeiro).exists())
+        liberado = LinhaControleRelatorio.objects.get(numero_relatorio='2001')
+        self.assertIsNone(liberado.processo_id)
+        self.assertEqual(liberado.situacao_linha, 'RESERVADA')
+        self.assertEqual(liberado.data_relatorio, timezone.localdate())
 
         segundo = self.novo_processo(self.especie_liq, numero_processo='11b/2026')
         self._salvar_liquidacao(segundo)
         self.assertEqual(segundo.numero_relatorio, '2001')
+        liberado_id = liberado.id
+        self.assertFalse(
+            LinhaControleRelatorio.objects.filter(id=liberado_id).exists())
+        ativo = LinhaControleRelatorio.objects.get(processo=segundo)
+        self.assertEqual(ativo.numero_relatorio, '2001')
+        self.assertEqual(ativo.situacao_linha, 'ATIVA')
 
-    def test_declinar_no_meio_nao_volta_a_numero_antigo(self):
+    def test_declinar_no_meio_reusa_numero_verde_no_mesmo_dia(self):
         admin = criar_usuario('admin_meio', 'GESTAO', is_superuser=True)
         relatorios.definir_ultimo_numero(admin, 2000)
         primeiro = self.novo_processo(self.especie_liq, numero_processo='11c/2026')
@@ -304,13 +421,35 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertEqual(segundo.numero_relatorio, '2002')
         tramitacao.declinar_analise(primeiro.id, self.analista_liq, 'Teste')
 
-        # O 2001 do meio não é reaproveitado; o contador segue em 2003.
+        liberado = LinhaControleRelatorio.objects.get(numero_relatorio='2001')
+        self.assertEqual(liberado.situacao_linha, 'RESERVADA')
+        self.assertIsNone(liberado.processo_id)
+
+        # No mesmo dia, o 2001 verde é reaproveitado antes do contador (2003).
         terceiro = self.novo_processo(self.especie_liq, numero_processo='11e/2026')
         self._salvar_liquidacao(terceiro)
-        self.assertEqual(terceiro.numero_relatorio, '2003')
+        self.assertEqual(terceiro.numero_relatorio, '2001')
         quarto = self.novo_processo(self.especie_liq, numero_processo='11f/2026')
         self._salvar_liquidacao(quarto)
-        self.assertEqual(quarto.numero_relatorio, '2004')
+        self.assertEqual(quarto.numero_relatorio, '2003')
+
+    def test_declinar_numero_verde_de_outro_dia_nao_reusa_automatico(self):
+        admin = criar_usuario('admin_outro_dia', 'GESTAO', is_superuser=True)
+        relatorios.definir_ultimo_numero(admin, 2000)
+        primeiro = self.novo_processo(self.especie_liq, numero_processo='11g/2026')
+        self._salvar_liquidacao(primeiro)
+        self.assertEqual(primeiro.numero_relatorio, '2001')
+        tramitacao.declinar_analise(primeiro.id, self.analista_liq, 'Teste')
+        liberado = LinhaControleRelatorio.objects.get(numero_relatorio='2001')
+        liberado.data_relatorio = datetime.date(2020, 1, 1)
+        liberado.save(update_fields=['data_relatorio'])
+
+        segundo = self.novo_processo(self.especie_liq, numero_processo='11h/2026')
+        self._salvar_liquidacao(segundo)
+        self.assertEqual(segundo.numero_relatorio, '2002')
+        liberado.refresh_from_db()
+        self.assertEqual(liberado.situacao_linha, 'RESERVADA')
+        self.assertIsNone(liberado.processo_id)
 
     def test_numero_antigo_devolvido_nao_vence_o_contador(self):
         admin = criar_usuario('admin_orfao', 'GESTAO', is_superuser=True)
@@ -789,7 +928,8 @@ class ControleRelatorioTest(BaseProcessoTestCase):
             for linha in relatorios.listar(self.analista_liq)
             if linha.numero_relatorio in ('1893', '1895')
         ]
-        self.assertEqual(numeros, ['1893', '1895'])
+        # Mais recentes primeiro (maior número no topo).
+        self.assertEqual(numeros, ['1895', '1893'])
         # Números automáticos abandonados ficam vermelhos na planilha.
         self.assertTrue(
             LinhaControleRelatorio.objects.filter(
@@ -938,3 +1078,102 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         pagina = self.client.get(reverse('controle_relatorio'))
         self.assertEqual(pagina.status_code, 200)
         self.assertNotContains(pagina, '13/2026')
+
+    def test_admin_importa_planilha_excel_historica(self):
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from openpyxl import Workbook
+
+        admin = criar_usuario('admin_import_xlsx', 'GESTAO', is_superuser=True)
+        # Linha ativa do sistema não pode ser sobrescrita pela importação.
+        relatorios.definir_ultimo_numero(admin, 10)
+        vivo = self.novo_processo(self.especie_liq, numero_processo='imp-vivo/2026')
+        self._salvar_liquidacao(vivo)
+        self.assertEqual(vivo.numero_relatorio, '11')
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'CONTROLE'
+        ws.append(['CONTROLADORIA'])
+        ws.append([])
+        ws.append([
+            'RELATOR', 'Nº relatório', 'DATA', 'PROCESSO ORIGEM',
+            'PROCESSO PAGAMENTO', 'SECRETARIA', 'OBJETO', 'PERÍODO',
+            'VALOR ', 'DESTINO',
+        ])
+        ws.append([
+            'Ana Teste', 5, datetime.date(2026, 2, 1), '100/2025',
+            '200/2026', 'Secretaria X', 'Objeto importado', 'Jan/2026',
+            1500.5, 'Destino Y',
+        ])
+        ws.append([
+            'Bruno', 11, datetime.date(2026, 2, 2), '300/2025',
+            '400/2026', 'Secretaria Z', 'Não deve sobrescrever', None,
+            10, 'Destino Z',
+        ])
+        ws.append([
+            'Carla', '56 A', datetime.date(2026, 2, 3), '500/2025',
+            '600/2026', 'Sec W', 'Sufixo letra', None, 99, 'Dest W',
+        ])
+        # Número pré-preenchido sem dados (como na planilha da CGM) — ignorar.
+        ws.append([None, 9999, None, None, None, None, None, None, None, None])
+        # Amarelo sem processo = reservado / saiu sem análise — importar.
+        from openpyxl.styles import PatternFill
+        ws.append([None, 88, datetime.date(2026, 3, 1), None, None, None, None, None, None, None])
+        amarelo = PatternFill(
+            start_color='FFFFFF00', end_color='FFFFFF00', fill_type='solid')
+        for celula in ws[ws.max_row]:
+            celula.fill = amarelo
+        buffer = BytesIO()
+        wb.save(buffer)
+        arquivo = SimpleUploadedFile(
+            'controle.xlsx',
+            buffer.getvalue(),
+            content_type=(
+                'application/vnd.openxmlformats-officedocument.'
+                'spreadsheetml.sheet'
+            ),
+        )
+
+        self.client.force_login(admin)
+        pagina = self.client.get(reverse('controle_relatorio') + '?secao=numeracao')
+        self.assertContains(pagina, 'Importar planilha antiga')
+        resp = self.client.post(
+            reverse('controle_relatorio_importar'),
+            {'grupo': 'LIQUIDACOES', 'planilha': arquivo},
+        )
+        self.assertEqual(resp.status_code, 302)
+
+        hist = LinhaControleRelatorio.objects.get(numero_relatorio='5')
+        self.assertEqual(hist.situacao_linha, 'HISTORICA')
+        self.assertEqual(hist.numero_processo, '200/2026')
+        self.assertIn('origem: 100/2025', hist.observacao)
+        self.assertEqual(hist.analista, 'Ana Teste')
+        self.assertTrue(hist.valor.startswith('R$'))
+
+        sufixo = LinhaControleRelatorio.objects.get(numero_relatorio='56 A')
+        self.assertEqual(sufixo.situacao_linha, 'HISTORICA')
+        self.assertFalse(
+            LinhaControleRelatorio.objects.filter(numero_relatorio='9999').exists())
+        reservado = LinhaControleRelatorio.objects.get(numero_relatorio='88')
+        self.assertEqual(reservado.situacao_linha, 'HISTORICA')
+        self.assertTrue(reservado.sem_relatorio)
+        self.assertIn('sem análise', reservado.observacao)
+
+        vivo.refresh_from_db()
+        self.assertEqual(vivo.numero_relatorio, '11')
+        ativo = LinhaControleRelatorio.objects.get(processo=vivo)
+        self.assertEqual(ativo.situacao_linha, 'ATIVA')
+        self.assertNotEqual(ativo.objeto, 'Não deve sobrescrever')
+
+        # Maior inteiro importado é 88 (amarelo); o 11 ativo já existia.
+        self.assertEqual(relatorios.estado_sequencia()['proximo'], 89)
+        self.assertIn(5, relatorios.numeros_usados('LIQUIDACOES'))
+        self.assertIn(88, relatorios.numeros_usados('LIQUIDACOES'))
+
+        planilha = self.client.get(
+            reverse('controle_relatorio') + '?aba=LIQUIDACOES&secao=analises')
+        self.assertContains(planilha, 'tr-relatorio-historico')
+        self.assertContains(planilha, '200/2026')
+        self.assertContains(planilha, '56 A')

@@ -423,7 +423,10 @@ def listar_processos(request):
             pendencias__status__in=Pendencia.STATUS_ABERTOS), distinct=True),
         tem_evento_cadastro=Exists(EventoProcesso.objects.filter(
             processo=OuterRef('pk'), tipo='PROCESSO_CADASTRADO')),
-    ).order_by('data_entrada', 'hora_entrada', 'id')
+    )
+    # Mesma ordem da fila / Para assinar: Urgente → Prioritário → Normal,
+    # e dentro de cada faixa a entrada mais antiga.
+    processos_query = ordem_fila(processos_query)
 
     # Totais sobre o conjunto filtrado (antes da paginação).
     # select_related(None) evita o FieldError do Django 5.2: um FK não pode

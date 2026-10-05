@@ -267,7 +267,7 @@ Fila completa dos dois grupos. Use para ver o estoque e **alterar a prioridade**
 
 A ação da linha é **Ver** — não existe **Assumir** para a Gestão.
 
-Se um analista assumiu por engano e o processo ficou preso, use **Fila sem análise**. O processo volta a ficar disponível.
+Se um analista assumiu por engano e o processo ficou preso, use **Devolver à fila**. O processo volta a ficar disponível (a análise em andamento é limpa).
 
 ### 5.3 Para assinar
 

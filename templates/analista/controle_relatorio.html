@@ -87,15 +87,15 @@
                             <th>Nº relatório</th>
                             <th>Data do relatório</th>
                             <th class="col-sticky">Nº processo</th>
+                            <th>Analista</th>
+                            <th>Secretaria</th>
+                            <th>Objeto</th>
                             <th>Espécie</th>
                             <th>Volume</th>
-                            <th>Secretaria</th>
                             <th>Contratada / Favorecido</th>
-                            <th>Objeto</th>
                             <th>Valor</th>
                             <th>Período</th>
                             <th>Destino</th>
-                            <th>Analista</th>
                             <th>Status da análise</th>
                             <th>Observação</th>
                             <th class="col-actions{% if not pode_cancelar_linha_relatorio and not pode_apagar_linha_relatorio %} col-actions--compact{% endif %}">Ações</th>
@@ -104,7 +104,9 @@
                     <tbody>
                         {% for linha in linhas %}
                         <tr class="{{ linha.linha_css_class }}"
-                            {% if linha.situacao_linha == 'RESERVADA' or linha.situacao_linha == 'CANCELADA' %}title="Número cancelado — disponível para reuso"
+                            {% if linha.situacao_linha == 'RESERVADA' %}title="Número liberado ao voltar à fila — reaproveitado no mesmo dia ao gerar número"
+                            {% elif linha.situacao_linha == 'CANCELADA' %}title="Número cancelado — disponível para reuso"
+                            {% elif linha.situacao_linha == 'HISTORICA' %}title="Número histórico importado da planilha Excel"
                             {% elif linha.sem_relatorio and linha.numero_relatorio %}title="Número reservado e vinculado — permanece sem relatório (amarelo)"
                             {% elif linha.sem_relatorio %}title="Processo despachado sem relatório"{% endif %}>
                             <td>
@@ -122,26 +124,48 @@
                                 {{ linha.numero_processo }}
                                 {% endif %}
                             </td>
+                            <td>{{ linha.analista|default:"—" }}</td>
+                            <td>{{ linha.secretaria|default:"—" }}</td>
+                            <td class="cell-wrap">{{ linha.objeto|truncatechars:80|default:"—" }}</td>
                             <td>{{ linha.processo.especie|default:"—" }}</td>
                             <td>{{ linha.volume|default:"—" }}</td>
-                            <td>{{ linha.secretaria|default:"—" }}</td>
                             <td>{{ linha.contratada|default:"—" }}</td>
-                            <td class="cell-wrap">{{ linha.objeto|truncatechars:80|default:"—" }}</td>
                             <td>{{ linha.valor|default:"—" }}</td>
                             <td>{{ linha.periodo|default:"—" }}</td>
                             <td>{{ linha.destino|default:"—" }}</td>
-                            <td>{{ linha.analista|default:"—" }}</td>
                             <td>{{ linha.status_analise_display }}</td>
                             <td class="cell-wrap">{{ linha.observacao|truncatechars:60|default:"—" }}</td>
                             <td class="col-actions {% if not pode_cancelar_linha_relatorio and not pode_apagar_linha_relatorio %}col-actions--compact{% endif %}">
                                 <div class="actions">
+                                    {% if pode_cancelar_linha_relatorio and linha.numero_relatorio %}
+                                    <button type="button" class="icon-btn icon-btn--primary"
+                                            title="Editar linha da planilha"
+                                            data-modal-open="modalEditarLinha"
+                                            data-editar-linha="{{ linha.id }}"
+                                            data-editar-grupo="{{ aba }}"
+                                            data-editar-numero="{{ linha.numero_relatorio|escape }}"
+                                            data-editar-data="{{ linha.data_relatorio|date:'Y-m-d' }}"
+                                            data-editar-processo="{{ linha.numero_processo|escape }}"
+                                            data-editar-volume="{{ linha.volume|escape }}"
+                                            data-editar-secretaria="{{ linha.secretaria|escape }}"
+                                            data-editar-contratada="{{ linha.contratada|escape }}"
+                                            data-editar-objeto="{{ linha.objeto|escape }}"
+                                            data-editar-valor="{{ linha.valor|escape }}"
+                                            data-editar-periodo="{{ linha.periodo|escape }}"
+                                            data-editar-destino="{{ linha.destino|escape }}"
+                                            data-editar-analista="{{ linha.analista|escape }}"
+                                            data-editar-observacao="{{ linha.observacao|escape }}"
+                                            data-editar-sem="{% if linha.sem_relatorio %}1{% else %}0{% endif %}">
+                                        <span class="material-symbols-rounded">edit</span>
+                                    </button>
+                                    {% endif %}
                                     {% if linha.processo_id %}
                                     <a href="{% url 'analista_processo' linha.processo_id %}?next={% url 'controle_relatorio' %}%3Faba%3D{{ aba }}%26secao%3Danalises"
-                                       class="icon-btn icon-btn--primary" title="Editar análise">
-                                        <span class="material-symbols-rounded">edit</span>
+                                       class="icon-btn" title="Abrir análise do processo">
+                                        <span class="material-symbols-rounded">open_in_new</span>
                                     </a>
                                     {% elif pode_cancelar_linha_relatorio and linha.numero_relatorio and not linha.processo_id %}
-                                        {% if linha.situacao_linha == 'CANCELADA' or linha.situacao_linha == 'RESERVADA' %}
+                                        {% if linha.situacao_linha == 'CANCELADA' or linha.situacao_linha == 'RESERVADA' or linha.situacao_linha == 'HISTORICA' %}
                                     <button type="button" class="icon-btn icon-btn--primary"
                                             title="Vincular processo a este número"
                                             data-modal-open="modalVincularProcesso"
@@ -150,6 +174,27 @@
                                             data-vincular-grupo="{{ aba }}">
                                         <span class="material-symbols-rounded">link</span>
                                     </button>
+                                        {% endif %}
+                                    {% endif %}
+                                    {% if pode_cancelar_linha_relatorio and linha.numero_relatorio %}
+                                        {% if linha.situacao_linha == 'ATIVA' or linha.situacao_linha == 'HISTORICA' %}
+                                    <form method="post" action="{% url 'controle_relatorio_sem_relatorio' linha.id %}" style="display:inline;">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="grupo" value="{{ aba }}">
+                                        {% if linha.sem_relatorio %}
+                                        <button type="submit" class="icon-btn icon-btn--primary"
+                                                title="Tirar marca de sem relatório"
+                                                onclick="return confirm('Remover a marca de sem relatório do nº {{ linha.numero_relatorio }}?');">
+                                            <span class="material-symbols-rounded">assignment</span>
+                                        </button>
+                                        {% else %}
+                                        <button type="submit" class="icon-btn"
+                                                title="Marcar como sem relatório (amarelo)"
+                                                onclick="return confirm('Marcar o nº {{ linha.numero_relatorio }} como sem relatório? A linha fica amarela.');">
+                                            <span class="material-symbols-rounded">sticky_note_2</span>
+                                        </button>
+                                        {% endif %}
+                                    </form>
                                         {% endif %}
                                     {% endif %}
                                     {% if pode_cancelar_linha_relatorio and linha.situacao_linha == 'ATIVA' and linha.numero_relatorio %}
@@ -258,7 +303,9 @@
                 </div>
                 <div class="modal__body">
                     <p style="margin:0 0 14px; color:var(--text-muted); line-height:1.45;">
-                        Informe o nº de um processo já cadastrado. O número cancelado volta a ficar ativo nessa análise.
+                        Digite o nº do processo. Ele entra nesta linha e, se existir
+                        no sistema, as informações da <strong>última passagem</strong>
+                        preenchem a planilha — mesmo se o processo já tiver saído.
                     </p>
                     <form method="post" id="formVincularProcesso" data-acao="{% url 'controle_relatorio_vincular_linha' 0 %}">
                         {% csrf_token %}
@@ -271,7 +318,7 @@
                         <div class="form-actions" style="display:flex; flex-direction:column; gap:10px; margin-top:14px;">
                             <button type="submit" class="btn btn--primary">
                                 <span class="material-symbols-rounded">link</span>
-                                Vincular processo
+                                Preencher com o processo
                             </button>
                             <button type="button" class="btn btn--outline" data-modal-close="modalVincularProcesso">
                                 Voltar
@@ -299,6 +346,121 @@
                     campo.value = '';
                     setTimeout(function () { campo.focus(); }, 50);
                 }
+            });
+        })();
+        </script>
+
+        <div class="modal" id="modalEditarLinha" role="dialog" aria-labelledby="tituloEditarLinha">
+            <div class="modal__dialog">
+                <div class="modal__header">
+                    <span class="modal__title" id="tituloEditarLinha">
+                        Editar nº <span data-editar-rotulo></span>
+                    </span>
+                    <button type="button" class="icon-btn" data-modal-close="modalEditarLinha" aria-label="Fechar">
+                        <span class="material-symbols-rounded">close</span>
+                    </button>
+                </div>
+                <div class="modal__body">
+                    <form method="post" id="formEditarLinha" data-acao="{% url 'controle_relatorio_editar_linha' 0 %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="grupo" value="{{ aba }}">
+                        <div class="form-grid">
+                            <div class="field">
+                                <label class="field__label" for="editar_data">Data do relatório</label>
+                                <input type="date" id="editar_data" name="data_relatorio" class="input" required>
+                            </div>
+                            <div class="field">
+                                <label class="field__label" for="editar_processo">Nº do processo</label>
+                                <input type="text" id="editar_processo" name="numero_processo" class="input" autocomplete="off">
+                            </div>
+                            <div class="field">
+                                <label class="field__label" for="editar_analista">Analista / Relator</label>
+                                <input type="text" id="editar_analista" name="analista" class="input">
+                            </div>
+                            <div class="field field--wide">
+                                <label class="field__label" for="editar_secretaria">Secretaria</label>
+                                <input type="text" id="editar_secretaria" name="secretaria" class="input">
+                            </div>
+                            <div class="field field--wide">
+                                <label class="field__label" for="editar_objeto">Objeto</label>
+                                <textarea id="editar_objeto" name="objeto" class="textarea" rows="2"></textarea>
+                            </div>
+                            <div class="field">
+                                <label class="field__label" for="editar_volume">Volume</label>
+                                <input type="text" id="editar_volume" name="volume" class="input">
+                            </div>
+                            <div class="field field--wide">
+                                <label class="field__label" for="editar_contratada">Contratada / Favorecido</label>
+                                <input type="text" id="editar_contratada" name="contratada" class="input">
+                            </div>
+                            <div class="field">
+                                <label class="field__label" for="editar_valor">Valor</label>
+                                <input type="text" id="editar_valor" name="valor" class="input">
+                            </div>
+                            <div class="field">
+                                <label class="field__label" for="editar_periodo">Período</label>
+                                <input type="text" id="editar_periodo" name="periodo" class="input">
+                            </div>
+                            <div class="field">
+                                <label class="field__label" for="editar_destino">Destino</label>
+                                <input type="text" id="editar_destino" name="destino" class="input">
+                            </div>
+                            <div class="field field--wide">
+                                <label class="field__label" for="editar_observacao">Observação</label>
+                                <textarea id="editar_observacao" name="observacao" class="textarea" rows="2"></textarea>
+                            </div>
+                            <div class="field field--wide">
+                                <label class="check">
+                                    <input type="checkbox" id="editar_sem" name="sem_relatorio" value="1">
+                                    <span>Sem relatório (linha amarela)</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-actions" style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
+                            <button type="submit" class="btn btn--primary">
+                                <span class="material-symbols-rounded">save</span>
+                                Salvar
+                            </button>
+                            <button type="button" class="btn btn--outline" data-modal-close="modalEditarLinha">
+                                Cancelar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <script>
+        (function () {
+            var form = document.getElementById('formEditarLinha');
+            if (!form) return;
+            var rotulo = document.querySelector('[data-editar-rotulo]');
+            var mapa = {
+                data_relatorio: 'data-editar-data',
+                numero_processo: 'data-editar-processo',
+                volume: 'data-editar-volume',
+                secretaria: 'data-editar-secretaria',
+                contratada: 'data-editar-contratada',
+                objeto: 'data-editar-objeto',
+                valor: 'data-editar-valor',
+                periodo: 'data-editar-periodo',
+                destino: 'data-editar-destino',
+                analista: 'data-editar-analista',
+                observacao: 'data-editar-observacao'
+            };
+            document.addEventListener('click', function (event) {
+                var botao = event.target.closest('[data-editar-linha]');
+                if (!botao) return;
+                var id = botao.getAttribute('data-editar-linha');
+                form.action = form.getAttribute('data-acao').replace('/0/', '/' + id + '/');
+                var grupo = botao.getAttribute('data-editar-grupo');
+                if (grupo) form.querySelector('[name="grupo"]').value = grupo;
+                if (rotulo) rotulo.textContent = botao.getAttribute('data-editar-numero') || '—';
+                Object.keys(mapa).forEach(function (nome) {
+                    var campo = form.querySelector('[name="' + nome + '"]');
+                    if (campo) campo.value = botao.getAttribute(mapa[nome]) || '';
+                });
+                var sem = form.querySelector('#editar_sem');
+                if (sem) sem.checked = botao.getAttribute('data-editar-sem') === '1';
             });
         })();
         </script>
@@ -665,6 +827,52 @@
                         {% endfor %}
                     </tbody>
                 </table>
+            </div>
+        </section>
+
+        <section class="card">
+            <div class="card__header">
+                <span class="card__title">Importar planilha antiga (Excel)</span>
+                <span class="card__hint">Números históricos entram na planilha de análises</span>
+            </div>
+            <div class="card__body">
+                <p style="margin:0 0 14px; color:var(--text-muted, #5b6472); line-height:1.45;">
+                    Envie o .xlsx do Controle de Relatórios (ex.: Liquidações).
+                    As linhas aparecem como histórico; linhas amarelas da planilha
+                    entram como “sem relatório”. Números já ativos no sistema
+                    não são sobrescritos. O próximo número do grupo passa a ser
+                    depois do maior número da planilha.
+                </p>
+                <form method="post" action="{% url 'controle_relatorio_importar' %}"
+                      enctype="multipart/form-data" class="stack" style="gap:12px;">
+                    {% csrf_token %}
+                    <div class="form-grid">
+                        <div class="field">
+                            <label class="field__label" for="grupoImportacao">Grupo de numeração</label>
+                            <select id="grupoImportacao" name="grupo" class="select" required>
+                                {% for item in estados_numeracao %}
+                                <option value="{{ item.codigo }}"
+                                    {% if item.codigo == aba %}selected{% endif %}>
+                                    {{ item.nome }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label class="field__label" for="arquivoPlanilha">Arquivo .xlsx</label>
+                            <input id="arquivoPlanilha" type="file" name="planilha"
+                                   class="input" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                   required>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn--primary"
+                                onclick="return confirm('Importar esta planilha para o grupo selecionado?');">
+                            <span class="material-symbols-rounded">upload_file</span>
+                            Importar Excel
+                        </button>
+                    </div>
+                </form>
             </div>
         </section>
 

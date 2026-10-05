@@ -759,10 +759,12 @@ class LinhaControleRelatorio(models.Model):
     SITUACAO_ATIVA = 'ATIVA'
     SITUACAO_RESERVADA = 'RESERVADA'
     SITUACAO_CANCELADA = 'CANCELADA'
+    SITUACAO_HISTORICA = 'HISTORICA'
     SITUACAO_CHOICES = [
         (SITUACAO_ATIVA, 'Ativa'),
         (SITUACAO_RESERVADA, 'Número guardado'),
         (SITUACAO_CANCELADA, 'Excluída da sequência'),
+        (SITUACAO_HISTORICA, 'Histórico importado'),
     ]
 
     processo = models.OneToOneField(
@@ -809,8 +811,11 @@ class LinhaControleRelatorio(models.Model):
             return 'tr-relatorio-reservado'
         if self.situacao_linha == self.SITUACAO_CANCELADA:
             return 'tr-relatorio-cancelado'
+        # Sem relatório (amarelo) vale também para histórico importado.
         if self.sem_relatorio:
             return 'tr-sem-relatorio'
+        if self.situacao_linha == self.SITUACAO_HISTORICA:
+            return 'tr-relatorio-historico'
         return ''
 
     class Meta:

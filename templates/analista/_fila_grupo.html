@@ -100,12 +100,12 @@
                                 </a>
                                 {% if not modo_gestao %}
                                 <form method="post" action="{% url 'tram_declinar_analise' processo.id %}"
-                                      onsubmit="return confirm('Devolver este processo à fila sem análise? Ele ficará disponível de novo.');">
+                                      onsubmit="return confirm('Devolver este processo à fila?\n\nA análise em andamento será limpa (incluindo número de relatório, se houver) e o processo ficará disponível de novo.');">
                                     {% csrf_token %}
-                                    <input type="hidden" name="motivo" value="Encaminhado para a fila sem análise">
-                                    <button type="submit" class="btn btn--outline btn--sm" title="Fila sem análise">
+                                    <input type="hidden" name="motivo" value="Devolvido à fila">
+                                    <button type="submit" class="btn btn--outline btn--sm" title="Devolver à fila">
                                         <span class="material-symbols-rounded">undo</span>
-                                        Fila sem análise
+                                        Devolver à fila
                                     </button>
                                 </form>
                                 {% endif %}
@@ -123,13 +123,13 @@
                                 {% if modo_gestao or pode_desfazer_tramite %}
                                 {% if processo.situacao_tramite == 'EM_ANALISE' %}
                                 <form method="post" action="{% url 'tram_declinar_analise' processo.id %}"
-                                      onsubmit="return confirm('Devolver este processo à fila sem análise? Ele ficará disponível de novo.');">
+                                      onsubmit="return confirm('Devolver este processo à fila?\n\nA análise em andamento será limpa (incluindo número de relatório, se houver) e o processo ficará disponível de novo.');">
                                     {% csrf_token %}
-                                    <input type="hidden" name="motivo" value="Encaminhado para a fila sem análise">
+                                    <input type="hidden" name="motivo" value="Devolvido à fila">
                                     <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                    <button type="submit" class="btn btn--outline btn--sm" title="Fila sem análise">
+                                    <button type="submit" class="btn btn--outline btn--sm" title="Devolver à fila">
                                         <span class="material-symbols-rounded">undo</span>
-                                        Fila sem análise
+                                        Devolver à fila
                                     </button>
                                 </form>
                                 {% elif pode_desfazer_tramite %}
