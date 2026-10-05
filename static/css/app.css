@@ -1823,64 +1823,129 @@ button.encaminhamento__opcao:disabled {
 .fila-grupo__subnav {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 10px 14px;
+    gap: 12px;
+    padding: 12px 14px;
     overflow-x: auto;
     scrollbar-width: thin;
     border-bottom: 1px solid var(--border);
-    background: var(--surface-2);
+    background: color-mix(in srgb, #0f5c5c 8%, var(--surface-2));
 }
 
-.fila-grupo__chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
+.fila-grupo__subnav-label {
     flex-shrink: 0;
-    height: 28px;
-    padding: 0 11px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-full);
-    background: var(--surface);
-    color: var(--text-muted);
-    text-decoration: none;
-    font-size: 12.5px;
-    font-weight: 600;
-    letter-spacing: 0;
-    text-transform: none;
-    white-space: nowrap;
-    transition: background .13s ease, color .13s ease, border-color .13s ease;
-}
-
-.fila-grupo__chip:hover {
-    color: var(--text);
-    border-color: var(--border-strong, var(--border));
-    background: var(--surface-3, var(--surface));
-    text-decoration: none;
-}
-
-.fila-grupo__chip.is-active {
+    font-size: 11px;
+    font-weight: 750;
+    letter-spacing: .08em;
+    text-transform: uppercase;
     color: #0f5c5c;
-    border-color: #0f5c5c;
-    background: rgba(15, 92, 92, .1);
 }
 
-.fila-grupo__chip-count {
+.fila-grupo__switches {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    flex: 1;
+    min-width: 0;
+    border: 1px solid #0f5c5c;
+    border-radius: 10px;
+    background: var(--surface);
+    overflow: hidden;
+}
+
+.fila-grupo__switch {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    border-radius: var(--radius-full);
-    background: rgba(15, 92, 92, .12);
-    color: #0f5c5c;
-    font-size: 11px;
-    font-weight: 700;
+    gap: 7px;
+    flex: 1 1 auto;
+    min-width: max-content;
+    height: 36px;
+    padding: 0 14px;
+    border: 0;
+    border-right: 1px solid color-mix(in srgb, #0f5c5c 35%, var(--border));
+    border-radius: 0;
+    background: transparent;
+    color: var(--text);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 650;
+    letter-spacing: 0;
+    text-transform: none;
+    white-space: nowrap;
+    transition: background .15s ease, color .15s ease;
 }
 
-.fila-grupo__chip:not(.is-active) .fila-grupo__chip-count {
-    background: var(--surface-3, rgba(0, 0, 0, .06));
-    color: var(--text-muted);
+.fila-grupo__switch:last-child {
+    border-right: 0;
+}
+
+.fila-grupo__switch:hover {
+    background: color-mix(in srgb, #0f5c5c 12%, transparent);
+    color: var(--text);
+    text-decoration: none;
+}
+
+.fila-grupo__switch.is-active {
+    background: #0f5c5c;
+    color: #f8fafc;
+    box-shadow: inset 0 0 0 1px #0f5c5c;
+}
+
+.fila-grupo__switch-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: var(--radius-full);
+    background: color-mix(in srgb, #0f5c5c 14%, var(--surface-2));
+    color: #0f5c5c;
+    font-size: 11px;
+    font-weight: 750;
+}
+
+.fila-grupo__switch.is-active .fila-grupo__switch-count {
+    background: rgba(248, 250, 252, .22);
+    color: #f8fafc;
+}
+
+[data-theme="dark"] .fila-grupo__subnav {
+    background: color-mix(in srgb, #14b8a6 10%, var(--surface-2));
+}
+
+[data-theme="dark"] .fila-grupo__subnav-label {
+    color: #5eead4;
+}
+
+[data-theme="dark"] .fila-grupo__switches {
+    border-color: #2dd4bf;
+    background: #0b1220;
+}
+
+[data-theme="dark"] .fila-grupo__switch {
+    border-right-color: rgba(45, 212, 191, .28);
+    color: #e2e8f0;
+}
+
+[data-theme="dark"] .fila-grupo__switch:hover {
+    background: rgba(45, 212, 191, .12);
+}
+
+[data-theme="dark"] .fila-grupo__switch.is-active {
+    background: #0f766e;
+    color: #f0fdfa;
+    box-shadow: inset 0 0 0 1px #2dd4bf;
+}
+
+[data-theme="dark"] .fila-grupo__switch-count {
+    background: rgba(45, 212, 191, .16);
+    color: #5eead4;
+}
+
+[data-theme="dark"] .fila-grupo__switch.is-active .fila-grupo__switch-count {
+    background: rgba(240, 253, 250, .2);
+    color: #f0fdfa;
 }
 
 .fila-grupo--licitacoes .fila-grupo__banner {

@@ -101,8 +101,10 @@ SEQUENCIAS = [
     {
         'nome': 'Auxílio Competição',
         'codigo': 'AUXILIO_COMPETICAO',
-        'especies': [],
-        'obs': 'Espécie ainda não cadastrada no sistema.',
+        'especies': [
+            'Concessão Aux. Competição',
+            'P.C. Aux. Competição',
+        ],
     },
     {
         'nome': 'Diária',

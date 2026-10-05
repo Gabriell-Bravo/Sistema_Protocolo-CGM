@@ -31,7 +31,9 @@
                         <th>Volume</th>
                         <th>Secretaria de origem</th>
                         <th>Entrada</th>
+                        <th>Entrada por</th>
                         <th>Saída</th>
+                        <th>Saída por</th>
                         <th>Destino</th>
                         <th>Permanência</th>
                         <th>Situação</th>
@@ -44,7 +46,9 @@
                         <td>{{ passagem.volume|default:'—' }}</td>
                         <td class="cell-wrap">{{ passagem.secretaria|default:'—' }}</td>
                         <td>{{ passagem.entrada|default:'—' }}</td>
+                        <td>{{ passagem.entrada_por|default:'—' }}</td>
                         <td>{{ passagem.saida|default:'—' }}</td>
+                        <td>{{ passagem.saida_por|default:'—' }}</td>
                         <td class="cell-wrap">{{ passagem.destino|default:'—' }}</td>
                         <td>{{ passagem.dias_permanencia }} dia{{ passagem.dias_permanencia|pluralize:"s" }}</td>
                         <td>

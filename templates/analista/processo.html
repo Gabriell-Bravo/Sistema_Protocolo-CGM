@@ -140,24 +140,27 @@
             </span>
         </div>
         <div class="meta-item">
-            <span class="meta-item__label">Contratada / Favorecido / Interessado</span>
+            <span class="meta-item__label">{% if layout_planilha %}{{ layout_planilha.rotulos.contratada }}{% else %}Contratada / Favorecido / Interessado{% endif %}</span>
             <div class="meta-view">
                 <span class="meta-item__value">{{ processo.contratada|default:'—' }}</span>
             </div>
             {% if pode_editar %}
+            {% if not layout_planilha or 'contratada' not in layout_planilha.formulario %}
             <div class="meta-edit" hidden>
                 <input type="text" name="contratada" form="formAnalise" class="input" disabled
                        value="{{ processo.contratada|default:'' }}"
                        data-inicial="{{ processo.contratada|default:'' }}">
             </div>
             {% endif %}
+            {% endif %}
         </div>
         <div class="meta-item">
-            <span class="meta-item__label">Secretaria</span>
+            <span class="meta-item__label">{% if layout_planilha %}{{ layout_planilha.rotulos.secretaria }}{% else %}Secretaria{% endif %}</span>
             <div class="meta-view">
                 <span class="meta-item__value">{{ processo.secretaria|default:'—' }}</span>
             </div>
             {% if pode_editar %}
+            {% if not layout_planilha or 'secretaria' not in layout_planilha.formulario %}
             <div class="meta-edit" hidden>
                 <select name="secretaria" form="formAnalise" class="select" required disabled data-inicial="{{ processo.secretaria|default:'' }}">
                     {% for nome in secretarias %}
@@ -169,17 +172,20 @@
                 </select>
             </div>
             {% endif %}
+            {% endif %}
         </div>
         <div class="meta-item meta-item--wide">
-            <span class="meta-item__label">Objeto</span>
+            <span class="meta-item__label">{% if layout_planilha %}{{ layout_planilha.rotulos.objeto }}{% else %}Objeto{% endif %}</span>
             <div class="meta-view">
                 <span class="meta-item__value">{{ processo.objeto }}</span>
             </div>
             {% if pode_editar %}
+            {% if not layout_planilha or 'objeto' not in layout_planilha.formulario %}
             <div class="meta-edit" hidden>
                 <textarea name="objeto" form="formAnalise" class="textarea" rows="2" required disabled
                           data-inicial="{{ processo.objeto }}">{{ processo.objeto }}</textarea>
             </div>
+            {% endif %}
             {% endif %}
         </div>
         {% if pode_editar or processo.observacao_protocolo %}
@@ -306,15 +312,20 @@
         <div class="form-section">
             <div class="form-section__title">
                 <span class="material-symbols-rounded">edit_note</span>
-                {% if eh_liquidacao %}Informações da liquidação{% else %}Alimentar análise{% endif %}
+                {% if layout_planilha %}{{ layout_planilha.titulo }}{% elif eh_liquidacao %}Informações da liquidação{% else %}Alimentar análise{% endif %}
             </div>
             {% if eh_licitacao %}
             <p class="field__hint" style="margin:-6px 0 14px;">Opcional para este grupo. O registro principal é o arquivo anexado acima.</p>
+            {% elif layout_planilha %}
+            <p class="field__hint" style="margin:-6px 0 14px;">
+                Campos iguais à planilha de <strong>{{ sequencia_relatorio_nome }}</strong>
+                (Controle de Relatórios). Número e data do relatório ficam acima; o restante alimenta a planilha.
+            </p>
             {% endif %}
             <div class="form-grid form-grid--full">
                 {% if eh_liquidacao %}
                 <div class="field" id="blocoNumeroRelatorio">
-                    <label class="field__label" for="numero_relatorio_exibicao">Número do relatório</label>
+                    <label class="field__label" for="numero_relatorio_exibicao">{% if layout_planilha %}{{ layout_planilha.rotulos.numero_relatorio }}{% else %}Número do relatório{% endif %}</label>
                     {% if pode_editar_numero_relatorio %}
                     <div class="pendencia-add__row" id="numeroRelatorioExibicao">
                         <input type="text" id="numero_relatorio_exibicao" class="input" value="{% if processo.numero_relatorio %}Relatório {{ processo.numero_relatorio }}{% else %}Ainda sem número — use Gerar número, o lápis, ou vincule no Controle{% endif %}" readonly>
@@ -333,7 +344,7 @@
                                            placeholder="Informe o número" disabled>
                                 </div>
                                 <div class="field">
-                                    <label class="field__label" for="data_relatorio">Data deste número</label>
+                                    <label class="field__label" for="data_relatorio">{% if layout_planilha %}{{ layout_planilha.rotulos.data_relatorio }}{% else %}Data deste número{% endif %}</label>
                                     <input type="date" id="data_relatorio" name="data_relatorio"
                                            {% if not pode_editar %}form="formNumeroRelatorio"{% endif %}
                                            class="input"
@@ -374,7 +385,7 @@
                     {% endif %}
                 </div>
                 <div class="field" id="dataRelatorioExibicaoCampo">
-                    <label class="field__label" for="data_relatorio_exibicao">Data do relatório</label>
+                    <label class="field__label" for="data_relatorio_exibicao">{% if layout_planilha %}{{ layout_planilha.rotulos.data_relatorio }}{% else %}Data do relatório{% endif %}</label>
                     <input type="date" id="data_relatorio_exibicao" class="input"
                            value="{% if processo.data_analise %}{{ processo.data_analise|date:'Y-m-d' }}{% else %}{% now 'Y-m-d' %}{% endif %}"
                            readonly>
@@ -385,7 +396,81 @@
                     <input type="text" class="input" value="{{ sequencia_relatorio_nome }}" readonly>
                     <span class="field__hint">Definido pela espécie do processo{% if processo.sequencia_relatorio %} (ajustado pelo administrador){% endif %}.</span>
                 </div>
-                {% endif %}
+
+                {% if layout_planilha %}
+                    {% for campo in layout_planilha.formulario %}
+                        {% if campo == 'valor' %}
+                        <div class="field">
+                            <label class="field__label" for="valor">{{ layout_planilha.rotulos.valor }}</label>
+                            <input type="text" id="valor" name="valor" class="input" inputmode="decimal" autocomplete="off"
+                                   value="{{ valor_exibicao }}" placeholder="R$ 0,00" {% if not pode_editar %}readonly{% endif %}>
+                        </div>
+                        {% elif campo == 'destino' %}
+                        <div class="field">
+                            <label class="field__label" for="destino">{{ layout_planilha.rotulos.destino }}</label>
+                            <select id="destino" name="destino" class="select" {% if not pode_editar %}disabled{% endif %}>
+                                <option value="">Selecione</option>
+                                {% for nome in secretarias %}
+                                    <option value="{{ nome }}" {% if processo.destino == nome %}selected{% endif %}>{{ nome }}</option>
+                                {% endfor %}
+                                {% if processo.destino and processo.destino not in secretarias %}
+                                    <option value="{{ processo.destino }}" selected>{{ processo.destino }}</option>
+                                {% endif %}
+                            </select>
+                        </div>
+                        {% elif campo == 'periodo' %}
+                        <div class="field">
+                            <label class="field__label" for="periodo">{{ layout_planilha.rotulos.periodo }}</label>
+                            <input type="text" id="periodo" name="periodo" class="input" value="{{ processo.periodo|default:'' }}" {% if not pode_editar %}readonly{% endif %}>
+                            {% if layout_planilha.dicas.periodo %}<span class="field__hint">{{ layout_planilha.dicas.periodo }}</span>{% endif %}
+                        </div>
+                        {% elif campo == 'contratada' %}
+                        <div class="field">
+                            <label class="field__label" for="contratada_analise">{{ layout_planilha.rotulos.contratada }}</label>
+                            <input type="text" id="contratada_analise" name="contratada" class="input"
+                                   value="{{ processo.contratada|default:'' }}" {% if not pode_editar %}readonly{% endif %}>
+                        </div>
+                        {% elif campo == 'secretaria' %}
+                        <div class="field">
+                            <label class="field__label" for="secretaria_analise">{{ layout_planilha.rotulos.secretaria }}</label>
+                            <select id="secretaria_analise" name="secretaria" class="select" {% if not pode_editar %}disabled{% endif %}>
+                                <option value="">Selecione</option>
+                                {% for nome in secretarias %}
+                                    <option value="{{ nome }}" {% if processo.secretaria == nome %}selected{% endif %}>{{ nome }}</option>
+                                {% endfor %}
+                                {% if processo.secretaria and processo.secretaria not in secretarias %}
+                                    <option value="{{ processo.secretaria }}" selected>{{ processo.secretaria }}</option>
+                                {% endif %}
+                            </select>
+                        </div>
+                        {% elif campo == 'objeto' %}
+                        <div class="field field--wide">
+                            <label class="field__label" for="objeto_analise">{{ layout_planilha.rotulos.objeto }}</label>
+                            <textarea id="objeto_analise" name="objeto" class="textarea" rows="2" {% if not pode_editar %}readonly{% endif %}>{{ processo.objeto }}</textarea>
+                            {% if layout_planilha.dicas.objeto %}<span class="field__hint">{{ layout_planilha.dicas.objeto }}</span>{% endif %}
+                        </div>
+                        {% elif campo == 'status_analise' %}
+                        <div class="field">
+                            <label class="field__label" for="status_analise">{{ layout_planilha.rotulos.status_analise }}</label>
+                            <select id="status_analise" name="status_analise" class="select" {% if not pode_editar %}disabled{% endif %}>
+                                {% for value, label in all_status_analise %}
+                                    <option value="{{ value }}" {% if processo.status_analise == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% elif campo == 'observacao' %}
+                        <div class="field field--wide">
+                            <label class="field__label" for="observacao">{{ layout_planilha.rotulos.observacao }}</label>
+                            <textarea id="observacao" name="observacao" class="textarea" rows="3" {% if not pode_editar %}readonly{% endif %}>{{ processo.observacao|default:'' }}</textarea>
+                            {% if layout_planilha.dicas.observacao %}<span class="field__hint">{{ layout_planilha.dicas.observacao }}</span>{% endif %}
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                    <div class="field">
+                        <label class="field__label" for="tecnico">Analista / relator</label>
+                        <input type="text" id="tecnico" class="input" value="{{ processo.nome_analista|default:'' }}" readonly>
+                    </div>
+                {% else %}
                 <div class="field">
                     <label class="field__label" for="valor">{% if eh_liquidacao %}Valor analisado{% else %}Valor{% endif %}</label>
                     <input type="text" id="valor" name="valor" class="input" inputmode="decimal" autocomplete="off"
@@ -429,6 +514,52 @@
                     <label class="field__label" for="observacao">Observação</label>
                     <textarea id="observacao" name="observacao" class="textarea" rows="4" {% if not pode_editar %}readonly{% endif %}>{{ processo.observacao|default:'' }}</textarea>
                 </div>
+                {% endif %}
+
+                {% else %}
+                <div class="field">
+                    <label class="field__label" for="valor">Valor</label>
+                    <input type="text" id="valor" name="valor" class="input" inputmode="decimal" autocomplete="off"
+                           value="{{ valor_exibicao }}" placeholder="R$ 0,00" {% if not pode_editar %}readonly{% endif %}>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="destino">Destino</label>
+                    <select id="destino" name="destino" class="select" {% if not pode_editar %}disabled{% endif %}>
+                        <option value="">Selecione a secretaria</option>
+                        {% for nome in secretarias %}
+                            <option value="{{ nome }}" {% if processo.destino == nome %}selected{% endif %}>{{ nome }}</option>
+                        {% endfor %}
+                        {% if processo.destino and processo.destino not in secretarias %}
+                            <option value="{{ processo.destino }}" selected>{{ processo.destino }}</option>
+                        {% endif %}
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="periodo">Período</label>
+                    <input type="text" id="periodo" name="periodo" class="input" value="{{ processo.periodo|default:'' }}" {% if not pode_editar %}readonly{% endif %}>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="tecnico">Analista / relator</label>
+                    <input type="text" id="tecnico" class="input" value="{{ processo.nome_analista|default:'' }}" readonly>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="numero_despacho">Nº de despacho</label>
+                    <input type="text" id="numero_despacho" name="numero_despacho" class="input" value="{{ processo.numero_despacho|default:'' }}" {% if not pode_editar %}readonly{% endif %}>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="status_analise">Status da análise</label>
+                    <select id="status_analise" name="status_analise" class="select" {% if not pode_editar %}disabled{% endif %}>
+                        {% for value, label in all_status_analise %}
+                            <option value="{{ value }}" {% if processo.status_analise == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field field--wide">
+                    <label class="field__label" for="observacao">Observação</label>
+                    <textarea id="observacao" name="observacao" class="textarea" rows="4" {% if not pode_editar %}readonly{% endif %}>{{ processo.observacao|default:'' }}</textarea>
+                </div>
+                {% endif %}
+
                 {% if eh_liquidacao %}
                 <div class="field field--checkbox field--wide">
                     <label class="check">
@@ -712,45 +843,6 @@
                 </li>
             {% endfor %}
         </ul>
-    </section>
-    {% endif %}
-
-    {% if passagens %}
-    <section class="table-card">
-        <div class="table-card__header">
-            <span class="table-card__title">Passagens pela CGM</span>
-            <span class="table-card__count">{{ passagens|length }} entrada{{ passagens|length|pluralize:"s" }}</span>
-        </div>
-        <div class="table-scroll table-scroll--compact">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Volume</th>
-                        <th>Entrada</th>
-                        <th>Saída</th>
-                        <th>Situação</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for passagem in passagens %}
-                    <tr {% if passagem.is_atual %}class="is-current"{% endif %}>
-                        <td>{{ passagem.ordem }}ª</td>
-                        <td>{{ passagem.volume|default:'—' }}</td>
-                        <td>{{ passagem.entrada|default:'—' }}</td>
-                        <td>{{ passagem.saida|default:'—' }}</td>
-                        <td>
-                            {% if passagem.em_andamento %}
-                                <span class="badge badge--warning">Em tramitação</span>
-                            {% else %}
-                                <span class="badge badge--success">Concluída</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
     </section>
     {% endif %}
 

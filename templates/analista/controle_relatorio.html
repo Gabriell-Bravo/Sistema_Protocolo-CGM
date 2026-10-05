@@ -84,17 +84,9 @@
                 <table class="table">
                     <thead>
                         <tr>
-                            <th>Nº relatório</th>
-                            <th>Data do relatório</th>
-                            <th class="col-sticky">Nº processo</th>
-                            <th>Analista</th>
-                            <th>Secretaria</th>
-                            <th>Objeto</th>
-                            <th>Valor</th>
-                            <th>Período</th>
-                            <th>Destino</th>
-                            <th>Status da análise</th>
-                            <th>Observação</th>
+                            {% for col in layout_planilha.colunas %}
+                            <th{% if col.campo == 'numero_processo' %} class="col-sticky"{% endif %}>{{ col.label }}</th>
+                            {% endfor %}
                             <th class="col-actions{% if not pode_cancelar_linha_relatorio and not pode_apagar_linha_relatorio %} col-actions--compact{% endif %}">Ações</th>
                         </tr>
                     </thead>
@@ -106,29 +98,39 @@
                             {% elif linha.situacao_linha == 'HISTORICA' %}title="Número histórico importado da planilha Excel"
                             {% elif linha.sem_relatorio and linha.numero_relatorio %}title="Número reservado e vinculado — permanece sem relatório (amarelo)"
                             {% elif linha.sem_relatorio %}title="Processo despachado sem relatório"{% endif %}>
-                            <td>
-                                {% if linha.numero_relatorio %}
-                                <strong>{{ linha.numero_relatorio }}</strong>
-                                {% else %}
-                                —
-                                {% endif %}
+                            {% for col in layout_planilha.colunas %}
+                            <td{% if col.campo == 'numero_processo' %} class="col-sticky"{% elif col.campo == 'objeto' or col.campo == 'observacao' %} class="cell-wrap"{% endif %}>
+                                {% if col.campo == 'numero_relatorio' %}
+                                    {% if linha.numero_relatorio %}<strong>{{ linha.numero_relatorio }}</strong>{% else %}—{% endif %}
+                                {% elif col.campo == 'data_relatorio' %}
+                                    {{ linha.data_relatorio|date:"d/m/Y"|default:"—" }}
+                                {% elif col.campo == 'numero_processo' %}
+                                    {% if linha.processo_id %}
+                                    <a href="{% url 'analista_processo' linha.processo_id %}">{{ linha.numero_processo }}</a>
+                                    {% else %}
+                                    {{ linha.numero_processo|default:"—" }}
+                                    {% endif %}
+                                {% elif col.campo == 'analista' %}
+                                    {{ linha.analista|default:"—" }}
+                                {% elif col.campo == 'secretaria' %}
+                                    {{ linha.secretaria|default:"—" }}
+                                {% elif col.campo == 'contratada' %}
+                                    {{ linha.contratada|default:"—" }}
+                                {% elif col.campo == 'objeto' %}
+                                    {{ linha.objeto|truncatechars:80|default:"—" }}
+                                {% elif col.campo == 'valor' %}
+                                    {{ linha.valor|default:"—" }}
+                                {% elif col.campo == 'periodo' %}
+                                    {{ linha.periodo|default:"—" }}
+                                {% elif col.campo == 'destino' %}
+                                    {{ linha.destino|default:"—" }}
+                                {% elif col.campo == 'status_analise' %}
+                                    {{ linha.status_analise_display }}
+                                {% elif col.campo == 'observacao' %}
+                                    {{ linha.observacao|truncatechars:60|default:"—" }}
+                                {% else %}—{% endif %}
                             </td>
-                            <td>{{ linha.data_relatorio|date:"d/m/Y" }}</td>
-                            <td class="col-sticky">
-                                {% if linha.processo_id %}
-                                <a href="{% url 'analista_processo' linha.processo_id %}">{{ linha.numero_processo }}</a>
-                                {% else %}
-                                {{ linha.numero_processo }}
-                                {% endif %}
-                            </td>
-                            <td>{{ linha.analista|default:"—" }}</td>
-                            <td>{{ linha.secretaria|default:"—" }}</td>
-                            <td class="cell-wrap">{{ linha.objeto|truncatechars:80|default:"—" }}</td>
-                            <td>{{ linha.valor|default:"—" }}</td>
-                            <td>{{ linha.periodo|default:"—" }}</td>
-                            <td>{{ linha.destino|default:"—" }}</td>
-                            <td>{{ linha.status_analise_display }}</td>
-                            <td class="cell-wrap">{{ linha.observacao|truncatechars:60|default:"—" }}</td>
+                            {% endfor %}
                             <td class="col-actions {% if not pode_cancelar_linha_relatorio and not pode_apagar_linha_relatorio %}col-actions--compact{% endif %}">
                                 <div class="actions">
                                     {% if pode_cancelar_linha_relatorio and linha.numero_relatorio %}
@@ -204,9 +206,9 @@
                                     </form>
                                         {% endif %}
                                     {% endif %}
-                                    {% if pode_cancelar_linha_relatorio and linha.situacao_linha == 'ATIVA' and linha.numero_relatorio %}
+                                    {% if pode_cancelar_linha_relatorio and linha.situacao_linha != 'CANCELADA' and linha.numero_relatorio %}
                                     <button type="button" class="icon-btn icon-btn--danger"
-                                            title="Cancelar relatório"
+                                            title="Cancelar relatório (libera o nº para reuso)"
                                             data-modal-open="modalCancelarRelatorio"
                                             data-cancelar-linha="{{ linha.id }}"
                                             data-cancelar-numero="{{ linha.numero_relatorio }}"
@@ -373,23 +375,23 @@
                         <input type="hidden" name="grupo" value="{{ aba }}">
                         <div class="form-grid">
                             <div class="field">
-                                <label class="field__label" for="editar_data">Data do relatório</label>
+                                <label class="field__label" for="editar_data">{{ layout_planilha.rotulos.data_relatorio }}</label>
                                 <input type="date" id="editar_data" name="data_relatorio" class="input" required>
                             </div>
                             <div class="field">
-                                <label class="field__label" for="editar_processo">Nº do processo</label>
+                                <label class="field__label" for="editar_processo">{{ layout_planilha.rotulos.numero_processo }}</label>
                                 <input type="text" id="editar_processo" name="numero_processo" class="input" autocomplete="off">
                             </div>
                             <div class="field">
-                                <label class="field__label" for="editar_analista">Analista / Relator</label>
+                                <label class="field__label" for="editar_analista">{{ layout_planilha.rotulos.analista }}</label>
                                 <input type="text" id="editar_analista" name="analista" class="input">
                             </div>
                             <div class="field field--wide">
-                                <label class="field__label" for="editar_secretaria">Secretaria</label>
+                                <label class="field__label" for="editar_secretaria">{{ layout_planilha.rotulos.secretaria }}</label>
                                 <input type="text" id="editar_secretaria" name="secretaria" class="input">
                             </div>
                             <div class="field field--wide">
-                                <label class="field__label" for="editar_objeto">Objeto</label>
+                                <label class="field__label" for="editar_objeto">{{ layout_planilha.rotulos.objeto }}</label>
                                 <textarea id="editar_objeto" name="objeto" class="textarea" rows="2"></textarea>
                             </div>
                             <div class="field">
@@ -397,23 +399,23 @@
                                 <input type="text" id="editar_volume" name="volume" class="input">
                             </div>
                             <div class="field field--wide">
-                                <label class="field__label" for="editar_contratada">Contratada / Favorecido</label>
+                                <label class="field__label" for="editar_contratada">{{ layout_planilha.rotulos.contratada }}</label>
                                 <input type="text" id="editar_contratada" name="contratada" class="input">
                             </div>
                             <div class="field">
-                                <label class="field__label" for="editar_valor">Valor</label>
+                                <label class="field__label" for="editar_valor">{{ layout_planilha.rotulos.valor }}</label>
                                 <input type="text" id="editar_valor" name="valor" class="input">
                             </div>
                             <div class="field">
-                                <label class="field__label" for="editar_periodo">Período</label>
+                                <label class="field__label" for="editar_periodo">{{ layout_planilha.rotulos.periodo }}</label>
                                 <input type="text" id="editar_periodo" name="periodo" class="input">
                             </div>
                             <div class="field">
-                                <label class="field__label" for="editar_destino">Destino</label>
+                                <label class="field__label" for="editar_destino">{{ layout_planilha.rotulos.destino }}</label>
                                 <input type="text" id="editar_destino" name="destino" class="input">
                             </div>
                             <div class="field field--wide">
-                                <label class="field__label" for="editar_observacao">Observação</label>
+                                <label class="field__label" for="editar_observacao">{{ layout_planilha.rotulos.observacao }}</label>
                                 <textarea id="editar_observacao" name="observacao" class="textarea" rows="2"></textarea>
                             </div>
                             <div class="field field--wide">
@@ -784,11 +786,13 @@
             </div>
             <div class="card__body">
                 <p style="margin:0 0 14px; color:var(--text-muted, #5b6472); line-height:1.45;">
-                    Envie o .xlsx do Controle de Relatórios (ex.: Liquidações).
-                    As linhas entram como histórico; amarelas da planilha viram
-                    “sem relatório”. Números já ativos no sistema não são
-                    sobrescritos. O próximo número do grupo passa a ser depois
-                    do maior da planilha.
+                    Envie o .xlsx do Controle de Relatórios (Liquidações ou o
+                    arquivo único de 2026 com várias abas). Use
+                    <strong>Todas as abas do arquivo</strong> para importar
+                    Adiantamento, Cota, Subvenção, Bolsa Atleta, Diárias,
+                    Blocos etc. de uma vez. As linhas entram como histórico;
+                    amarelas viram “sem relatório”. Números já ativos no
+                    sistema não são sobrescritos.
                 </p>
                 <form method="post" action="{% url 'controle_relatorio_importar' %}"
                       enctype="multipart/form-data" class="stack" style="gap:12px;">
@@ -797,10 +801,13 @@
                         <div class="field">
                             <label class="field__label" for="grupoImportacao">Grupo de numeração</label>
                             <select id="grupoImportacao" name="grupo" class="select" required>
+                                <option value="__TODAS__">
+                                    Todas as abas do arquivo (Controle 2026)
+                                </option>
                                 {% for item in estados_numeracao %}
                                 <option value="{{ item.codigo }}"
                                     {% if item.codigo == aba %}selected{% endif %}>
-                                    {{ item.nome }}
+                                    {{ item.nome }} — só esta aba
                                 </option>
                                 {% endfor %}
                             </select>

@@ -49,7 +49,7 @@
     <section class="filters">
         <div class="filters__chips">
             {% for chave, rotulo, quantidade in filtros_fila %}
-                <a href="?filtro={{ chave }}{% if seq_atual %}&seq={{ seq_atual }}{% endif %}{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}"
+                <a href="?filtro={{ chave }}{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}"
                    class="chip {% if filtro_atual == chave %}chip--ativo{% endif %}">
                     {{ rotulo }} <span class="chip__label">{{ quantidade }}</span>
                 </a>
@@ -61,7 +61,6 @@
         <div class="filters__bar">
             <form method="get" class="search">
                 <input type="hidden" name="filtro" value="{{ filtro_atual }}">
-                {% if seq_atual %}<input type="hidden" name="seq" value="{{ seq_atual }}">{% endif %}
                 <div class="search__field">
                     <span class="material-symbols-rounded search__icon">search</span>
                     <input type="text" name="pesquisa" class="input"
@@ -71,7 +70,7 @@
                 <button type="submit" class="btn btn--primary">Buscar</button>
             </form>
             {% if termo_pesquisa %}
-                <a href="{% url 'gestao_processos' %}{% if seq_atual %}?seq={{ seq_atual }}{% endif %}" class="btn btn--ghost">
+                <a href="{% url 'gestao_processos' %}" class="btn btn--ghost">
                     <span class="material-symbols-rounded">filter_alt_off</span>
                     Limpar
                 </a>
@@ -81,7 +80,11 @@
 
     {% include "analista/_fila_grupo.html" with titulo="Licitações e Contratos" grupo_css="licitacoes" icone="gavel" processos=licitacoes mostrar_contratada=True modo_gestao=modo_gestao pode_assumir=False %}
 
-    {% include "analista/_fila_grupo.html" with titulo="Liquidações" grupo_css="liquidacoes" icone="payments" processos=liquidacoes mostrar_contratada=True modo_gestao=modo_gestao pode_assumir=False abas_sequencia=abas_liquidacoes %}
+    {% for grupo in grupos_liquidacoes %}
+        {% include "analista/_fila_grupo.html" with titulo=grupo.nome grupo_css="liquidacoes" icone="payments" processos=grupo.processos mostrar_contratada=True modo_gestao=modo_gestao pode_assumir=False %}
+    {% empty %}
+        {% include "analista/_fila_grupo.html" with titulo="Liquidações" grupo_css="liquidacoes" icone="payments" processos=lista_vazia mostrar_contratada=True modo_gestao=modo_gestao pode_assumir=False %}
+    {% endfor %}
 </div>
 
 <div id="balao-urgencia" class="balao" hidden>

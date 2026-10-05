@@ -27,6 +27,8 @@ from .processos import converter_data, formatar_valor
 # Código legado da sequência geral (continua no banco como LIQUIDACOES).
 GRUPO_PADRAO = perm.GRUPO_LIQUIDACOES
 LIMITE_DESTINO = 80
+# Importa todas as abas reconhecidas do .xlsx unificado (Controle Relatórios 2026).
+GRUPO_IMPORTACAO_COMPLETA = '__TODAS__'
 
 SEQUENCIAS = (
     {
@@ -92,10 +94,12 @@ SEQUENCIAS = (
     {
         'codigo': 'AUXILIO_COMPETICAO',
         'nome': 'Auxílio Competição',
-        'especies': (),
+        'especies': (
+            'Concessão Aux. Competição',
+            'P.C. Aux. Competição',
+        ),
         'resumo': (
-            'Inclui (Auxílio Competição — ajuda de custo). '
-            'Espécie ainda não cadastrada no sistema.'
+            'Inclui (Concessão Aux. Competição; P.C. Aux. Competição).'
         ),
     },
     {
@@ -128,7 +132,6 @@ _ESPECIE_PARA_SEQUENCIA = {
 }
 
 # Sequências que já geram número próprio pela espécie.
-# Auxílio Competição fica de fora até a espécie ser cadastrada.
 SEQUENCIAS_ATIVAS = frozenset({
     GRUPO_PADRAO,
     'ADIANTAMENTO',
@@ -136,9 +139,270 @@ SEQUENCIAS_ATIVAS = frozenset({
     'SUBVENCAO',
     'ALUGUEL_SOCIAL',
     'BOLSA_ATLETA',
+    'AUXILIO_COMPETICAO',
     'DIARIA',
     'BLOCOS_CARNAVALESCOS',
 })
+
+
+# Layout da planilha de Controle por grupo (rótulos iguais ao Excel 2026).
+# Cada item: campo do modelo Processo/Linha → rótulo exibido.
+# Campos extras da planilha (quant, modalidade…) reusam periodo/observacao.
+_LAYOUT_PLANILHA = {
+    GRUPO_PADRAO: {
+        'titulo': 'Dados do relatório — Liquidação',
+        'rotulos': {
+            'analista': 'Relator',
+            'numero_relatorio': 'Nº relatório',
+            'data_relatorio': 'Data',
+            'numero_processo': 'Nº processo',
+            'secretaria': 'Secretaria',
+            'objeto': 'Objeto',
+            'periodo': 'Período',
+            'valor': 'Valor',
+            'destino': 'Destino',
+            'contratada': 'Contratada / Favorecido',
+            'observacao': 'Observação',
+            'status_analise': 'Status da análise',
+        },
+        'colunas': (
+            'numero_relatorio', 'data_relatorio', 'numero_processo', 'analista',
+            'secretaria', 'objeto', 'valor', 'periodo', 'destino',
+            'status_analise', 'observacao',
+        ),
+        'formulario': (
+            'valor', 'destino', 'periodo', 'status_analise', 'observacao',
+        ),
+    },
+    'ADIANTAMENTO': {
+        'titulo': 'Dados do relatório — Adiantamento',
+        'rotulos': {
+            'numero_relatorio': 'Número',
+            'contratada': 'Servidor',
+            'valor': 'Valor',
+            'numero_processo': 'Nº do Processo',
+            'objeto': 'Assunto',
+            'data_relatorio': 'Data',
+            'destino': 'Enviado para',
+            'secretaria': 'Secretaria de Origem',
+            'analista': 'Analista / Relator',
+            'observacao': 'Observação',
+            'status_analise': 'Status da análise',
+        },
+        'colunas': (
+            'numero_relatorio', 'contratada', 'valor', 'numero_processo',
+            'objeto', 'data_relatorio', 'destino', 'secretaria', 'analista',
+            'observacao',
+        ),
+        'formulario': (
+            'contratada', 'valor', 'objeto', 'destino', 'secretaria',
+            'status_analise', 'observacao',
+        ),
+    },
+    'COTA_PATROCINIO': {
+        'titulo': 'Dados do relatório — Cota Patrocínio',
+        'rotulos': {
+            'numero_relatorio': 'Número',
+            'contratada': 'Interessado',
+            'objeto': 'Evento',
+            'valor': 'Valor',
+            'numero_processo': 'Nº do Processo',
+            'periodo': 'Assunto',
+            'data_relatorio': 'Data',
+            'destino': 'Enviado para',
+            'observacao': 'OBS',
+            'analista': 'Analista / Relator',
+            'secretaria': 'Secretaria',
+            'status_analise': 'Status da análise',
+        },
+        'colunas': (
+            'numero_relatorio', 'contratada', 'objeto', 'valor',
+            'numero_processo', 'periodo', 'data_relatorio', 'destino',
+            'observacao',
+        ),
+        'formulario': (
+            'contratada', 'objeto', 'valor', 'periodo', 'destino',
+            'status_analise', 'observacao',
+        ),
+    },
+    'SUBVENCAO': {
+        'titulo': 'Dados do relatório — Subvenção',
+        'rotulos': {
+            'numero_relatorio': 'Número',
+            'contratada': 'Entidade',
+            'valor': 'Valor',
+            'numero_processo': 'Nº do Processo',
+            'periodo': 'Assunto',
+            'objeto': 'Necessidade concessão/prestação',
+            'data_relatorio': 'Data',
+            'destino': 'Enviado para',
+            'observacao': 'OBS',
+            'analista': 'Analista / Relator',
+            'secretaria': 'Secretaria',
+            'status_analise': 'Status da análise',
+        },
+        'colunas': (
+            'numero_relatorio', 'contratada', 'valor', 'numero_processo',
+            'periodo', 'objeto', 'data_relatorio', 'destino', 'observacao',
+        ),
+        'formulario': (
+            'contratada', 'valor', 'periodo', 'objeto', 'destino',
+            'status_analise', 'observacao',
+        ),
+    },
+    'ALUGUEL_SOCIAL': {
+        'titulo': 'Dados do relatório — Aluguel Social',
+        'rotulos': {
+            'numero_relatorio': 'Número',
+            'contratada': 'Beneficiário',
+            'valor': 'Valor',
+            'numero_processo': 'Nº do Processo',
+            'objeto': 'Assunto',
+            'data_relatorio': 'Data',
+            'destino': 'Enviado para',
+            'periodo': 'Parcelas',
+            'observacao': 'OBS',
+            'analista': 'Analista / Relator',
+            'secretaria': 'Secretaria',
+            'status_analise': 'Status da análise',
+        },
+        'colunas': (
+            'numero_relatorio', 'contratada', 'valor', 'numero_processo',
+            'objeto', 'data_relatorio', 'destino', 'periodo', 'observacao',
+        ),
+        'formulario': (
+            'contratada', 'valor', 'objeto', 'destino', 'periodo',
+            'status_analise', 'observacao',
+        ),
+    },
+    'BOLSA_ATLETA': {
+        'titulo': 'Dados do relatório — Bolsa Atleta',
+        'rotulos': {
+            'numero_relatorio': 'Número',
+            'contratada': 'Nome do atleta',
+            'periodo': 'Nome do responsável',
+            'valor': 'Valor',
+            'numero_processo': 'Nº do Processo',
+            'objeto': 'Assunto / Modalidade',
+            'data_relatorio': 'Data',
+            'destino': 'Enviado para',
+            'observacao': 'OBS',
+            'analista': 'Analista / Relator',
+            'secretaria': 'Secretaria',
+            'status_analise': 'Status da análise',
+        },
+        'colunas': (
+            'numero_relatorio', 'contratada', 'periodo', 'valor',
+            'numero_processo', 'objeto', 'data_relatorio', 'destino',
+            'observacao',
+        ),
+        'formulario': (
+            'contratada', 'periodo', 'valor', 'objeto', 'destino',
+            'status_analise', 'observacao',
+        ),
+        'dicas': {
+            'objeto': 'Informe o assunto e a modalidade (ex.: Prestação 2º semestre — Jiu-Jitsu).',
+            'observacao': (
+                'Se houver processo relacionado (concessão ou prestação), '
+                'registre aqui.'
+            ),
+        },
+    },
+    'AUXILIO_COMPETICAO': {
+        'titulo': 'Dados do relatório — Auxílio Competição',
+        'rotulos': {
+            'numero_relatorio': 'Número',
+            'contratada': 'Nome do atleta',
+            'periodo': 'Nome do responsável',
+            'valor': 'Valor',
+            'numero_processo': 'Nº do Processo',
+            'objeto': 'Assunto / Modalidade',
+            'data_relatorio': 'Data',
+            'destino': 'Enviado para',
+            'observacao': 'OBS',
+            'analista': 'Analista / Relator',
+            'secretaria': 'Secretaria',
+            'status_analise': 'Status da análise',
+        },
+        'colunas': (
+            'numero_relatorio', 'contratada', 'periodo', 'valor',
+            'numero_processo', 'objeto', 'data_relatorio', 'destino',
+            'observacao',
+        ),
+        'formulario': (
+            'contratada', 'periodo', 'valor', 'objeto', 'destino',
+            'status_analise', 'observacao',
+        ),
+    },
+    'DIARIA': {
+        'titulo': 'Dados do relatório — Diária',
+        'rotulos': {
+            'numero_relatorio': 'Número',
+            'secretaria': 'Secretaria',
+            'contratada': 'Servidor',
+            'periodo': 'Quantidade',
+            'valor': 'Valor total',
+            'numero_processo': 'Nº do Processo',
+            'objeto': 'Assunto',
+            'data_relatorio': 'Data',
+            'destino': 'Enviado para',
+            'analista': 'Analista / Relator',
+            'observacao': 'Observação',
+            'status_analise': 'Status da análise',
+        },
+        'colunas': (
+            'numero_relatorio', 'secretaria', 'contratada', 'periodo', 'valor',
+            'numero_processo', 'objeto', 'data_relatorio', 'destino',
+        ),
+        'formulario': (
+            'secretaria', 'contratada', 'periodo', 'valor', 'objeto',
+            'destino', 'status_analise', 'observacao',
+        ),
+    },
+    'BLOCOS_CARNAVALESCOS': {
+        'titulo': 'Dados do relatório — Blocos carnavalescos',
+        'rotulos': {
+            'numero_relatorio': 'Número',
+            'contratada': 'Bloco',
+            'valor': 'Valor',
+            'numero_processo': 'Nº do Processo',
+            'objeto': 'Assunto',
+            'data_relatorio': 'Data',
+            'destino': 'Enviado para',
+            'observacao': 'OBS',
+            'analista': 'Analista / Relator',
+            'secretaria': 'Secretaria',
+            'status_analise': 'Status da análise',
+        },
+        'colunas': (
+            'numero_relatorio', 'contratada', 'valor', 'numero_processo',
+            'objeto', 'data_relatorio', 'destino', 'observacao',
+        ),
+        'formulario': (
+            'contratada', 'valor', 'objeto', 'destino',
+            'status_analise', 'observacao',
+        ),
+    },
+}
+
+
+def layout_planilha(codigo=None):
+    """Rótulos e colunas iguais à planilha Excel do grupo."""
+    codigo = codigo or GRUPO_PADRAO
+    base = _LAYOUT_PLANILHA.get(GRUPO_PADRAO)
+    layout = _LAYOUT_PLANILHA.get(codigo) or base
+    rotulos = {**base['rotulos'], **layout.get('rotulos', {})}
+    return {
+        'codigo': codigo,
+        'titulo': layout.get('titulo', base['titulo']),
+        'rotulos': rotulos,
+        'colunas': [
+            {'campo': c, 'label': rotulos.get(c, c)}
+            for c in layout.get('colunas', base['colunas'])
+        ],
+        'formulario': list(layout.get('formulario', base['formulario'])),
+        'dicas': dict(layout.get('dicas') or {}),
+    }
 
 
 class RelatorioInvalido(ValidationError):
@@ -874,8 +1138,8 @@ def alternar_sem_relatorio(usuario, linha_id):
 def cancelar_linha(usuario, linha_id, destino_numero=None):
     """Cancela a linha na planilha (vermelha), mantendo número e data.
 
-    O número fica disponível para reuso com número específico ou na
-    reserva automática.
+    Vale para linha ativa, histórica ou reservada. O número fica
+    disponível para reuso (número específico ou geração automática).
     """
     perm.assert_permissao(
         perm.pode_cancelar_linha_relatorio(usuario),
@@ -889,7 +1153,7 @@ def cancelar_linha(usuario, linha_id, destino_numero=None):
              .first())
     if linha is None:
         raise RelatorioInvalido('Linha não encontrada.')
-    if linha.situacao_linha != LinhaControleRelatorio.SITUACAO_ATIVA:
+    if linha.situacao_linha == LinhaControleRelatorio.SITUACAO_CANCELADA:
         raise RelatorioInvalido('Esta linha já foi cancelada.')
     if not linha.numero_relatorio and not linha.sem_relatorio:
         raise RelatorioInvalido('Não há número de relatório nesta linha.')
@@ -1559,24 +1823,35 @@ def _chave_cabecalho(texto):
 
 _ALIAS_COLUNAS = {
     'numero_relatorio': (
-        'n relatorio', 'no relatorio', 'numero relatorio', 'nº relatorio',
-        'num relatorio', 'relatorio',
+        'numero', 'n relatorio', 'no relatorio', 'numero relatorio',
+        'nº relatorio', 'num relatorio', 'relatorio',
     ),
     'data_relatorio': ('data', 'data relatorio', 'data do relatorio'),
     'analista': ('relator', 'analista', 'tecnico'),
     'processo_pagamento': (
+        'processo de prestacao', 'processo prestacao',
         'processo pagamento', 'proc pagamento', 'pagamento',
     ),
     'processo_origem': (
-        'processo origem', 'proc origem', 'origem', 'processo',
-        'n processo', 'numero processo', 'nº processo',
+        'processo de concessao', 'processo concessao',
+        'processo origem', 'proc origem', 'origem',
+        'n do processo', 'n processo', 'numero processo', 'nº processo',
+        'processo',
     ),
-    'secretaria': ('secretaria',),
-    'objeto': ('objeto',),
+    'secretaria': ('secretaria', 'secretaria de origem'),
+    'objeto': (
+        'objeto', 'assunto', 'evento', 'modalidade',
+        'necessidade concessao prestacao', 'necessidade',
+    ),
     'periodo': ('periodo',),
-    'valor': ('valor',),
-    'destino': ('destino',),
-    'contratada': ('contratada', 'favorecido', 'contratada favorecido'),
+    'valor': ('valor', 'valor total'),
+    'destino': ('destino', 'enviado para'),
+    'contratada': (
+        'contratada', 'favorecido', 'contratada favorecido', 'servidor',
+        'interessado', 'entidade', 'beneficiario', 'bloco',
+        'nome do atleta', 'nome do responsavel',
+    ),
+    'observacao_planilha': ('obs', 'observacao'),
 }
 
 
@@ -1598,25 +1873,62 @@ def _mapear_cabecalhos(linha):
     return mapa
 
 
-def _escolher_aba_planilha(workbook):
+def _sequencia_por_nome_aba(nome_aba):
+    """Mapeia o título da aba Excel para o código da sequência de relatório."""
+    chave = _chave_cabecalho(nome_aba)
+    if not chave:
+        return None
+    if 'medicao anual' in chave:
+        # Aba complementar (vários blocos por secretaria); use ADIANTAMENTOS.
+        return None
+    if 'aux' in chave and 'competicao' in chave:
+        return 'AUXILIO_COMPETICAO'
+    if 'adiantamento' in chave:
+        return 'ADIANTAMENTO'
+    if 'cota' in chave and 'patrocinio' in chave:
+        return 'COTA_PATROCINIO'
+    if 'subvencao' in chave:
+        return 'SUBVENCAO'
+    if 'aluguel' in chave and 'social' in chave:
+        return 'ALUGUEL_SOCIAL'
+    if 'bolsa' in chave and 'atleta' in chave:
+        return 'BOLSA_ATLETA'
+    if 'diaria' in chave:
+        return 'DIARIA'
+    if 'bloco' in chave:
+        return 'BLOCOS_CARNAVALESCOS'
+    if 'controle' in chave or 'liquidacao' in chave or 'liquidacoes' in chave:
+        return GRUPO_PADRAO
+    return None
+
+
+def _escolher_aba_planilha(workbook, grupo=None):
+    if grupo and grupo not in (GRUPO_IMPORTACAO_COMPLETA,):
+        for nome in workbook.sheetnames:
+            if _sequencia_por_nome_aba(nome) == grupo:
+                return workbook[nome]
     for nome in workbook.sheetnames:
         if 'controle' in _chave_cabecalho(nome):
             return workbook[nome]
     return workbook[workbook.sheetnames[0]]
 
 
-def _localizar_cabecalho(planilha):
+def _localizar_cabecalho(planilha, max_row=25):
     for indice, row in enumerate(
-            planilha.iter_rows(min_row=1, max_row=20, values_only=True), 1):
+            planilha.iter_rows(min_row=1, max_row=max_row, values_only=True), 1):
         mapa = _mapear_cabecalhos(row)
-        if 'numero_relatorio' in mapa and (
+        if 'numero_relatorio' not in mapa:
+            continue
+        if (
                 'data_relatorio' in mapa
                 or 'processo_pagamento' in mapa
-                or 'processo_origem' in mapa):
+                or 'processo_origem' in mapa
+                or 'objeto' in mapa
+                or 'contratada' in mapa):
             return indice, mapa
     raise RelatorioInvalido(
         'Não encontrei o cabeçalho da planilha. '
-        'É preciso ter colunas de Nº relatório e Data ou Processo.')
+        'É preciso ter colunas de Nº relatório e Data, Processo ou Assunto.')
 
 
 def _texto_celula(valor, limite=255):
@@ -1696,53 +2008,9 @@ def _linha_amarela(celulas):
     return any(_celula_amarela(celula) for celula in celulas[:12])
 
 
-@transaction.atomic
-def importar_planilha_excel(usuario, arquivo, grupo=GRUPO_PADRAO):
-    """Importa números antigos de um .xlsx para o Controle de relatório.
-
-    Linhas entram como HISTORICA (não apagam análises atuais). Linhas
-    amarelas da planilha viram \"sem relatório\". O contador do grupo
-    avança para depois do maior número inteiro importado.
-    """
-    perm.assert_permissao(
-        perm.pode_definir_ultimo_relatorio(usuario),
-        'Somente o administrador importa planilha de relatório.')
-    if not sequencia_valida(grupo):
-        raise RelatorioInvalido('Sequência de relatório inválida.')
-    if arquivo is None:
-        raise RelatorioInvalido('Selecione o arquivo Excel (.xlsx).')
-    nome = (getattr(arquivo, 'name', '') or '').lower()
-    if not nome.endswith('.xlsx'):
-        raise RelatorioInvalido('Envie um arquivo .xlsx (Excel).')
-
-    try:
-        from openpyxl import load_workbook
-    except ImportError as exc:
-        raise RelatorioInvalido(
-            'Biblioteca openpyxl indisponível no servidor.') from exc
-
-    # data_only=False: precisa da cor da célula para achar linhas amarelas.
-    try:
-        workbook = load_workbook(arquivo, data_only=False)
-    except Exception as exc:
-        raise RelatorioInvalido(
-            'Não foi possível ler o Excel. Verifique se o arquivo não está '
-            'corrompido ou aberto em outro programa.') from exc
-
-    planilha = _escolher_aba_planilha(workbook)
-    linha_cabecalho, colunas = _localizar_cabecalho(planilha)
+def _importar_linhas_aba(planilha, linha_cabecalho, colunas, grupo, existentes):
+    """Lê linhas de uma aba já com cabeçalho mapeado; retorna contadores."""
     idx_num = colunas['numero_relatorio']
-
-    existentes = {
-        (linha.numero_relatorio or '').strip(): linha
-        for linha in (
-            LinhaControleRelatorio.objects
-            .select_for_update()
-            .filter(filtro_sequencia(grupo))
-            .exclude(numero_relatorio='')
-        )
-    }
-
     criadas = atualizadas = ignoradas = 0
     maior_inteiro = 0
     hoje = timezone.localdate()
@@ -1785,6 +2053,7 @@ def importar_planilha_excel(usuario, arquivo, grupo=GRUPO_PADRAO):
         secretaria = _texto_celula(cel('secretaria'))
         contratada = _texto_celula(cel('contratada'))
         objeto = _texto_celula(cel('objeto'), limite=5000)
+        obs_planilha = _texto_celula(cel('observacao_planilha'), limite=500)
         periodo = _texto_celula(cel('periodo'))
         destino = _texto_celula(cel('destino'))
         valor_bruto = cel('valor')
@@ -1817,6 +2086,8 @@ def importar_planilha_excel(usuario, arquivo, grupo=GRUPO_PADRAO):
             obs.append('Reservado / saiu sem análise (amarelo na planilha)')
         if nota_data:
             obs.append(nota_data)
+        if obs_planilha:
+            obs.append(obs_planilha)
         if origem and pagamento and origem != pagamento:
             obs.append(f'Processo origem: {origem}')
 
@@ -1882,18 +2153,38 @@ def importar_planilha_excel(usuario, arquivo, grupo=GRUPO_PADRAO):
         LinhaControleRelatorio.objects.bulk_update(
             atualizar_lote, campos_update)
 
-    if maior_inteiro > 0:
-        seq, _ = SequenciaRelatorio.objects.select_for_update().get_or_create(
-            grupo=grupo,
-            defaults={'proximo_numero': maior_inteiro + 1})
-        if int(seq.proximo_numero or 0) <= maior_inteiro:
-            seq.proximo_numero = maior_inteiro + 1
-            seq.save(update_fields=['proximo_numero'])
+    return criadas, atualizadas, ignoradas, maior_inteiro
 
-    if criadas + atualizadas == 0 and ignoradas == 0:
-        raise RelatorioInvalido(
-            'Nenhuma linha com número de relatório foi encontrada na planilha.')
 
+def _atualizar_proximo_numero_grupo(grupo, maior_inteiro):
+    if maior_inteiro <= 0:
+        return
+    seq, _ = SequenciaRelatorio.objects.select_for_update().get_or_create(
+        grupo=grupo,
+        defaults={'proximo_numero': maior_inteiro + 1})
+    if int(seq.proximo_numero or 0) <= maior_inteiro:
+        seq.proximo_numero = maior_inteiro + 1
+        seq.save(update_fields=['proximo_numero'])
+
+
+def _existentes_por_grupo(grupo):
+    return {
+        (linha.numero_relatorio or '').strip(): linha
+        for linha in (
+            LinhaControleRelatorio.objects
+            .select_for_update()
+            .filter(filtro_sequencia(grupo))
+            .exclude(numero_relatorio='')
+        )
+    }
+
+
+def _importar_aba_excel(planilha, grupo):
+    linha_cabecalho, colunas = _localizar_cabecalho(planilha)
+    existentes = _existentes_por_grupo(grupo)
+    criadas, atualizadas, ignoradas, maior_inteiro = _importar_linhas_aba(
+        planilha, linha_cabecalho, colunas, grupo, existentes)
+    _atualizar_proximo_numero_grupo(grupo, maior_inteiro)
     return {
         'grupo': grupo,
         'nome': info_sequencia(grupo)['nome'],
@@ -1902,3 +2193,87 @@ def importar_planilha_excel(usuario, arquivo, grupo=GRUPO_PADRAO):
         'ignoradas': ignoradas,
         'proximo': estado_sequencia(grupo)['proximo'],
     }
+
+
+@transaction.atomic
+def importar_planilha_excel(usuario, arquivo, grupo=GRUPO_PADRAO):
+    """Importa números antigos de um .xlsx para o Controle de relatório.
+
+    Linhas entram como HISTORICA (não apagam análises atuais). Linhas
+    amarelas da planilha viram \"sem relatório\". O contador do grupo
+    avança para depois do maior número inteiro importado.
+
+    Com ``grupo=GRUPO_IMPORTACAO_COMPLETA`` importa todas as abas
+    reconhecidas (arquivo unificado Controle Relatórios 2026).
+    """
+    perm.assert_permissao(
+        perm.pode_definir_ultimo_relatorio(usuario),
+        'Somente o administrador importa planilha de relatório.')
+    if grupo != GRUPO_IMPORTACAO_COMPLETA and not sequencia_valida(grupo):
+        raise RelatorioInvalido('Sequência de relatório inválida.')
+    if arquivo is None:
+        raise RelatorioInvalido('Selecione o arquivo Excel (.xlsx).')
+    nome = (getattr(arquivo, 'name', '') or '').lower()
+    if not nome.endswith('.xlsx'):
+        raise RelatorioInvalido('Envie um arquivo .xlsx (Excel).')
+
+    try:
+        from openpyxl import load_workbook
+    except ImportError as exc:
+        raise RelatorioInvalido(
+            'Biblioteca openpyxl indisponível no servidor.') from exc
+
+    # data_only=False: precisa da cor da célula para achar linhas amarelas.
+    try:
+        workbook = load_workbook(arquivo, data_only=False)
+    except Exception as exc:
+        raise RelatorioInvalido(
+            'Não foi possível ler o Excel. Verifique se o arquivo não está '
+            'corrompido ou aberto em outro programa.') from exc
+
+    if grupo == GRUPO_IMPORTACAO_COMPLETA:
+        resultados = []
+        puladas = []
+        total_c = total_a = total_i = 0
+        for nome_aba in workbook.sheetnames:
+            codigo = _sequencia_por_nome_aba(nome_aba)
+            if not codigo:
+                puladas.append(nome_aba)
+                continue
+            try:
+                parcial = _importar_aba_excel(workbook[nome_aba], codigo)
+            except RelatorioInvalido:
+                puladas.append(nome_aba)
+                continue
+            if parcial['criadas'] + parcial['atualizadas'] + parcial['ignoradas'] == 0:
+                continue
+            resultados.append(parcial)
+            total_c += parcial['criadas']
+            total_a += parcial['atualizadas']
+            total_i += parcial['ignoradas']
+        if not resultados:
+            raise RelatorioInvalido(
+                'Nenhuma aba reconhecida com linhas para importar. '
+                'Verifique se o arquivo é o Controle Relatórios (.xlsx) '
+                'com abas como ADIANTAMENTOS, DIÁRIAS, BOLSA ATLETA…')
+        return {
+            'multi': True,
+            'grupo': GRUPO_IMPORTACAO_COMPLETA,
+            'nome': 'Todas as abas',
+            'abas': resultados,
+            'puladas': puladas,
+            'criadas': total_c,
+            'atualizadas': total_a,
+            'ignoradas': total_i,
+            'proximo': None,
+        }
+
+    planilha = _escolher_aba_planilha(workbook, grupo=grupo)
+    resultado = _importar_aba_excel(planilha, grupo)
+    if (
+        resultado['criadas'] + resultado['atualizadas'] == 0
+        and resultado['ignoradas'] == 0
+    ):
+        raise RelatorioInvalido(
+            'Nenhuma linha com número de relatório foi encontrada na planilha.')
+    return resultado

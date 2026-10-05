@@ -322,12 +322,9 @@ def calcular_prazo(data_entrada, prioridade_value):
         return None
 
 
-def formatar_prazo(dias_restantes):
-    if dias_restantes < 0:
-        return f"{dias_restantes} dia(s)"
-    if dias_restantes == 0:
-        return "Vence hoje"
-    return f"{dias_restantes} dia(s) restante(s)"
+def formatar_prazo(dias_na_cgm):
+    """Rótulo da coluna Prazo: quantos dias o processo está na CGM."""
+    return prazos_service.formatar_dias_na_cgm(dias_na_cgm)
 
 
 def calcular_proxima_data_monitoramento(data_base, prazo_monitoramento_tipo):
@@ -570,10 +567,28 @@ def montar_passagens(processo):
 
     Cada retorno do processo gera um novo registro com o mesmo numero_processo,
     entao as passagens sao os registros irmaos ordenados pela entrada.
+    Inclui quem deu entrada (evento PROCESSO_CADASTRADO) e quem registrou
+    a saída (saida_concluida_por ou evento SAIDA_CONCLUIDA).
     """
-    registros = Processo.objects.filter(
+    registros = list(Processo.objects.filter(
         numero_processo=processo.numero_processo
-    ).order_by('data_entrada', 'hora_entrada', 'id')
+    ).select_related('saida_concluida_por').order_by(
+        'data_entrada', 'hora_entrada', 'id'))
+
+    ids = [registro.id for registro in registros]
+    entrada_por = {}
+    saida_por_evento = {}
+    if ids:
+        for evento in (EventoProcesso.objects
+                       .filter(
+                           processo_id__in=ids,
+                           tipo__in=('PROCESSO_CADASTRADO', 'SAIDA_CONCLUIDA'))
+                       .select_related('usuario')
+                       .order_by('criado_em', 'id')):
+            if evento.tipo == 'PROCESSO_CADASTRADO':
+                entrada_por.setdefault(evento.processo_id, evento.usuario)
+            elif evento.tipo == 'SAIDA_CONCLUIDA':
+                saida_por_evento[evento.processo_id] = evento.usuario
 
     hoje = date.today()
     passagens = []
@@ -583,6 +598,10 @@ def montar_passagens(processo):
             dias_permanencia = (registro.data_saida - registro.data_entrada).days
         else:
             dias_permanencia = (hoje - registro.data_entrada).days
+
+        quem_entrada = entrada_por.get(registro.id)
+        quem_saida = registro.saida_concluida_por or saida_por_evento.get(
+            registro.id)
 
         passagens.append({
             'ordem': ordem,
@@ -594,6 +613,8 @@ def montar_passagens(processo):
             'destino': registro.destino,
             'entrada': formatar_data_hora(registro.data_entrada, registro.hora_entrada),
             'saida': formatar_data_hora(registro.data_saida, registro.hora_saida),
+            'entrada_por': nome_usuario(quem_entrada) if quem_entrada else None,
+            'saida_por': nome_usuario(quem_saida) if quem_saida else None,
             'dias_permanencia': dias_permanencia,
         })
 
@@ -1338,42 +1359,42 @@ def _sequencia_fila_liquidacao(processo):
     return svc_relatorios.GRUPO_PADRAO
 
 
-def montar_abas_liquidacoes(processos, seq_pedido=''):
-    """Abas das sequências de Liquidações e lista filtrada pela aba ativa."""
+def montar_grupos_liquidacoes(processos):
+    """Separa Liquidações em blocos por sequência (Liquidação, Bolsa…).
+
+    Só entram grupos com processo — cada um vira um separador na fila.
+    """
     ativas = [
         item for item in svc_relatorios.sequencias_disponiveis()
         if svc_relatorios.sequencia_ativa(item['codigo'])
     ]
-    totais = {item['codigo']: 0 for item in ativas}
     por_seq = {item['codigo']: [] for item in ativas}
     for processo in processos:
         codigo = _sequencia_fila_liquidacao(processo)
-        if codigo not in totais:
+        if codigo not in por_seq:
             codigo = svc_relatorios.GRUPO_PADRAO
-        totais[codigo] += 1
         por_seq[codigo].append(processo)
 
-    codigos = {item['codigo'] for item in ativas}
-    seq = seq_pedido if seq_pedido in codigos else svc_relatorios.GRUPO_PADRAO
-    abas = [
-        {
+    grupos = []
+    for item in ativas:
+        lista = por_seq.get(item['codigo']) or []
+        if not lista:
+            continue
+        grupos.append({
             'codigo': item['codigo'],
             'nome': item['nome'],
-            'total': totais[item['codigo']],
-            'ativa': item['codigo'] == seq,
-        }
-        for item in ativas
-    ]
-    return por_seq.get(seq, []), abas, seq
+            'processos': lista,
+            'total': len(lista),
+        })
+    return grupos
 
 
 def consultar_fila_grupos(request, opcoes_filtro=FILTROS_ANALISTA):
     """Fila dos dois grupos de análise, com busca e filtro (item 37).
 
-    Devolve (todos, licitacoes, liquidacoes, termo, filtro, contagens,
-    abas_liquidacoes, seq_atual).
+    Devolve (todos, licitacoes, grupos_liquidacoes, termo, filtro, contagens).
     `todos` é o conjunto sem filtro — base dos totais do topo da tela.
-    Liquidações são filtradas pela aba de sequência (`?seq=`).
+    Liquidações vêm separadas por sequência (blocos empilhados).
     """
     termo_pesquisa = request.GET.get('pesquisa', '').strip()
     padrao = opcoes_filtro[0][0]
@@ -1417,11 +1438,10 @@ def consultar_fila_grupos(request, opcoes_filtro=FILTROS_ANALISTA):
         processos, filtro, request.user, vencidos_so_trabalho)
     licitacoes = [p for p in filtrados if p.genero == 'LICITACOES_E_CONTRATOS']
     liquidacoes_todas = [p for p in filtrados if p.genero == 'LIQUIDACOES']
-    liquidacoes, abas_liquidacoes, seq_atual = montar_abas_liquidacoes(
-        liquidacoes_todas, request.GET.get('seq', '').strip())
+    grupos_liquidacoes = montar_grupos_liquidacoes(liquidacoes_todas)
     return (
-        processos, licitacoes, liquidacoes, termo_pesquisa, filtro, contagens,
-        abas_liquidacoes, seq_atual,
+        processos, licitacoes, grupos_liquidacoes, termo_pesquisa, filtro,
+        contagens,
     )
 
 
@@ -1447,8 +1467,8 @@ def _inicio_legado(request):
 @user_passes_test(pode_usar_area_analista)
 def area_analista(request):
     (
-        processos, licitacoes, liquidacoes, termo_pesquisa, filtro, contagens,
-        abas_liquidacoes, seq_atual,
+        processos, licitacoes, grupos_liquidacoes, termo_pesquisa, filtro,
+        contagens,
     ) = consultar_fila_grupos(request, FILTROS_ANALISTA)
 
     total_disponiveis = sum(1 for p in processos if p.situacao_fila == 'disponivel')
@@ -1466,12 +1486,11 @@ def area_analista(request):
         'filtro_atual': filtro,
         'filtros_fila': contagens,
         'licitacoes': licitacoes,
-        'liquidacoes': liquidacoes,
-        'abas_liquidacoes': abas_liquidacoes,
-        'seq_atual': seq_atual,
+        'grupos_liquidacoes': grupos_liquidacoes,
+        'lista_vazia': [],
         'mostra_licitacoes': bool(licitacoes) or can_access_genero(
             request.user, 'LICITACOES_E_CONTRATOS'),
-        'mostra_liquidacoes': bool(liquidacoes) or can_access_genero(
+        'mostra_liquidacoes': bool(grupos_liquidacoes) or can_access_genero(
             request.user, 'LIQUIDACOES'),
         'total_processos': total_trabalho,
         'total_disponiveis': total_disponiveis,
@@ -1488,8 +1507,8 @@ def area_analista(request):
 @user_passes_test(perm.pode_acessar_fila_gestao)
 def gestao_processos(request):
     (
-        processos, licitacoes, liquidacoes, termo_pesquisa, filtro, contagens,
-        abas_liquidacoes, seq_atual,
+        processos, licitacoes, grupos_liquidacoes, termo_pesquisa, filtro,
+        contagens,
     ) = consultar_fila_grupos(request, FILTROS_GESTAO)
 
     total_disponiveis = sum(1 for p in processos if p.situacao_fila == 'disponivel')
@@ -1501,9 +1520,8 @@ def gestao_processos(request):
 
     return render(request, 'gestao/processos.html', {
         'licitacoes': licitacoes,
-        'liquidacoes': liquidacoes,
-        'abas_liquidacoes': abas_liquidacoes,
-        'seq_atual': seq_atual,
+        'grupos_liquidacoes': grupos_liquidacoes,
+        'lista_vazia': [],
         'mostra_licitacoes': True,
         'mostra_liquidacoes': True,
         'total_processos': len(processos),
@@ -1687,19 +1705,7 @@ def analista_processo(request, process_id):
             return redirect(destino)
         return redirect('analista_processo', process_id=processo.id)
 
-    prazo_obj = calcular_prazo(processo.data_entrada, processo.prioridade)
-    if prazo_obj:
-        dias_restantes = (prazo_obj - date.today()).days
-        processo.prazo_formatado = formatar_prazo(dias_restantes)
-        processo.prazo_status = (
-            'atrasado' if dias_restantes < 0
-            else 'hoje' if dias_restantes == 0
-            else 'atencao' if dias_restantes <= 2
-            else 'ok'
-        )
-    else:
-        processo.prazo_formatado = "-"
-        processo.prazo_status = 'indefinido'
+    prazos_service.anotar(processo)
 
     return render(request, 'analista/processo.html', {
         'processo': processo,
@@ -1716,7 +1722,6 @@ def analista_processo(request, process_id):
         'all_status_analise': Processo.STATUS_ANALISE_CHOICES,
         'secretarias': [u.nome for u in svc_cadastros.unidades_ativas()],
         'valor_exibicao': svc_processos.formatar_valor(processo.valor),
-        'passagens': montar_passagens(processo),
         'pode_editar': pode_editar,
         'eh_liquidacao': processo.genero == 'LIQUIDACOES',
         'eh_licitacao': processo.grupo == 'LICITACOES_E_CONTRATOS',
@@ -1754,6 +1759,13 @@ def analista_processo(request, process_id):
                 svc_relatorios.sequencia_do_processo(processo)
                 or svc_relatorios.GRUPO_PADRAO)['nome']
             if processo.genero == 'LIQUIDACOES' else ''),
+        'layout_planilha': (
+            svc_relatorios.layout_planilha(
+                svc_relatorios.sequencia_do_processo(processo)
+                or svc_relatorios.GRUPO_PADRAO)
+            if processo.genero == 'LIQUIDACOES'
+            else None
+        ),
         'sequencias_relatorio': [
             item for item in svc_relatorios.sequencias_disponiveis()
             if svc_relatorios.sequencia_ativa(item['codigo'])

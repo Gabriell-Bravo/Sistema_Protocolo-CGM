@@ -202,3 +202,18 @@ class PrazosTest(BaseProcessoTestCase):
     def test_rotulos(self):
         self.assertEqual(prazos.status_do_prazo(-1), 'atrasado')
         self.assertEqual(prazos.status_do_prazo(0), 'hoje')
+        self.assertEqual(prazos.formatar_dias_na_cgm(0), '0 dias Na CGM')
+        self.assertEqual(prazos.formatar_dias_na_cgm(1), '1 dia Na CGM')
+        self.assertEqual(prazos.formatar_dias_na_cgm(13), '13 dias Na CGM')
+
+    def test_anotar_mostra_dias_na_cgm(self):
+        from datetime import timedelta
+        from django.utils import timezone
+
+        processo = self.novo_processo(self.especie_liq)
+        processo.data_entrada = timezone.localdate() - timedelta(days=5)
+        processo.save(update_fields=['data_entrada'])
+        prazos.anotar(processo)
+        self.assertEqual(processo.dias_na_cgm, 5)
+        self.assertEqual(processo.prazo_formatado, '5 dias Na CGM')
+        self.assertIn(processo.prazo_status, {'atrasado', 'hoje', 'atencao', 'ok'})

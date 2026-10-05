@@ -1062,6 +1062,35 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertEqual(novo.numero_relatorio, '5001')
         self.assertEqual(linha.numero_processo, 'c2/2026')
 
+    def test_cancelar_linha_historica_libera_numero(self):
+        """Linha importada (HISTORICA) também pode ser cancelada."""
+        admin = criar_usuario('admin_hist_cancel', 'GESTAO', is_superuser=True)
+        linha = LinhaControleRelatorio.objects.create(
+            processo=None,
+            numero_processo='hist-1/2026',
+            numero_relatorio='7201',
+            data_relatorio='2026-09-01',
+            situacao_linha='HISTORICA',
+            sequencia='LIQUIDACOES',
+            grupo='LIQUIDACOES',
+            objeto='Histórico importado',
+        )
+        self.assertIn(7201, relatorios.numeros_usados('LIQUIDACOES'))
+
+        self.client.force_login(admin)
+        pagina = self.client.get(reverse('controle_relatorio'))
+        self.assertContains(pagina, f'data-cancelar-linha="{linha.id}"')
+
+        resp = self.client.post(
+            reverse('controle_relatorio_cancelar_linha', args=[linha.id]), {
+                'grupo': 'LIQUIDACOES',
+            })
+        self.assertEqual(resp.status_code, 302)
+        linha.refresh_from_db()
+        self.assertEqual(linha.situacao_linha, 'CANCELADA')
+        self.assertEqual(linha.numero_relatorio, '7201')
+        self.assertNotIn(7201, relatorios.numeros_usados('LIQUIDACOES'))
+
     def test_numero_especifico_reativa_linha_cancelada(self):
         admin = criar_usuario('admin_reativa', 'GESTAO', is_superuser=True)
         relatorios.definir_ultimo_numero(admin, 6100)
@@ -1238,3 +1267,98 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertContains(planilha, 'tr-relatorio-historico')
         self.assertContains(planilha, '200/2026')
         self.assertContains(planilha, '56 A')
+
+    def test_importa_planilha_adiantamento_aba_correta(self):
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from openpyxl import Workbook
+
+        admin = criar_usuario('admin_imp_adiant', 'GESTAO', is_superuser=True)
+        wb = Workbook()
+        ws_med = wb.active
+        ws_med.title = 'MEDIÇÃO ANUAL-ADIANTAMENTO'
+        ws_med.append(['NUMERO', 'SERVIDOR', ' VALOR ', 'Nº do Processo', 'Data'])
+        ws_med.append(['999', 'Não deve usar esta aba', 1, '1/2026', datetime.date(2026, 1, 1)])
+        ws_adi = wb.create_sheet('ADIANTAMENTOS')
+        ws_adi.append(['Título qualquer'])
+        ws_adi.append([
+            'NUMERO', 'SERVIDOR', ' VALOR ', 'Nº do Processo', 'Assunto',
+            'Data', 'Enviado para', 'Secretaria de Origem',
+        ])
+        ws_adi.append([
+            '001', 'Servidor Teste', 1000, '21257/2025', 'Concessão',
+            datetime.date(2026, 1, 6), 'Finanças', 'Sec. Educação',
+        ])
+        buffer = BytesIO()
+        wb.save(buffer)
+        arquivo = SimpleUploadedFile(
+            'controle2026.xlsx',
+            buffer.getvalue(),
+            content_type=(
+                'application/vnd.openxmlformats-officedocument.'
+                'spreadsheetml.sheet'
+            ),
+        )
+        self.client.force_login(admin)
+        resp = self.client.post(
+            reverse('controle_relatorio_importar'),
+            {'grupo': 'ADIANTAMENTO', 'planilha': arquivo},
+        )
+        self.assertEqual(resp.status_code, 302)
+        linha = LinhaControleRelatorio.objects.get(
+            sequencia='ADIANTAMENTO', numero_relatorio='001')
+        self.assertEqual(linha.numero_processo, '21257/2025')
+        self.assertEqual(linha.contratada, 'Servidor Teste')
+        self.assertFalse(
+            LinhaControleRelatorio.objects.filter(numero_relatorio='999').exists())
+
+    def test_importa_planilha_todas_abas(self):
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from openpyxl import Workbook
+
+        admin = criar_usuario('admin_imp_todas', 'GESTAO', is_superuser=True)
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'DIÁRIAS'
+        ws.append([
+            'NUMERO', 'SECRETARIA', 'SERVIDOR', 'QUANT', 'VALOR TOTAL',
+            'Nº do Processo', 'Assunto', 'Data', 'Enviado para',
+        ])
+        ws.append([
+            1, 'Sec. Social', 'Maria Silva', 1, 500, '100/2026',
+            'Concessão Diária', datetime.date(2026, 3, 1), 'Gabinete',
+        ])
+        ws2 = wb.create_sheet('BLOCOS')
+        ws2.append([
+            'NUMERO', 'BLOCO', ' VALOR ', 'Nº do Processo', 'Assunto',
+            'Data', 'Enviado para',
+        ])
+        ws2.append([
+            '001', 'Bloco Teste', 7000, '7079/2025', 'PC 2025',
+            datetime.date(2026, 2, 3), 'Esporte',
+        ])
+        buffer = BytesIO()
+        wb.save(buffer)
+        arquivo = SimpleUploadedFile(
+            'multi.xlsx',
+            buffer.getvalue(),
+            content_type=(
+                'application/vnd.openxmlformats-officedocument.'
+                'spreadsheetml.sheet'
+            ),
+        )
+        self.client.force_login(admin)
+        resp = self.client.post(
+            reverse('controle_relatorio_importar'),
+            {'grupo': relatorios.GRUPO_IMPORTACAO_COMPLETA, 'planilha': arquivo},
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.assertTrue(
+            LinhaControleRelatorio.objects.filter(
+                sequencia='DIARIA', numero_relatorio='1').exists())
+        self.assertTrue(
+            LinhaControleRelatorio.objects.filter(
+                sequencia='BLOCOS_CARNAVALESCOS', numero_relatorio='001').exists())

@@ -149,15 +149,25 @@ def vence_hoje(processo, referencia=None):
     return dias_restantes(processo, referencia) == 0
 
 
-def formatar(dias):
-    """Rótulo curto para as filas."""
+def dias_na_cgm(processo, referencia=None):
+    """Dias corridos desde a entrada na CGM (0 no dia da entrada)."""
+    if not getattr(processo, 'data_entrada', None):
+        return None
+    hoje = referencia or timezone.localdate()
+    return max(0, (hoje - processo.data_entrada).days)
+
+
+def formatar_dias_na_cgm(dias):
+    """Rótulo exibido nas filas: \"N dias Na CGM\"."""
     if dias is None:
-        return ''
-    if dias < 0:
-        return f'{dias} dia(s)'
-    if dias == 0:
-        return 'Vence hoje'
-    return f'{dias} dia' + ('s' if dias > 1 else '')
+        return '-'
+    unidade = 'dia' if dias == 1 else 'dias'
+    return f'{dias} {unidade} Na CGM'
+
+
+def formatar(dias):
+    """Alias legado — use ``formatar_dias_na_cgm``."""
+    return formatar_dias_na_cgm(dias)
 
 
 def status_do_prazo(dias):
@@ -180,12 +190,6 @@ def anotar(processo, referencia=None):
     dias = dias_restantes(processo, referencia)
     processo.dias_restantes = dias
     processo.prazo_status = status_do_prazo(dias)
-    if dias is None:
-        processo.prazo_formatado = '-'
-    elif dias < 0:
-        processo.prazo_formatado = f'{dias} dia(s)'
-    elif dias == 0:
-        processo.prazo_formatado = 'Vence hoje'
-    else:
-        processo.prazo_formatado = f'{dias} dia(s) restante(s)'
+    processo.dias_na_cgm = dias_na_cgm(processo, referencia)
+    processo.prazo_formatado = formatar_dias_na_cgm(processo.dias_na_cgm)
     return processo

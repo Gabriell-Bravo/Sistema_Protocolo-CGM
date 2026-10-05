@@ -36,7 +36,6 @@ def _opcoes_sequencia_relatorio():
         (item['codigo'], item['nome'])
         for item in svc_relatorios.SEQUENCIAS
         if svc_relatorios.sequencia_ativa(item['codigo'])
-        or item['codigo'] == 'AUXILIO_COMPETICAO'
     ]
 
 

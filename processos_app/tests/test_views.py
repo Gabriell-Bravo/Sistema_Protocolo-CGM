@@ -601,7 +601,30 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         self.assertContains(resposta, '1004/2026')
         self.assertContains(resposta, 'A assinatura do Controlador é fora do sistema')
 
-    def test_fila_liquidacoes_separa_por_aba_de_sequencia(self):
+    def test_historico_mostra_usuario_entrada_e_saida(self):
+        processo = self.novo_processo(numero_processo='hist-user/2026')
+        self.anexar_teste(processo)
+        tramitacao.assumir(processo.id, self.analista_lic)
+        tramitacao.liberar_assinatura(processo.id, self.analista_lic)
+        processo.refresh_from_db()
+        processo.situacao_tramite = 'DISPONIVEL_RETIRADA'
+        processo.save(update_fields=['situacao_tramite'])
+        tramitacao.registrar_saida([processo.id], self.protocolo)
+
+        self.client.force_login(self.protocolo)
+        historico = self.client.get(
+            reverse('ver_historico_processo', args=[processo.id]))
+        self.assertContains(historico, 'Entrada por')
+        self.assertContains(historico, 'Saída por')
+        self.assertContains(historico, self.protocolo.get_full_name()
+                            or self.protocolo.username)
+        passagem = historico.context['passagens'][0]
+        self.assertEqual(passagem['entrada_por'],
+                         self.protocolo.get_full_name() or self.protocolo.username)
+        self.assertEqual(passagem['saida_por'],
+                         self.protocolo.get_full_name() or self.protocolo.username)
+
+    def test_fila_liquidacoes_separa_por_blocos_de_sequencia(self):
         especie_bolsa, _ = EspecieProcesso.objects.get_or_create(
             nome='Concessão Aux. Bolsa Atleta', grupo=LIQ,
             defaults={'ativo': True, 'gera_relatorio': True,
@@ -618,18 +641,12 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
             especie=especie_bolsa, numero_processo='2002/2026')
 
         self.client.force_login(self.analista_liq)
-        padrao = self.client.get(reverse('area_analista'))
-        self.assertContains(padrao, 'Liquidação')
-        self.assertContains(padrao, 'Bolsa Atleta')
-        self.assertContains(padrao, '2001/2026')
-        self.assertNotContains(padrao, '2002/2026')
-        self.assertEqual(padrao.context['seq_atual'], 'LIQUIDACOES')
-
-        aba_bolsa = self.client.get(
-            reverse('area_analista') + '?seq=BOLSA_ATLETA')
-        self.assertContains(aba_bolsa, '2002/2026')
-        self.assertNotContains(aba_bolsa, '2001/2026')
-        self.assertEqual(aba_bolsa.context['seq_atual'], 'BOLSA_ATLETA')
-        self.assertEqual(len(aba_bolsa.context['liquidacoes']), 1)
-        self.assertEqual(aba_bolsa.context['liquidacoes'][0].id, bolsa.id)
-        self.assertEqual(padrao.context['liquidacoes'][0].id, liquidacao.id)
+        pagina = self.client.get(reverse('area_analista'))
+        self.assertContains(pagina, 'Liquidação')
+        self.assertContains(pagina, 'Bolsa Atleta')
+        self.assertContains(pagina, '2001/2026')
+        self.assertContains(pagina, '2002/2026')
+        grupos = pagina.context['grupos_liquidacoes']
+        self.assertEqual([g['codigo'] for g in grupos], ['LIQUIDACOES', 'BOLSA_ATLETA'])
+        self.assertEqual(grupos[0]['processos'][0].id, liquidacao.id)
+        self.assertEqual(grupos[1]['processos'][0].id, bolsa.id)

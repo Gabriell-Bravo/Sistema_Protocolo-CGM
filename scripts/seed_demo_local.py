@@ -1,10 +1,9 @@
 """Gera processos DEMO só no SQLite local. Não usar em produção.
 
-Padrão: 5 com número de relatório + 3 sem número (para testar Gerar /
-vincular / cancelar).
+Um processo por grupo de numeração, com campos no estilo da planilha
+Controle Relatórios 2026, para testar o formulário do analista.
 
 Uso: python manage.py shell < scripts/seed_demo_local.py
-  ou: python scripts/seed_demo_local.py (com DJANGO_SETTINGS_MODULE)
 """
 import os
 import django
@@ -15,22 +14,158 @@ django.setup()
 from django.contrib.auth.models import User
 from processos_app.models import (
     EspecieProcesso, UnidadeAdministrativa, Processo,
-    SequenciaRelatorio, LinhaControleRelatorio,
+    LinhaControleRelatorio,
 )
 from processos_app.services import processos as svc_processos
 from processos_app.services import relatorios, tramitacao
 
 SENHA = 'teste123'
 
-TEMAS = [
-    'Pagamento de serviços de limpeza predial — contrato 12/2025',
-    'Liquidação de diárias de viagem a serviço — Out/2026',
-    'Pagamento de material de consumo — almoxarifado',
-    'Prestação de serviços de TI — suporte técnico',
-    'Auxílio bolsa-atleta — parcela Outubro/2026',
-    'Reembolso de despesas com locomoção',
-    'Pagamento de energia elétrica — unidade administrativa',
-    'Contrato de vigilância patrimonial — mensalidade',
+# Um caso por grupo: sequência, espécie, dados cadastrais + análise (planilha).
+DEMOS = [
+    {
+        'sequencia': 'LIQUIDACOES',
+        'especie': 'Pagamento Geral',
+        'ultimo': 9000,
+        'cadastro': {
+            'objeto': 'Pagamento de serviços de limpeza predial — contrato 12/2025',
+            'contratada': 'Limpeza Total Serviços LTDA',
+        },
+        'analise': {
+            'valor': '12500,00',
+            'periodo': 'Set/2026',
+            'destino': None,  # unidade padrão
+            'observacao': 'DEMO Liquidação — planilha clássica',
+        },
+        'gerar_numero': True,
+    },
+    {
+        'sequencia': 'ADIANTAMENTO',
+        'especie': 'Concessão Adiantamento',
+        'ultimo': 100,
+        'cadastro': {
+            'objeto': 'Concessão',  # Assunto na planilha
+            'contratada': 'Neusa de Oliveira Santos',  # Servidor
+        },
+        'analise': {
+            'valor': '3000,00',
+            'destino': 'Finanças',
+            'observacao': 'DEMO Adiantamento',
+        },
+        'gerar_numero': True,
+    },
+    {
+        'sequencia': 'COTA_PATROCINIO',
+        'especie': 'Concessão Patrocínio',
+        'ultimo': 200,
+        'cadastro': {
+            'objeto': 'SAQUAREMA INTERNATIONAL CUP 2026',  # Evento
+            'contratada': 'Federação de Jiu-Jitsu do RJ',  # Interessado
+        },
+        'analise': {
+            'valor': '119820,00',
+            'periodo': 'Prestação de Contas',  # Assunto
+            'destino': 'Sec. De Esporte, Lazer e Turismo',
+            'observacao': 'DEMO Cota Patrocínio',
+        },
+        'gerar_numero': True,
+    },
+    {
+        'sequencia': 'SUBVENCAO',
+        'especie': 'Subvenção Social - Concessão',
+        'ultimo': 300,
+        'cadastro': {
+            'objeto': 'Renovação para o ano de 2026',  # Necessidade
+            'contratada': 'Lar das crianças especiais — Laces',  # Entidade
+        },
+        'analise': {
+            'valor': '197400,00',
+            'periodo': 'Renovação',  # Assunto
+            'destino': 'PGM',
+            'observacao': 'DEMO Subvenção',
+        },
+        'gerar_numero': True,
+    },
+    {
+        'sequencia': 'ALUGUEL_SOCIAL',
+        'especie': 'Concessão Aux. Aluguel Social',
+        'ultimo': 400,
+        'cadastro': {
+            'objeto': 'Aluguel Social',
+            'contratada': 'Katia Marins de Vasconcelos',  # Beneficiário
+        },
+        'analise': {
+            'valor': '7200,00',
+            'periodo': '1ª parcela: R$ 600,00',  # Parcelas
+            'destino': 'Desenvolvimento Social',
+            'observacao': 'DEMO Aluguel Social',
+        },
+        'gerar_numero': True,
+    },
+    {
+        'sequencia': 'BOLSA_ATLETA',
+        'especie': 'Concessão Aux. Bolsa Atleta',
+        'ultimo': 500,
+        'cadastro': {
+            'objeto': 'Prestação 2º semestre 2025 — Jiu-Jitsu',  # Assunto/Modalidade
+            'contratada': 'Laura Silva Crispim de Carvalho',  # Atleta
+        },
+        'analise': {
+            'valor': '3000,00',
+            'periodo': 'Aline Jorge Silva Crispim de Carvalho',  # Responsável
+            'destino': 'Esporte, Lazer e Turismo',
+            'observacao': 'DEMO Bolsa Atleta · Processo concessão: 22.950/2024',
+        },
+        'gerar_numero': True,
+    },
+    {
+        'sequencia': 'AUXILIO_COMPETICAO',
+        'especie': 'Concessão Aux. Competição',
+        'ultimo': 90,
+        'cadastro': {
+            'objeto': 'Concessão — Jiu-Jitsu',
+            'contratada': 'Bernardo Rosalba de Menezes',
+        },
+        'analise': {
+            'valor': '3000,00',
+            'periodo': 'ATLETA MAIOR',
+            'destino': 'Finanças',
+            'observacao': 'DEMO Auxílio Competição',
+        },
+        'gerar_numero': True,
+    },
+    {
+        'sequencia': 'DIARIA',
+        'especie': 'Concessão Diária',
+        'ultimo': 600,
+        'cadastro': {
+            'objeto': 'Concessão Diária',
+            'contratada': 'Beatriz Ferreira de O. Correia e outros',  # Servidor(es)
+            'secretaria': 'Sec. Municipal de Desenvolvimento Social',
+        },
+        'analise': {
+            'valor': '6300,00',
+            'periodo': '3',  # Quantidade
+            'destino': 'Gabinete',
+            'observacao': 'DEMO Diária',
+        },
+        'gerar_numero': True,
+    },
+    {
+        'sequencia': 'BLOCOS_CARNAVALESCOS',
+        'especie': 'Subvenção Bloco Carnaval',
+        'ultimo': 700,
+        'cadastro': {
+            'objeto': 'Prestação de Contas 2025',
+            'contratada': 'Virgens de Itauna',  # Bloco
+        },
+        'analise': {
+            'valor': '7000,00',
+            'destino': 'Esporte',
+            'observacao': 'DEMO Blocos · Apto',
+        },
+        'gerar_numero': True,
+    },
 ]
 
 
@@ -51,6 +186,31 @@ def user(username, papel, **extra):
     return u
 
 
+def especie_do_grupo(nome, sequencia):
+    esp, _ = EspecieProcesso.objects.get_or_create(
+        nome=nome,
+        grupo='LIQUIDACOES',
+        defaults={
+            'ativo': True,
+            'gera_relatorio': True,
+            'sequencia_numeracao': sequencia,
+        },
+    )
+    campos = []
+    if not esp.ativo:
+        esp.ativo = True
+        campos.append('ativo')
+    if not esp.gera_relatorio:
+        esp.gera_relatorio = True
+        campos.append('gera_relatorio')
+    if (esp.sequencia_numeracao or '').strip() != sequencia:
+        esp.sequencia_numeracao = sequencia
+        campos.append('sequencia_numeracao')
+    if campos:
+        esp.save(update_fields=campos)
+    return esp
+
+
 def main():
     protocolo = user('protocolo', 'PROTOCOLO')
     analista = user('analista_liq', 'ANALISTA_LIQUIDACOES')
@@ -58,14 +218,13 @@ def main():
     admin = User.objects.filter(is_superuser=True).first()
     if admin is None:
         admin = user('admin', 'GESTAO', is_superuser=True)
-        admin.set_password(SENHA)
-        admin.save()
+    admin.set_password(SENHA)
+    admin.is_superuser = True
+    admin.is_staff = True
+    admin.save()
+    admin.profile.papel = 'GESTAO'
+    admin.profile.save()
 
-    especie = EspecieProcesso.objects.filter(
-        grupo='LIQUIDACOES', gera_relatorio=True, nome='Pagamento Geral').first()
-    if especie is None:
-        especie = EspecieProcesso.objects.filter(
-            grupo='LIQUIDACOES', gera_relatorio=True).first()
     unidade = (
         UnidadeAdministrativa.objects
         .filter(ativo=True)
@@ -75,98 +234,84 @@ def main():
     )
     if unidade is None:
         unidade = UnidadeAdministrativa.objects.filter(ativo=True).first()
-    print('Unidade usada:', unidade.nome)
+    print('Unidade padrão:', unidade.nome if unidade else '(nenhuma)')
 
-    # Limpa demos anteriores (processos 1..N e linhas 9xxx).
+    # Limpa demos anteriores (números simples 1..N).
     Processo.objects.filter(numero_processo__regex=r'^\d+$').delete()
-    LinhaControleRelatorio.objects.filter(
-        sequencia='LIQUIDACOES',
-        numero_relatorio__regex=r'^9\d{3}$',
-    ).delete()
     LinhaControleRelatorio.objects.filter(
         numero_processo__regex=r'^\d+$').delete()
 
-    relatorios.definir_ultimo_numero(admin, 9000, 'LIQUIDACOES')
+    for demo in DEMOS:
+        relatorios.definir_ultimo_numero(
+            admin, demo['ultimo'], demo['sequencia'])
 
-    def tema(i):
-        return TEMAS[i % len(TEMAS)]
-
-    def criar(numero_proc, indice_tema):
-        return svc_processos.criar_processo({
-            'numero_processo': str(numero_proc),
+    criados = []
+    for i, demo in enumerate(DEMOS, start=1):
+        sequencia = demo['sequencia']
+        especie = especie_do_grupo(demo['especie'], sequencia)
+        cad = demo['cadastro']
+        secretaria = cad.get('secretaria') or (unidade.nome if unidade else 'Sec. Teste')
+        p = svc_processos.criar_processo({
+            'numero_processo': str(i),
             'volume': '1',
-            'secretaria': unidade.nome,
+            'secretaria': secretaria,
             'data_entrada': '2026-10-02',
             'hora_entrada': '10:00',
             'especie': especie.nome,
             'especie_id': str(especie.id),
             'genero': especie.grupo,
-            'objeto': tema(indice_tema),
-            'contratada': 'Empresa Teste Local LTDA',
+            'objeto': cad['objeto'],
+            'contratada': cad['contratada'],
             'recorrente': 'NAO',
         }, protocolo)
 
-    def analisar(p, *, gerar_numero=False, observacao='DEMO LOCAL'):
         if p.situacao_tramite != 'EM_ANALISE':
             tramitacao.assumir(p.id, analista)
             p.refresh_from_db()
+
+        analise = dict(demo['analise'])
+        destino = analise.pop('destino', None) or (unidade.nome if unidade else '')
         dados = {
-            'destino': unidade.nome,
-            'valor': '1500,00',
-            'periodo': 'Out/2026',
+            'contratada': cad['contratada'],
+            'secretaria': secretaria,
+            'objeto': cad['objeto'],
+            'destino': destino,
+            'valor': analise.get('valor', ''),
+            'periodo': analise.get('periodo', ''),
             'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
-            'observacao': observacao,
+            'observacao': analise.get('observacao', f'DEMO {sequencia}'),
         }
-        if gerar_numero:
+        if demo.get('gerar_numero'):
             dados['gerar_numero'] = '1'
         svc_processos.aplicar_analise(p, dados, analista)
         p.refresh_from_db()
-        return p
 
-    criados = []
-    n = 1
+        info = relatorios.info_sequencia(sequencia)
+        layout = relatorios.layout_planilha(sequencia)
+        criados.append({
+            'num': p.numero_processo,
+            'grupo': info['nome'],
+            'rel': p.numero_relatorio or '(sem)',
+            'titulo': layout['titulo'],
+            'url': f'/analista/processo/{p.id}/',
+        })
 
-    # 5 com número de relatório (ativos na planilha)
-    for idx in range(5):
-        p = analisar(
-            criar(n, idx),
-            gerar_numero=True,
-            observacao=f'DEMO — com número ({idx + 1}/5)',
+    print('=== DEMO LOCAL — 1 processo por grupo ===')
+    print(f'Login analista: analista_liq / {SENHA}')
+    print(f'Login admin:    admin / {SENHA}')
+    print('')
+    print('Abra cada processo para ver o formulário igual à planilha:')
+    for item in criados:
+        print(
+            f"  #{item['num']}  {item['grupo']:22}  "
+            f"rel={str(item['rel']):6}  {item['url']}"
         )
-        criados.append((
-            p.numero_processo,
-            p.numero_relatorio,
-            'COM Nº',
-            p.objeto[:42],
-        ))
-        n += 1
-
-    # 3 sem número (análise salva; pode Gerar número ou vincular no Controle)
-    for idx in range(3):
-        p = analisar(
-            criar(n, 5 + idx),
-            gerar_numero=False,
-            observacao=f'DEMO — sem número ({idx + 1}/3)',
-        )
-        criados.append((
-            p.numero_processo,
-            '(sem)',
-            'SEM Nº',
-            p.objeto[:42],
-        ))
-        n += 1
-
-    prox = SequenciaRelatorio.objects.get(grupo='LIQUIDACOES').proximo_numero
-    print('=== DEMO LOCAL (SQLite) ===')
-    print(f'Usuarios: protocolo | analista_liq | gestao   senha: {SENHA}')
-    print(f'Admin: {admin.username} (use a senha dele)')
-    print(f'Proximo automatico Liquidacoes: {prox}')
-    print('Padrão: 5 com número + 3 sem número')
-    print('Processos:')
-    for num, rel, sit, obj in criados:
-        print(f'  {num:6}  rel={str(rel):8}  [{sit}]  {obj}')
-    print(f'Linhas no Controle: {LinhaControleRelatorio.objects.count()}')
-    print('Abra /controle-relatorio/ ou a análise dos processos 6–8 (sem nº)')
+        print(f"         -> {item['titulo']}")
+    print('')
+    print(f'Total: {len(criados)} processos · '
+          f'{LinhaControleRelatorio.objects.count()} linhas no Controle')
+    print('Fila: http://127.0.0.1:8000/analista/')
+    print('Controle: http://127.0.0.1:8000/controle-relatorio/?secao=analises')
 
 
 if __name__ == '__main__':

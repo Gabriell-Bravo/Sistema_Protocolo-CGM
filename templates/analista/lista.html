@@ -7,14 +7,14 @@
 {% block content %}
 <div class="stack">
     <section class="stats">
-        <a class="stat stat--success stat--link" href="?filtro=disponiveis{% if seq_atual %}&seq={{ seq_atual }}{% endif %}{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}">
+        <a class="stat stat--success stat--link" href="?filtro=disponiveis{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}">
             <span class="stat__icon"><span class="material-symbols-rounded">front_hand</span></span>
             <div>
                 <div class="stat__value">{{ total_disponiveis }}</div>
                 <div class="stat__label">Disponíveis</div>
             </div>
         </a>
-        <a class="stat stat--violet stat--link" href="?filtro=comigo{% if seq_atual %}&seq={{ seq_atual }}{% endif %}{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}">
+        <a class="stat stat--violet stat--link" href="?filtro=comigo{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}">
             <span class="stat__icon"><span class="material-symbols-rounded">person</span></span>
             <div>
                 <div class="stat__value">{{ total_comigo }}</div>
@@ -22,14 +22,14 @@
             </div>
         </a>
         <a class="stat stat--primary stat--link {% if filtro_atual == 'liberados' %}is-active{% endif %}"
-           href="?filtro=liberados{% if seq_atual %}&seq={{ seq_atual }}{% endif %}{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}">
+           href="?filtro=liberados{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}">
             <span class="stat__icon"><span class="material-symbols-rounded">draw</span></span>
             <div>
                 <div class="stat__value">{{ total_com_controlador }}</div>
                 <div class="stat__label">Com o Controlador</div>
             </div>
         </a>
-        <a class="stat stat--danger stat--link" href="?filtro=vencidos{% if seq_atual %}&seq={{ seq_atual }}{% endif %}{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}">
+        <a class="stat stat--danger stat--link" href="?filtro=vencidos{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}">
             <span class="stat__icon"><span class="material-symbols-rounded">running_with_errors</span></span>
             <div>
                 <div class="stat__value">{{ total_atrasados }}</div>
@@ -49,7 +49,7 @@
     <section class="filters">
         <div class="filters__chips">
             {% for chave, rotulo, quantidade in filtros_fila %}
-                <a href="?filtro={{ chave }}{% if seq_atual %}&seq={{ seq_atual }}{% endif %}{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}"
+                <a href="?filtro={{ chave }}{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}"
                    class="chip {% if filtro_atual == chave %}chip--ativo{% endif %}">
                     {{ rotulo }} <span class="chip__label">{{ quantidade }}</span>
                 </a>
@@ -61,7 +61,6 @@
         <div class="filters__bar">
             <form method="get" class="search">
                 <input type="hidden" name="filtro" value="{{ filtro_atual }}">
-                {% if seq_atual %}<input type="hidden" name="seq" value="{{ seq_atual }}">{% endif %}
                 <div class="search__field">
                     <span class="material-symbols-rounded search__icon">search</span>
                     <input type="text" name="pesquisa" class="input"
@@ -71,7 +70,7 @@
                 <button type="submit" class="btn btn--primary">Buscar</button>
             </form>
             {% if termo_pesquisa %}
-                <a href="{% url 'area_analista' %}{% if seq_atual %}?seq={{ seq_atual }}{% endif %}" class="btn btn--ghost">
+                <a href="{% url 'area_analista' %}" class="btn btn--ghost">
                     <span class="material-symbols-rounded">filter_alt_off</span>
                     Limpar
                 </a>
@@ -91,7 +90,11 @@
     {% endif %}
 
     {% if mostra_liquidacoes %}
-        {% include "analista/_fila_grupo.html" with titulo="Liquidações" grupo_css="liquidacoes" icone="payments" processos=liquidacoes mostrar_contratada=True modo_gestao=False pode_assumir=pode_assumir abas_sequencia=abas_liquidacoes %}
+        {% for grupo in grupos_liquidacoes %}
+            {% include "analista/_fila_grupo.html" with titulo=grupo.nome grupo_css="liquidacoes" icone="payments" processos=grupo.processos mostrar_contratada=True modo_gestao=False pode_assumir=pode_assumir %}
+        {% empty %}
+            {% include "analista/_fila_grupo.html" with titulo="Liquidações" grupo_css="liquidacoes" icone="payments" processos=lista_vazia mostrar_contratada=True modo_gestao=False pode_assumir=pode_assumir %}
+        {% endfor %}
     {% endif %}
 
     {% if not mostra_licitacoes and not mostra_liquidacoes %}

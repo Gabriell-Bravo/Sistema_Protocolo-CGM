@@ -114,10 +114,13 @@ def controle_relatorio(request):
             for item in svc.sequencias_disponiveis()
         ]
 
+    layout = svc.layout_planilha(grupo)
+
     return render(request, 'analista/controle_relatorio.html', {
         'aba': grupo,
         'secao': secao,
         'info_aba': info,
+        'layout_planilha': layout,
         'abas': abas,
         'abas_reserva': abas_reserva,
         'grupos_destino': svc.sequencias_disponiveis(),
@@ -174,6 +177,32 @@ def importar_planilha(request):
     except (PermissionDenied, ValidationError) as exc:
         messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
         return redirect(_voltar_controle(grupo, 'numeracao'))
+    if resultado.get('multi'):
+        resumos = []
+        for aba in resultado.get('abas') or []:
+            trecho = (
+                f'{aba["nome"]}: {aba["criadas"]} nova(s)'
+                f', próximo nº {aba["proximo"]}')
+            if aba['atualizadas']:
+                trecho += f', {aba["atualizadas"]} atualizada(s)'
+            if aba['ignoradas']:
+                trecho += f', {aba["ignoradas"]} ignorada(s)'
+            resumos.append(trecho)
+        texto = (
+            f'Importação completa — {resultado["criadas"]} linha(s) no total. '
+            + ' · '.join(resumos)
+        )
+        puladas = resultado.get('puladas') or []
+        if puladas:
+            texto += (
+                f' Abas não importadas (formato diferente ou duplicada): '
+                f'{", ".join(puladas[:5])}'
+                + ('…' if len(puladas) > 5 else '')
+                + '.'
+            )
+        messages.success(request, texto)
+        return redirect(_voltar_controle(svc.GRUPO_PADRAO, 'analises'))
+
     partes = [
         f'{resultado["nome"]}: {resultado["criadas"]} linha(s) importada(s)',
     ]
