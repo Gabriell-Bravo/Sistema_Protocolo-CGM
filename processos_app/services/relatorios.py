@@ -1270,10 +1270,16 @@ def listar(usuario, sequencia=None):
         return consulta.none()
     if sequencia:
         consulta = consulta.filter(filtro_sequencia(sequencia))
+    # Só faz cast quando o nº é inteiro puro. No PostgreSQL,
+    # Cast("56 A") quebra a tela inteira (DataError).
     return consulta.annotate(
         numero_ordem=Case(
             When(numero_relatorio='', then=Value(None)),
-            default=Cast('numero_relatorio', IntegerField()),
+            When(
+                numero_relatorio__regex=r'^[0-9]+$',
+                then=Cast('numero_relatorio', IntegerField()),
+            ),
+            default=Value(None),
             output_field=IntegerField(null=True),
         )
     # Mais recentes primeiro: evita ir até a última página da planilha.

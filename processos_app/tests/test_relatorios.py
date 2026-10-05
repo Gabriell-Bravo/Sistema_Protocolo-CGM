@@ -64,6 +64,37 @@ class ControleRelatorioTest(BaseProcessoTestCase):
             reverse('controle_relatorio') + '?termo=nao-existe-xyz')
         self.assertNotContains(vazia, 'busca-1/2026')
 
+    def test_listar_aceita_numero_relatorio_nao_inteiro(self):
+        """Planilha antiga pode ter nº tipo '56 A'; Postgres não pode Cast cego."""
+        admin = criar_usuario('admin_num_txt', 'GESTAO', is_superuser=True)
+        LinhaControleRelatorio.objects.create(
+            processo=None,
+            numero_relatorio='56 A',
+            numero_processo='x/2026',
+            data_relatorio=datetime.date(2026, 1, 10),
+            situacao_linha='HISTORICA',
+            grupo='LIQUIDACOES',
+            sequencia='LIQUIDACOES',
+        )
+        LinhaControleRelatorio.objects.create(
+            processo=None,
+            numero_relatorio='100',
+            numero_processo='y/2026',
+            data_relatorio=datetime.date(2026, 1, 11),
+            situacao_linha='HISTORICA',
+            grupo='LIQUIDACOES',
+            sequencia='LIQUIDACOES',
+        )
+        lista = list(relatorios.listar(admin, 'LIQUIDACOES'))
+        numeros = [linha.numero_relatorio for linha in lista]
+        self.assertIn('56 A', numeros)
+        self.assertIn('100', numeros)
+        self.client.force_login(admin)
+        pagina = self.client.get(
+            reverse('controle_relatorio') + '?aba=LIQUIDACOES&secao=analises')
+        self.assertEqual(pagina.status_code, 200)
+        self.assertContains(pagina, '56 A')
+
     def test_desvincular_processo_mantem_numero_na_planilha(self):
         admin = criar_usuario('admin_desvinc', 'GESTAO', is_superuser=True)
         relatorios.definir_ultimo_numero(admin, 7000)
