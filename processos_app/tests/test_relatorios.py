@@ -1328,7 +1328,7 @@ class ControleRelatorioTest(BaseProcessoTestCase):
             'Nº do Processo', 'Assunto', 'Data', 'Enviado para',
         ])
         ws.append([
-            1, 'Sec. Social', 'Maria Silva', 1, 500, '100/2026',
+            1, 'Sec. Social', 'Maria Silva', 3, 500, '100/2026',
             'Concessão Diária', datetime.date(2026, 3, 1), 'Gabinete',
         ])
         ws2 = wb.create_sheet('BLOCOS')
@@ -1339,6 +1339,36 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         ws2.append([
             '001', 'Bloco Teste', 7000, '7079/2025', 'PC 2025',
             datetime.date(2026, 2, 3), 'Esporte',
+        ])
+        ws3 = wb.create_sheet('COTA PATROCINIO')
+        ws3.append([
+            'NUMERO', 'INTERESSADO', 'EVENTO', ' VALOR ', 'Nº do Processo',
+            'Assunto', 'Data', 'Enviado para', 'OBS',
+        ])
+        ws3.append([
+            '001', 'Fed Teste', 'Copa X', 1000, '24589/2025',
+            'Prestação de Contas', datetime.date(2026, 1, 9), 'Esporte', 'ok',
+        ])
+        ws4 = wb.create_sheet('BOLSA ATLETA')
+        ws4.append([
+            'Número', 'Nome do atleta', 'Nome do responsável', 'VALOR ',
+            'Processo de concessão', 'Processo de prestação', 'Assunto',
+            'Modalidade', 'Data', 'Enviado para', 'OBS',
+        ])
+        ws4.append([
+            '001', 'Laura Atleta', 'Aline Resp', 3000,
+            '22.950/2024', '13024/2025', 'Prestação 2º semestre',
+            'Canoa', datetime.date(2026, 2, 11), 'Esporte', '',
+        ])
+        ws5 = wb.create_sheet('SUBVENÇÃO')
+        ws5.append([
+            'NUMERO', 'ENTIDADE', ' VALOR ', 'Nº do Processo', 'Assunto',
+            'NECESSIDADE CONCESSÃO/PRESTAÇÃO', 'Data', 'Enviado para', 'OBS',
+        ])
+        ws5.append([
+            '001', 'Lar Teste', 197400, '17435/2018', 'Renovação',
+            'Renovação para o ano de 2026', datetime.date(2025, 12, 22),
+            'PGM', '',
         ])
         buffer = BytesIO()
         wb.save(buffer)
@@ -1356,9 +1386,32 @@ class ControleRelatorioTest(BaseProcessoTestCase):
             {'grupo': relatorios.GRUPO_IMPORTACAO_COMPLETA, 'planilha': arquivo},
         )
         self.assertEqual(resp.status_code, 302)
-        self.assertTrue(
-            LinhaControleRelatorio.objects.filter(
-                sequencia='DIARIA', numero_relatorio='1').exists())
+
+        diaria = LinhaControleRelatorio.objects.get(
+            sequencia='DIARIA', numero_relatorio='1')
+        self.assertEqual(diaria.periodo, '3')
+        self.assertEqual(diaria.contratada, 'Maria Silva')
+
         self.assertTrue(
             LinhaControleRelatorio.objects.filter(
                 sequencia='BLOCOS_CARNAVALESCOS', numero_relatorio='001').exists())
+
+        cota = LinhaControleRelatorio.objects.get(
+            sequencia='COTA_PATROCINIO', numero_relatorio='001')
+        self.assertEqual(cota.objeto, 'Copa X')
+        self.assertEqual(cota.periodo, 'Prestação de Contas')
+        self.assertEqual(cota.contratada, 'Fed Teste')
+
+        bolsa = LinhaControleRelatorio.objects.get(
+            sequencia='BOLSA_ATLETA', numero_relatorio='001')
+        self.assertEqual(bolsa.numero_processo, '13024/2025')
+        self.assertEqual(bolsa.contratada, 'Laura Atleta')
+        self.assertEqual(bolsa.periodo, 'Aline Resp')
+        self.assertIn('Canoa', bolsa.objeto)
+        self.assertIn('concessão: 22.950/2024', bolsa.observacao.casefold())
+
+        subv = LinhaControleRelatorio.objects.get(
+            sequencia='SUBVENCAO', numero_relatorio='001')
+        self.assertEqual(subv.periodo, 'Renovação')
+        self.assertEqual(subv.objeto, 'Renovação para o ano de 2026')
+        self.assertEqual(subv.contratada, 'Lar Teste')

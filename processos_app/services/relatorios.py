@@ -1830,46 +1830,197 @@ _ALIAS_COLUNAS = {
     'analista': ('relator', 'analista', 'tecnico'),
     'processo_pagamento': (
         'processo de prestacao', 'processo prestacao',
-        'processo pagamento', 'proc pagamento', 'pagamento',
+        'processo pagamento', 'proc pagamento',
     ),
     'processo_origem': (
         'processo de concessao', 'processo concessao',
-        'processo origem', 'proc origem', 'origem',
+        'processo origem', 'proc origem',
         'n do processo', 'n processo', 'numero processo', 'nº processo',
         'processo',
     ),
     'secretaria': ('secretaria', 'secretaria de origem'),
     'objeto': (
-        'objeto', 'assunto', 'evento', 'modalidade',
+        'objeto', 'assunto', 'evento',
         'necessidade concessao prestacao', 'necessidade',
     ),
-    'periodo': ('periodo',),
+    'periodo': (
+        'periodo', 'nome do responsavel', 'quant', 'quantidade',
+    ),
+    'modalidade': ('modalidade',),
     'valor': ('valor', 'valor total'),
     'destino': ('destino', 'enviado para'),
     'contratada': (
         'contratada', 'favorecido', 'contratada favorecido', 'servidor',
         'interessado', 'entidade', 'beneficiario', 'bloco',
-        'nome do atleta', 'nome do responsavel',
+        'nome do atleta',
     ),
     'observacao_planilha': ('obs', 'observacao'),
 }
 
+# Mapa por grupo: evita colisões (ex.: Assunto vs Evento/Necessidade).
+_ALIAS_POR_GRUPO = {
+    'ADIANTAMENTO': {
+        'numero_relatorio': ('numero',),
+        'contratada': ('servidor',),
+        'valor': ('valor',),
+        'processo_origem': (
+            'n do processo', 'n processo', 'numero processo', 'nº processo',
+        ),
+        'objeto': ('assunto',),
+        'data_relatorio': ('data',),
+        'destino': ('enviado para', 'destino'),
+        'secretaria': ('secretaria de origem', 'secretaria'),
+    },
+    'COTA_PATROCINIO': {
+        'numero_relatorio': ('numero',),
+        'contratada': ('interessado',),
+        'objeto': ('evento',),
+        'valor': ('valor',),
+        'processo_origem': (
+            'n do processo', 'n processo', 'numero processo', 'nº processo',
+        ),
+        'periodo': ('assunto',),
+        'data_relatorio': ('data',),
+        'destino': ('enviado para', 'destino'),
+        'observacao_planilha': ('obs', 'observacao'),
+    },
+    'SUBVENCAO': {
+        'numero_relatorio': ('numero',),
+        'contratada': ('entidade',),
+        'valor': ('valor',),
+        'processo_origem': (
+            'n do processo', 'n processo', 'numero processo', 'nº processo',
+        ),
+        'periodo': ('assunto',),
+        'objeto': ('necessidade',),
+        'data_relatorio': ('data',),
+        'destino': ('enviado para', 'destino'),
+        'observacao_planilha': ('obs', 'observacao'),
+    },
+    'ALUGUEL_SOCIAL': {
+        'numero_relatorio': ('numero',),
+        'contratada': ('beneficiario',),
+        'valor': ('valor',),
+        'processo_origem': (
+            'n do processo', 'n processo', 'numero processo', 'nº processo',
+        ),
+        'objeto': ('assunto',),
+        'data_relatorio': ('data',),
+        'destino': ('enviado para', 'destino'),
+        'observacao_planilha': ('obs', 'observacao'),
+    },
+    'BOLSA_ATLETA': {
+        'numero_relatorio': ('numero',),
+        'contratada': ('nome do atleta',),
+        'periodo': ('nome do responsavel',),
+        'valor': ('valor',),
+        'processo_origem': (
+            'processo de concessao', 'processo concessao',
+        ),
+        'processo_pagamento': (
+            'processo de prestacao', 'processo prestacao',
+        ),
+        'objeto': ('assunto',),
+        'modalidade': ('modalidade',),
+        'data_relatorio': ('data',),
+        'destino': ('enviado para', 'destino'),
+        'observacao_planilha': ('obs', 'observacao'),
+    },
+    'AUXILIO_COMPETICAO': {
+        'numero_relatorio': ('numero',),
+        'contratada': ('nome do atleta',),
+        'periodo': ('nome do responsavel',),
+        'valor': ('valor',),
+        'processo_origem': (
+            'processo de concessao', 'processo concessao',
+        ),
+        'processo_pagamento': (
+            'processo de prestacao', 'processo prestacao',
+        ),
+        'objeto': ('assunto',),
+        'modalidade': ('modalidade',),
+        'data_relatorio': ('data',),
+        'destino': ('enviado para', 'destino'),
+        'observacao_planilha': ('obs', 'observacao'),
+    },
+    'DIARIA': {
+        'numero_relatorio': ('numero',),
+        'secretaria': ('secretaria',),
+        'contratada': ('servidor',),
+        'periodo': ('quant', 'quantidade'),
+        'valor': ('valor total', 'valor'),
+        'processo_origem': (
+            'n do processo', 'n processo', 'numero processo', 'nº processo',
+        ),
+        'objeto': ('assunto',),
+        'data_relatorio': ('data',),
+        'destino': ('enviado para', 'destino'),
+    },
+    'BLOCOS_CARNAVALESCOS': {
+        'numero_relatorio': ('numero',),
+        'contratada': ('bloco',),
+        'valor': ('valor',),
+        'processo_origem': (
+            'n do processo', 'n processo', 'numero processo', 'nº processo',
+        ),
+        'objeto': ('assunto',),
+        'data_relatorio': ('data',),
+        'destino': ('enviado para', 'destino'),
+        'observacao_planilha': ('obs', 'observacao'),
+    },
+}
 
-def _mapear_cabecalhos(linha):
+
+def _campo_por_chave(chave, aliases_dict, campos_ja):
+    """Escolhe o campo que melhor casa com o cabeçalho (exato > parcial)."""
+    candidatos = []
+    for campo, aliases in aliases_dict.items():
+        if campo in campos_ja:
+            continue
+        for alias in aliases:
+            if not alias:
+                continue
+            if chave == alias:
+                candidatos.append((0, -len(alias), campo))
+            elif alias in chave:
+                candidatos.append((1, -len(alias), campo))
+    if not candidatos:
+        return None
+    candidatos.sort()
+    return candidatos[0][2]
+
+
+def _mapear_cabecalhos(linha, grupo=None):
+    """Mapeia índices de coluna → campo. Usa layout do grupo quando conhecido."""
     mapa = {}
     usados = set()
+    aliases = _ALIAS_POR_GRUPO.get(grupo) if grupo else None
+
     for indice, celula in enumerate(linha):
         chave = _chave_cabecalho(celula)
         if not chave:
             continue
-        for campo, aliases in _ALIAS_COLUNAS.items():
-            if campo in mapa:
-                continue
-            if chave in aliases or any(alias in chave for alias in aliases):
-                # "destino" aparece duas vezes na planilha da CGM — fica o 1º.
-                mapa[campo] = indice
-                usados.add(indice)
-                break
+        campo = None
+        if aliases:
+            campo = _campo_por_chave(chave, aliases, mapa)
+        if campo is None:
+            campo = _campo_por_chave(chave, _ALIAS_COLUNAS, mapa)
+        if campo is None:
+            continue
+        mapa[campo] = indice
+        usados.add(indice)
+
+    # Aluguel Social: 1ª…5ª parcela → periodo combinado.
+    parcelas = []
+    for indice, celula in enumerate(linha):
+        if indice in usados:
+            continue
+        chave = _chave_cabecalho(celula)
+        if chave and 'parcela' in chave:
+            parcelas.append(indice)
+            usados.add(indice)
+    if parcelas:
+        mapa['parcelas'] = parcelas
     return mapa
 
 
@@ -1907,16 +2058,21 @@ def _escolher_aba_planilha(workbook, grupo=None):
         for nome in workbook.sheetnames:
             if _sequencia_por_nome_aba(nome) == grupo:
                 return workbook[nome]
+        raise RelatorioInvalido(
+            f'Não achei a aba do grupo {info_sequencia(grupo)["nome"]} '
+            f'neste arquivo. Se for o Excel unificado 2026, escolha '
+            f'“Todas as abas do arquivo”.'
+        )
     for nome in workbook.sheetnames:
         if 'controle' in _chave_cabecalho(nome):
             return workbook[nome]
     return workbook[workbook.sheetnames[0]]
 
 
-def _localizar_cabecalho(planilha, max_row=25):
+def _localizar_cabecalho(planilha, grupo=None, max_row=25):
     for indice, row in enumerate(
             planilha.iter_rows(min_row=1, max_row=max_row, values_only=True), 1):
-        mapa = _mapear_cabecalhos(row)
+        mapa = _mapear_cabecalhos(row, grupo=grupo)
         if 'numero_relatorio' not in mapa:
             continue
         if (
@@ -1924,7 +2080,8 @@ def _localizar_cabecalho(planilha, max_row=25):
                 or 'processo_pagamento' in mapa
                 or 'processo_origem' in mapa
                 or 'objeto' in mapa
-                or 'contratada' in mapa):
+                or 'contratada' in mapa
+                or 'periodo' in mapa):
             return indice, mapa
     raise RelatorioInvalido(
         'Não encontrei o cabeçalho da planilha. '
@@ -2053,8 +2210,23 @@ def _importar_linhas_aba(planilha, linha_cabecalho, colunas, grupo, existentes):
         secretaria = _texto_celula(cel('secretaria'))
         contratada = _texto_celula(cel('contratada'))
         objeto = _texto_celula(cel('objeto'), limite=5000)
+        modalidade = _texto_celula(cel('modalidade'))
+        if modalidade:
+            objeto = (
+                f'{objeto} — {modalidade}' if objeto else modalidade
+            )[:5000]
         obs_planilha = _texto_celula(cel('observacao_planilha'), limite=500)
         periodo = _texto_celula(cel('periodo'))
+        idxs_parcelas = colunas.get('parcelas') or []
+        if not periodo and idxs_parcelas:
+            partes = []
+            for n, idx in enumerate(idxs_parcelas, 1):
+                if idx >= len(valores):
+                    continue
+                trecho = _texto_celula(valores[idx])
+                if trecho:
+                    partes.append(f'{n}ª: {trecho}')
+            periodo = ' · '.join(partes)[:255]
         destino = _texto_celula(cel('destino'))
         valor_bruto = cel('valor')
         if isinstance(valor_bruto, (int, float)):
@@ -2089,7 +2261,12 @@ def _importar_linhas_aba(planilha, linha_cabecalho, colunas, grupo, existentes):
         if obs_planilha:
             obs.append(obs_planilha)
         if origem and pagamento and origem != pagamento:
-            obs.append(f'Processo origem: {origem}')
+            rotulo = (
+                'Processo concessão'
+                if grupo in ('BOLSA_ATLETA', 'AUXILIO_COMPETICAO')
+                else 'Processo origem'
+            )
+            obs.append(f'{rotulo}: {origem}')
 
         dados = {
             'numero_processo': numero_processo,
@@ -2180,7 +2357,7 @@ def _existentes_por_grupo(grupo):
 
 
 def _importar_aba_excel(planilha, grupo):
-    linha_cabecalho, colunas = _localizar_cabecalho(planilha)
+    linha_cabecalho, colunas = _localizar_cabecalho(planilha, grupo=grupo)
     existentes = _existentes_por_grupo(grupo)
     criadas, atualizadas, ignoradas, maior_inteiro = _importar_linhas_aba(
         planilha, linha_cabecalho, colunas, grupo, existentes)
