@@ -90,9 +90,6 @@
                             <th>Analista</th>
                             <th>Secretaria</th>
                             <th>Objeto</th>
-                            <th>Espécie</th>
-                            <th>Volume</th>
-                            <th>Contratada / Favorecido</th>
                             <th>Valor</th>
                             <th>Período</th>
                             <th>Destino</th>
@@ -127,9 +124,6 @@
                             <td>{{ linha.analista|default:"—" }}</td>
                             <td>{{ linha.secretaria|default:"—" }}</td>
                             <td class="cell-wrap">{{ linha.objeto|truncatechars:80|default:"—" }}</td>
-                            <td>{{ linha.processo.especie|default:"—" }}</td>
-                            <td>{{ linha.volume|default:"—" }}</td>
-                            <td>{{ linha.contratada|default:"—" }}</td>
                             <td>{{ linha.valor|default:"—" }}</td>
                             <td>{{ linha.periodo|default:"—" }}</td>
                             <td>{{ linha.destino|default:"—" }}</td>
@@ -237,7 +231,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="15">
+                            <td colspan="12">
                                 <div class="empty empty--compact">
                                     <span class="material-symbols-rounded">table_chart</span>
                                     <div class="empty__title">Nenhuma linha neste grupo</div>
