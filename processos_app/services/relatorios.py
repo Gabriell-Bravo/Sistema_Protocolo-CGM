@@ -434,30 +434,19 @@ def _especie_e_prestacao(processo):
 
 
 def processos_relacionados_formulario(processo):
-    """Valores dos campos Processo de concessão / prestação (Bolsa e Auxílio).
+    """Campos editáveis Processo de concessão / prestação (Bolsa e Auxílio).
 
-    O nº do processo atual fica só leitura; o relacionado grava em `volume`.
+    Concessão = nº do processo (editável). Prestação começa vazia (editável).
     """
     sequencia = sequencia_do_processo(processo)
     if sequencia not in ('BOLSA_ATLETA', 'AUXILIO_COMPETICAO'):
         return None
-    atual = (processo.numero_processo or '').strip()
-    relacionado = (processo.volume or '').strip()
-    if _especie_e_prestacao(processo):
-        return {
-            'concessao': relacionado,
-            'concessao_name': 'volume',
-            'concessao_readonly': False,
-            'prestacao': atual,
-            'prestacao_name': '',
-            'prestacao_readonly': True,
-        }
     return {
-        'concessao': atual,
-        'concessao_name': '',
-        'concessao_readonly': True,
-        'prestacao': relacionado,
-        'prestacao_name': 'volume',
+        'concessao': (processo.numero_processo or '').strip(),
+        'concessao_name': 'numero_processo',
+        'concessao_readonly': False,
+        'prestacao': (getattr(processo, 'processo_prestacao', None) or '').strip(),
+        'prestacao_name': 'processo_prestacao',
         'prestacao_readonly': False,
     }
 
@@ -1665,16 +1654,12 @@ def _dados_da_linha(processo):
     sequencia = sequencia_do_processo(processo) or GRUPO_PADRAO
     numero_processo = processo.numero_processo or ''
     volume = processo.volume or ''
-    # Bolsa/Auxílio: volume = concessão; numero_processo = prestação.
+    # Bolsa/Auxílio na planilha: concessão = nº do processo; prestação = campo opcional.
     if sequencia in ('BOLSA_ATLETA', 'AUXILIO_COMPETICAO'):
-        atual = (processo.numero_processo or '').strip()
-        relacionado = (processo.volume or '').strip()
-        if _especie_e_prestacao(processo):
-            numero_processo = atual
-            volume = relacionado
-        else:
-            volume = atual
-            numero_processo = relacionado
+        volume = (processo.numero_processo or '').strip()
+        numero_processo = (
+            getattr(processo, 'processo_prestacao', None) or ''
+        ).strip()
     return {
         'numero_processo': numero_processo,
         'volume': volume,

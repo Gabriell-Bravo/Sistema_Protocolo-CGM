@@ -71,6 +71,11 @@ class Processo(models.Model):
         max_length=255, verbose_name="Número de Processo")
     volume = models.CharField(
         max_length=255, verbose_name="Volume")
+    # Bolsa Atleta / Auxílio: nº do processo de prestação (planilha).
+    # Concessão relacionada fica em `volume` nesses grupos.
+    processo_prestacao = models.CharField(
+        max_length=255, blank=True, default='',
+        verbose_name="Processo de prestação")
     secretaria = models.CharField(max_length=255, verbose_name="Secretaria")
     data_entrada = models.DateField(verbose_name="Data de Entrada")
     hora_entrada = models.TimeField(verbose_name="Hora de Entrada")

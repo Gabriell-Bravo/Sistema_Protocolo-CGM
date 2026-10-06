@@ -44,16 +44,16 @@ CAMPOS_PROTOCOLO = (
 # Dados da análise: o que o analista responsável alimenta.
 CAMPOS_ANALISTA = (
     'valor', 'destino', 'periodo', 'data_analise', 'numero_despacho',
-    'status_analise', 'observacao',
+    'status_analise', 'observacao', 'processo_prestacao',
 )
 
 # Dados cadastrais do processo que analista e administrador também
 # corrigem na tela do processo (resumo: espécie, volume, objeto etc.).
 # Situação, analista e assumido em continuam só pela tramitação.
 CAMPOS_CADASTRO = (
-    'volume', 'secretaria', 'data_entrada', 'hora_entrada',
-    'genero', 'especie', 'objeto', 'contratada', 'prioridade',
-    'observacao_protocolo',
+    'numero_processo', 'volume', 'processo_prestacao', 'secretaria',
+    'data_entrada', 'hora_entrada', 'genero', 'especie', 'objeto',
+    'contratada', 'prioridade', 'observacao_protocolo',
 )
 
 # A Gestão não pratica ato técnico nem edita dado de protocolo (item 2).

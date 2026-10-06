@@ -702,20 +702,62 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         self.assertContains(tela, 'id="processo_prestacao"')
         self.assertContains(tela, '24099/2025')
 
+        rel = tela.context['processos_relacionados']
+        # Concessão = nº do processo; prestação vazia; os dois editáveis.
+        self.assertEqual(rel['concessao'], '24099/2025')
+        self.assertEqual(rel['prestacao'], '')
+        self.assertEqual(rel['concessao_name'], 'numero_processo')
+        self.assertEqual(rel['prestacao_name'], 'processo_prestacao')
+        self.assertContains(tela, 'name="numero_processo"')
+        self.assertContains(tela, 'name="processo_prestacao"')
+
         resp = self.client.post(reverse('analista_processo', args=[processo.id]), {
             'valor': 'R$ 3.000,00',
             'destino': 'Unidade de Teste',
             'periodo': 'Aline Resp',
             'contratada': 'Laura Atleta',
             'objeto': 'Prestação 2º semestre — Jiu-Jitsu',
-            'volume': '22.140/2024',
+            'numero_processo': '24099/2025',
+            'processo_prestacao': '24.099/2025',
             'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
             'observacao': '',
         })
         self.assertEqual(resp.status_code, 302)
         processo.refresh_from_db()
-        self.assertEqual(processo.volume, '22.140/2024')
+        self.assertEqual(processo.numero_processo, '24099/2025')
+        self.assertEqual(processo.processo_prestacao, '24.099/2025')
         from processos_app.services import relatorios
         dados_linha = relatorios._dados_da_linha(processo)
-        self.assertEqual(dados_linha['numero_processo'], '24099/2025')
-        self.assertEqual(dados_linha['volume'], '22.140/2024')
+        self.assertEqual(dados_linha['volume'], '24099/2025')
+        self.assertEqual(dados_linha['numero_processo'], '24.099/2025')
+
+        especie_conc, _ = EspecieProcesso.objects.get_or_create(
+            nome='Concessão Aux. Bolsa Atleta', grupo=LIQ,
+            defaults={'ativo': True, 'gera_relatorio': True,
+                      'sequencia_numeracao': 'BOLSA_ATLETA'})
+        if especie_conc.sequencia_numeracao != 'BOLSA_ATLETA':
+            especie_conc.sequencia_numeracao = 'BOLSA_ATLETA'
+            especie_conc.save(update_fields=['sequencia_numeracao'])
+        conc = self.novo_processo(
+            especie=especie_conc, numero_processo='22140/2024')
+        tramitacao.assumir(conc.id, self.analista_liq)
+        tela_conc = self.client.get(reverse('analista_processo', args=[conc.id]))
+        rel_conc = tela_conc.context['processos_relacionados']
+        self.assertEqual(rel_conc['concessao'], '22140/2024')
+        self.assertEqual(rel_conc['prestacao'], '')
+        resp_conc = self.client.post(reverse('analista_processo', args=[conc.id]), {
+            'valor': 'R$ 3.000,00',
+            'destino': 'Unidade de Teste',
+            'periodo': 'Responsavel',
+            'contratada': 'Atleta',
+            'objeto': 'Concessão — Natação',
+            'numero_processo': '22140/2024',
+            'processo_prestacao': '',
+            'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+            'observacao': '',
+        })
+        self.assertEqual(resp_conc.status_code, 302)
+        conc.refresh_from_db()
+        self.assertEqual(conc.processo_prestacao, '')
+        self.assertEqual(relatorios._dados_da_linha(conc)['volume'], '22140/2024')
+        self.assertEqual(relatorios._dados_da_linha(conc)['numero_processo'], '')
