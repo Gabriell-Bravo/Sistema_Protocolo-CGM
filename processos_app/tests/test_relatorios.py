@@ -1268,6 +1268,50 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertContains(planilha, '200/2026')
         self.assertContains(planilha, '56 A')
 
+    def test_amarelo_na_importacao_so_vale_para_liquidacao(self):
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from openpyxl import Workbook
+        from openpyxl.styles import PatternFill
+
+        admin = criar_usuario('admin_amarelo_grp', 'GESTAO', is_superuser=True)
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'ADIANTAMENTOS'
+        ws.append([
+            'NUMERO', 'SERVIDOR', ' VALOR ', 'Nº do Processo', 'Assunto',
+            'Data', 'Enviado para', 'Secretaria de Origem',
+        ])
+        ws.append([
+            '010', 'Servidor Amarelo', 1000, '99/2026', 'Concessão',
+            datetime.date(2026, 1, 6), 'Finanças', 'Sec. Educação',
+        ])
+        amarelo = PatternFill(
+            start_color='FFFFFF00', end_color='FFFFFF00', fill_type='solid')
+        for celula in ws[ws.max_row]:
+            celula.fill = amarelo
+        buffer = BytesIO()
+        wb.save(buffer)
+        arquivo = SimpleUploadedFile(
+            'adiant_amarelo.xlsx',
+            buffer.getvalue(),
+            content_type=(
+                'application/vnd.openxmlformats-officedocument.'
+                'spreadsheetml.sheet'
+            ),
+        )
+        self.client.force_login(admin)
+        resp = self.client.post(
+            reverse('controle_relatorio_importar'),
+            {'grupo': 'ADIANTAMENTO', 'planilha': arquivo},
+        )
+        self.assertEqual(resp.status_code, 302)
+        linha = LinhaControleRelatorio.objects.get(
+            sequencia='ADIANTAMENTO', numero_relatorio='010')
+        self.assertFalse(linha.sem_relatorio)
+        self.assertNotIn('sem análise', (linha.observacao or '').casefold())
+
     def test_reimporta_substitui_historico_misturado(self):
         """Histórico errado (ex.: Liquidação no Adiantamento) some na reimportação."""
         from io import BytesIO

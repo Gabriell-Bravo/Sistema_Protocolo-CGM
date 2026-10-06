@@ -2189,7 +2189,11 @@ def _importar_linhas_aba(planilha, linha_cabecalho, colunas, grupo, existentes):
         if not numero_txt:
             continue
 
-        amarela = _linha_amarela(row)
+        # Amarelo = “saiu sem análise” só na planilha de Liquidação.
+        # Nos demais grupos a cor da célula não altera o status.
+        amarela = (
+            grupo == GRUPO_PADRAO and _linha_amarela(row)
+        )
 
         def cel(campo, _valores=valores):
             indice = colunas.get(campo)
