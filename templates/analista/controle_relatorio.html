@@ -375,6 +375,12 @@
                         <input type="hidden" name="grupo" value="{{ aba }}">
                         <div class="form-grid">
                             <div class="field">
+                                <label class="field__label" for="editar_numero">{{ layout_planilha.rotulos.numero_relatorio }}</label>
+                                <input type="text" id="editar_numero" name="numero_relatorio" class="input"
+                                       inputmode="numeric" autocomplete="off" required>
+                                <span class="field__hint">Pode trocar o número desta linha. Não use um nº já ocupado no mesmo grupo.</span>
+                            </div>
+                            <div class="field">
                                 <label class="field__label" for="editar_data">{{ layout_planilha.rotulos.data_relatorio }}</label>
                                 <input type="date" id="editar_data" name="data_relatorio" class="input" required>
                             </div>
@@ -444,6 +450,7 @@
             if (!form) return;
             var rotulo = document.querySelector('[data-editar-rotulo]');
             var mapa = {
+                numero_relatorio: 'data-editar-numero',
                 data_relatorio: 'data-editar-data',
                 numero_processo: 'data-editar-processo',
                 volume: 'data-editar-volume',
@@ -471,6 +478,12 @@
                 var sem = form.querySelector('#editar_sem');
                 if (sem) sem.checked = botao.getAttribute('data-editar-sem') === '1';
             });
+            var campoNumero = form.querySelector('[name="numero_relatorio"]');
+            if (campoNumero && rotulo) {
+                campoNumero.addEventListener('input', function () {
+                    rotulo.textContent = campoNumero.value.trim() || '—';
+                });
+            }
         })();
         </script>
         {% endif %}

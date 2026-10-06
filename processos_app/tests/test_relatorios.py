@@ -186,6 +186,7 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         resp = self.client.post(
             reverse('controle_relatorio_editar_linha', args=[linha.id]), {
                 'grupo': 'LIQUIDACOES',
+                'numero_relatorio': '777',
                 'data_relatorio': '2026-03-15',
                 'numero_processo': 'novo/2026',
                 'secretaria': 'Sec nova',
@@ -202,6 +203,33 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertEqual(linha.objeto, 'Objeto novo')
         self.assertTrue(linha.sem_relatorio)
         self.assertTrue(linha.valor.startswith('R$'))
+
+    def test_analista_troca_numero_relatorio_pela_planilha(self):
+        processo = self.novo_processo(self.especie_liq, numero_processo='troca-n/2026')
+        self._salvar_liquidacao(processo)
+        linha = LinhaControleRelatorio.objects.get(processo=processo)
+        numero_antigo = linha.numero_relatorio
+        novo = str(int(numero_antigo) + 50)
+
+        self.client.force_login(self.analista_liq)
+        pagina = self.client.get(reverse('controle_relatorio'))
+        self.assertContains(pagina, 'name="numero_relatorio"')
+        resp = self.client.post(
+            reverse('controle_relatorio_editar_linha', args=[linha.id]), {
+                'grupo': 'LIQUIDACOES',
+                'numero_relatorio': novo,
+                'data_relatorio': '2026-10-06',
+                'numero_processo': processo.numero_processo,
+                'secretaria': processo.secretaria,
+                'objeto': processo.objeto,
+                'valor': '100',
+                'analista': 'Analista',
+            })
+        self.assertEqual(resp.status_code, 302)
+        linha.refresh_from_db()
+        processo.refresh_from_db()
+        self.assertEqual(linha.numero_relatorio, novo)
+        self.assertEqual(processo.numero_relatorio, novo)
 
     def test_marcar_sem_relatorio_pela_planilha_do_controle(self):
         admin = criar_usuario('admin_sr_planilha', 'GESTAO', is_superuser=True)
@@ -1169,6 +1197,41 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertEqual(pagina.status_code, 200)
         self.assertNotContains(pagina, '13/2026')
 
+    def test_analista_liquidacoes_ve_historico_importado_de_outras_sequencias(self):
+        """Importação antiga gravava grupo vazio; analista precisa ver igual ao admin."""
+        LinhaControleRelatorio.objects.create(
+            processo=None,
+            numero_relatorio='72',
+            numero_processo='11792/2026',
+            contratada='Jade Santos',
+            data_relatorio=datetime.date(2026, 7, 1),
+            situacao_linha='HISTORICA',
+            grupo='',
+            sequencia='ADIANTAMENTO',
+        )
+        LinhaControleRelatorio.objects.create(
+            processo=None,
+            numero_relatorio='1',
+            numero_processo='13024/2025',
+            contratada='Laura Atleta',
+            data_relatorio=datetime.date(2026, 2, 11),
+            situacao_linha='HISTORICA',
+            grupo='LIQUIDACOES',
+            sequencia='BOLSA_ATLETA',
+        )
+        self.client.force_login(self.analista_liq)
+        adiant = self.client.get(
+            reverse('controle_relatorio') + '?aba=ADIANTAMENTO&secao=analises')
+        self.assertEqual(adiant.status_code, 200)
+        self.assertContains(adiant, '11792/2026')
+        self.assertContains(adiant, 'Jade Santos')
+
+        bolsa = self.client.get(
+            reverse('controle_relatorio') + '?aba=BOLSA_ATLETA&secao=analises')
+        self.assertEqual(bolsa.status_code, 200)
+        self.assertContains(bolsa, '13024/2025')
+        self.assertContains(bolsa, 'Laura Atleta')
+
     def test_admin_importa_planilha_excel_historica(self):
         from io import BytesIO
 
@@ -1411,8 +1474,16 @@ class ControleRelatorioTest(BaseProcessoTestCase):
             sequencia='ADIANTAMENTO', numero_relatorio='001')
         self.assertEqual(linha.numero_processo, '21257/2025')
         self.assertEqual(linha.contratada, 'Servidor Teste')
+        self.assertEqual(linha.grupo, 'LIQUIDACOES')
         self.assertFalse(
             LinhaControleRelatorio.objects.filter(numero_relatorio='999').exists())
+
+        # Analista de Liquidações também vê o histórico importado.
+        self.client.force_login(self.analista_liq)
+        planilha = self.client.get(
+            reverse('controle_relatorio') + '?aba=ADIANTAMENTO&secao=analises')
+        self.assertContains(planilha, '21257/2025')
+        self.assertContains(planilha, 'Servidor Teste')
 
     def test_importa_planilha_todas_abas(self):
         from io import BytesIO

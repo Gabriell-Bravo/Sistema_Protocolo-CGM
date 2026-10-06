@@ -42,6 +42,7 @@ class TelasPorPapelTest(BaseProcessoTestCase):
         self._get(self.analista_lic, 'area_analista')
         self._get(self.analista_lic, 'area_analista', query='?filtro=disponiveis')
         self._get(self.analista_lic, 'analista_processo', self.processo.id)
+        self._get(self.analista_lic, 'meus_processos')
         self._get(self.analista_lic, 'meus_atendimentos')
         self._get(self.analista_lic, 'listar_finalizados')
         self._get(self.analista_lic, 'gestao_liberados_assinatura')
@@ -67,6 +68,7 @@ class TelasPorPapelTest(BaseProcessoTestCase):
         self._get(self.analista_liq, 'analista_processo', self.processo.id, esperado=403)
         self._get(self.protocolo, 'gestao_diligencias', esperado=403)
         self._get(self.protocolo, 'gestao_liberados_assinatura', esperado=403)
+        self._get(self.protocolo, 'meus_processos', esperado=302)
 
     def test_analista_consulta_finalizados_assinatura_e_diligencias_sem_editar(self):
         from processos_app.services import pendencias
@@ -600,6 +602,31 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         resposta = self.client.get(reverse('area_analista') + '?filtro=liberados')
         self.assertContains(resposta, '1004/2026')
         self.assertContains(resposta, 'A assinatura do Controlador é fora do sistema')
+
+    def test_meus_processos_mostra_comigo_e_ja_trabalhei(self):
+        comigo = self.processo_em_analise()
+        comigo.numero_processo = 'mp-comigo/2026'
+        comigo.save(update_fields=['numero_processo'])
+
+        feito = self.processo_em_analise()
+        feito.numero_processo = 'mp-feito/2026'
+        feito.save(update_fields=['numero_processo'])
+        tramitacao.liberar_assinatura(feito.id, self.analista_lic)
+
+        self.client.force_login(self.analista_lic)
+        pagina = self.client.get(reverse('meus_processos'))
+        self.assertEqual(pagina.status_code, 200)
+        self.assertContains(pagina, 'Meus processos')
+        self.assertContains(pagina, 'mp-comigo/2026')
+        self.assertNotContains(pagina, 'mp-feito/2026')
+
+        feitos = self.client.get(reverse('meus_processos') + '?filtro=feitos')
+        self.assertContains(feitos, 'mp-feito/2026')
+        self.assertNotContains(feitos, 'mp-comigo/2026')
+
+        todos = self.client.get(reverse('meus_processos') + '?filtro=todos')
+        self.assertContains(todos, 'mp-comigo/2026')
+        self.assertContains(todos, 'mp-feito/2026')
 
     def test_historico_mostra_usuario_entrada_e_saida(self):
         processo = self.novo_processo(numero_processo='hist-user/2026')

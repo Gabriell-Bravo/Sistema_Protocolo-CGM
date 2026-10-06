@@ -23,7 +23,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from ..models import Processo, UrgenciaRecorrente
-from . import cadastros, monitoramento, prazos
+from . import cadastros, monitoramento, prazos, prioridade_auto
 from . import permissions as perm
 from .eventos import registrar_diff, registrar_evento
 
@@ -256,11 +256,21 @@ def criar_processo(dados, usuario):
 
     processo.secretaria_fk = cadastros.resolver_unidade(processo.secretaria)
 
-    # Prioridade informada na entrada. Se o número está marcado como
-    # urgência recorrente pela Gestão, nasce Urgente de qualquer forma.
+    # Prioridade na entrada: (1) urgência recorrente por número;
+    # (2) palavra-chave da contratada/objeto (listas da CGM);
+    # (3) o que o Protocolo informou no formulário.
     codigo_prioridade = prazos.normalizar_prioridade(dados.get('prioridade'))
     if UrgenciaRecorrente.vale_para(processo.numero_processo):
         codigo_prioridade = 'URGENTE'
+    else:
+        detectada = prioridade_auto.detectar_codigo({
+            'contratada': processo.contratada,
+            'objeto': processo.objeto,
+            'secretaria': processo.secretaria,
+            'numero_processo': processo.numero_processo,
+        })
+        if detectada:
+            codigo_prioridade = detectada
     cadastro_prio = cadastros.resolver_prioridade(codigo_prioridade)
     if cadastro_prio is None or not cadastro_prio.ativo:
         codigo_prioridade = 'NORMAL'

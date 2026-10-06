@@ -1712,6 +1712,18 @@ button.encaminhamento__opcao:disabled {
     color: var(--warning-hover);
 }
 
+.badge--obras {
+    background: #ffe8cc;
+    border-color: #f0b36a;
+    color: #9a4b00;
+}
+
+.badge--recorrente {
+    background: #fff6b8;
+    border-color: #e6c200;
+    color: #7a6400;
+}
+
 .badge--danger {
     background: var(--danger-soft);
     border-color: var(--danger-border);
@@ -2923,7 +2935,7 @@ tr.is-inativo td {
 }
 
 /* Linha do processo pela prioridade.
-   Verde claro = normal, amarelo = prioritário, vermelho = urgente.
+   Verde claro = normal, amarelo = recorrente, laranja = obras, vermelho = urgente.
    Inclui coluna fixa e ações, que têm fundo próprio. */
 .table tbody tr.tr-prio-normal > td,
 .table tbody tr.tr-prio-normal:hover > td,
@@ -2934,6 +2946,12 @@ tr.is-inativo td {
     background: #d8f5df;
 }
 
+.table tbody tr.tr-prio-recorrente > td,
+.table tbody tr.tr-prio-recorrente:hover > td,
+.table tbody tr.tr-prio-recorrente > td.col-sticky,
+.table tbody tr.tr-prio-recorrente:hover > td.col-sticky,
+.table tbody tr.tr-prio-recorrente > td.col-actions,
+.table tbody tr.tr-prio-recorrente:hover > td.col-actions,
 .table tbody tr.tr-prio-prioritario > td,
 .table tbody tr.tr-prio-prioritario:hover > td,
 .table tbody tr.tr-prio-prioritario > td.col-sticky,
@@ -2941,6 +2959,15 @@ tr.is-inativo td {
 .table tbody tr.tr-prio-prioritario > td.col-actions,
 .table tbody tr.tr-prio-prioritario:hover > td.col-actions {
     background: #fff3a3;
+}
+
+.table tbody tr.tr-prio-obras > td,
+.table tbody tr.tr-prio-obras:hover > td,
+.table tbody tr.tr-prio-obras > td.col-sticky,
+.table tbody tr.tr-prio-obras:hover > td.col-sticky,
+.table tbody tr.tr-prio-obras > td.col-actions,
+.table tbody tr.tr-prio-obras:hover > td.col-actions {
+    background: #ffd8a8;
 }
 
 .table tbody tr.tr-prio-urgente > td,
@@ -2958,10 +2985,19 @@ tr.is-inativo td {
     background: #c4edd0;
 }
 
+.table tbody tr.tr-prio-recorrente:hover > td,
+.table tbody tr.tr-prio-recorrente:hover > td.col-sticky,
+.table tbody tr.tr-prio-recorrente:hover > td.col-actions,
 .table tbody tr.tr-prio-prioritario:hover > td,
 .table tbody tr.tr-prio-prioritario:hover > td.col-sticky,
 .table tbody tr.tr-prio-prioritario:hover > td.col-actions {
     background: #ffe56a;
+}
+
+.table tbody tr.tr-prio-obras:hover > td,
+.table tbody tr.tr-prio-obras:hover > td.col-sticky,
+.table tbody tr.tr-prio-obras:hover > td.col-actions {
+    background: #ffc078;
 }
 
 .table tbody tr.tr-prio-urgente:hover > td,
@@ -2977,10 +3013,20 @@ tr.is-inativo td {
     color: #0f172a;
 }
 
+[data-theme="dark"] .table tbody tr.tr-prio-recorrente > td,
+[data-theme="dark"] .table tbody tr.tr-prio-recorrente > td.col-sticky,
+[data-theme="dark"] .table tbody tr.tr-prio-recorrente > td.col-actions,
 [data-theme="dark"] .table tbody tr.tr-prio-prioritario > td,
 [data-theme="dark"] .table tbody tr.tr-prio-prioritario > td.col-sticky,
 [data-theme="dark"] .table tbody tr.tr-prio-prioritario > td.col-actions {
     background: #fff3a3;
+    color: #0f172a;
+}
+
+[data-theme="dark"] .table tbody tr.tr-prio-obras > td,
+[data-theme="dark"] .table tbody tr.tr-prio-obras > td.col-sticky,
+[data-theme="dark"] .table tbody tr.tr-prio-obras > td.col-actions {
+    background: #ffd8a8;
     color: #0f172a;
 }
 
@@ -2998,10 +3044,20 @@ tr.is-inativo td {
     color: #0f172a;
 }
 
+[data-theme="dark"] .table tbody tr.tr-prio-recorrente:hover > td,
+[data-theme="dark"] .table tbody tr.tr-prio-recorrente:hover > td.col-sticky,
+[data-theme="dark"] .table tbody tr.tr-prio-recorrente:hover > td.col-actions,
 [data-theme="dark"] .table tbody tr.tr-prio-prioritario:hover > td,
 [data-theme="dark"] .table tbody tr.tr-prio-prioritario:hover > td.col-sticky,
 [data-theme="dark"] .table tbody tr.tr-prio-prioritario:hover > td.col-actions {
     background: #ffe56a;
+    color: #0f172a;
+}
+
+[data-theme="dark"] .table tbody tr.tr-prio-obras:hover > td,
+[data-theme="dark"] .table tbody tr.tr-prio-obras:hover > td.col-sticky,
+[data-theme="dark"] .table tbody tr.tr-prio-obras:hover > td.col-actions {
+    background: #ffc078;
     color: #0f172a;
 }
 
@@ -3013,6 +3069,8 @@ tr.is-inativo td {
 }
 
 [data-theme="dark"] .table tbody tr.tr-prio-normal > td .cell-muted,
+[data-theme="dark"] .table tbody tr.tr-prio-recorrente > td .cell-muted,
+[data-theme="dark"] .table tbody tr.tr-prio-obras > td .cell-muted,
 [data-theme="dark"] .table tbody tr.tr-prio-prioritario > td .cell-muted,
 [data-theme="dark"] .table tbody tr.tr-prio-urgente > td .cell-muted {
     color: #475569;

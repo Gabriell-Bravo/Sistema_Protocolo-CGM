@@ -38,6 +38,10 @@
                                     <option value="{{ valor }}">{{ rotulo }}</option>
                                 {% endfor %}
                             </select>
+                        {% elif coluna.tipo == 'texto_longo' %}
+                            <textarea id="novo_{{ coluna.campo }}" name="{{ coluna.campo }}"
+                                      class="textarea" rows="4"
+                                      placeholder="Uma palavra-chave por linha"></textarea>
                         {% else %}
                             <input type="{% if coluna.tipo == 'numero' %}number{% else %}text{% endif %}" min="0"
                                    id="novo_{{ coluna.campo }}" name="{{ coluna.campo }}" class="input">
@@ -88,6 +92,10 @@
                                 {% if linha.em_uso and celula.campo in travados %}
                                     <input type="hidden" form="f{{ linha.obj.id }}" name="{{ celula.campo }}" value="{{ celula.valor }}">
                                 {% endif %}
+                            {% elif celula.tipo == 'texto_longo' %}
+                                <textarea class="textarea" rows="3" form="f{{ linha.obj.id }}"
+                                          name="{{ celula.campo }}" aria-label="{{ celula.rotulo }}"
+                                          {% if linha.em_uso and celula.campo in travados %}readonly title="Cadastro já usado em processos"{% endif %}>{{ celula.valor|default_if_none:'' }}</textarea>
                             {% else %}
                                 <input type="{% if celula.tipo == 'numero' %}number{% else %}text{% endif %}" min="0"
                                        class="input" form="f{{ linha.obj.id }}" name="{{ celula.campo }}"

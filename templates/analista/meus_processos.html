@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block title %}Meus processos{% endblock %}
+{% block page_title %}Meus processos{% endblock %}
+{% block page_subtitle %}O que está com você agora e o que você já analisou ou tramitou.{% endblock %}
+
+{% block content %}
+<div class="stack">
+    <section class="stats">
+        <a class="stat stat--violet stat--link {% if filtro_atual == 'comigo' %}is-active{% endif %}"
+           href="?filtro=comigo{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}">
+            <span class="stat__icon"><span class="material-symbols-rounded">person</span></span>
+            <div>
+                <div class="stat__value">{{ totais.comigo }}</div>
+                <div class="stat__label">Comigo agora</div>
+            </div>
+        </a>
+        <a class="stat stat--primary stat--link {% if filtro_atual == 'feitos' %}is-active{% endif %}"
+           href="?filtro=feitos{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}">
+            <span class="stat__icon"><span class="material-symbols-rounded">history</span></span>
+            <div>
+                <div class="stat__value">{{ totais.feitos }}</div>
+                <div class="stat__label">Já analisados</div>
+            </div>
+        </a>
+        <a class="stat stat--success stat--link {% if filtro_atual == 'todos' %}is-active{% endif %}"
+           href="?filtro=todos{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}">
+            <span class="stat__icon"><span class="material-symbols-rounded">folder_shared</span></span>
+            <div>
+                <div class="stat__value">{{ totais.todos }}</div>
+                <div class="stat__label">Todos</div>
+            </div>
+        </a>
+    </section>
+
+    <section class="filters">
+        <div class="filters__chips">
+            {% for chave, rotulo, quantidade in filtros %}
+                <a href="?filtro={{ chave }}{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}"
+                   class="chip {% if filtro_atual == chave %}chip--ativo{% endif %}">
+                    {{ rotulo }} <span class="chip__label">{{ quantidade }}</span>
+                </a>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="filters">
+        <div class="filters__bar">
+            <form method="get" class="search">
+                <input type="hidden" name="filtro" value="{{ filtro_atual }}">
+                <div class="search__field">
+                    <span class="material-symbols-rounded search__icon">search</span>
+                    <input type="text" name="pesquisa" class="input"
+                           placeholder="Buscar por nº, secretaria, objeto, contratada…"
+                           value="{{ termo_pesquisa|default:'' }}">
+                </div>
+                <button type="submit" class="btn btn--primary">Buscar</button>
+            </form>
+            {% if termo_pesquisa %}
+                <a href="{% url 'meus_processos' %}?filtro={{ filtro_atual }}" class="btn btn--ghost">
+                    <span class="material-symbols-rounded">filter_alt_off</span>
+                    Limpar
+                </a>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="table-card">
+        <div class="table-card__header">
+            <span class="table-card__title">
+                {% if filtro_atual == 'comigo' %}Comigo agora
+                {% elif filtro_atual == 'feitos' %}Já analisados
+                {% else %}Todos os meus processos{% endif %}
+            </span>
+            <span class="table-card__count">{{ total }} registro{{ total|pluralize:"s" }}</span>
+        </div>
+        <div class="table-scroll">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th class="col-sticky">Processo</th>
+                        <th>Espécie</th>
+                        <th>Secretaria</th>
+                        <th>Objeto</th>
+                        <th>Entrada</th>
+                        <th>Última atuação</th>
+                        <th>Situação</th>
+                        <th>Prazo</th>
+                        <th class="col-actions">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for processo in processos %}
+                    <tr class="{% if processo.eh_comigo %}tr-situacao-voce{% endif %} {{ processo.prioridade_linha_class }}">
+                        <td class="col-sticky"><strong>{{ processo.numero_processo }}</strong></td>
+                        <td>{{ processo.especie|default:"—" }}</td>
+                        <td>{{ processo.secretaria }}</td>
+                        <td class="cell-wrap">
+                            <span class="cell-preview">{{ processo.objeto|truncatechars:70 }}</span>
+                        </td>
+                        <td>
+                            {{ processo.data_entrada|date:"d/m/Y" }}
+                            {% if processo.hora_entrada %}
+                            <div class="cell-muted">{{ processo.hora_entrada|time:"H:i" }}</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if processo.ultimo_ato_em %}
+                                {{ processo.ultimo_ato_em|date:"d/m/Y H:i" }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge badge--situacao {{ processo.classe_meu }}">{{ processo.rotulo_meu }}</span>
+                        </td>
+                        <td>
+                            <span class="badge badge--dot {% if processo.prazo_status == 'atrasado' %}badge--danger{% elif processo.prazo_status == 'hoje' or processo.prazo_status == 'atencao' %}badge--warning{% elif processo.prazo_status == 'ok' %}badge--success{% endif %}">
+                                {{ processo.prazo_formatado }}
+                            </span>
+                        </td>
+                        <td class="col-actions">
+                            <div class="actions">
+                                <a href="{% url 'analista_processo' processo.id %}"
+                                   class="btn {% if processo.eh_comigo %}btn--primary{% else %}btn--outline{% endif %} btn--sm">
+                                    <span class="material-symbols-rounded">{% if processo.eh_comigo %}edit_note{% else %}visibility{% endif %}</span>
+                                    {% if processo.eh_comigo %}Analisar{% else %}Ver{% endif %}
+                                </a>
+                                <a href="{% url 'ver_historico_processo' processo.id %}" class="btn btn--ghost btn--sm" title="Histórico">
+                                    <span class="material-symbols-rounded">history</span>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9">
+                            <div class="empty" style="padding:32px 16px;">
+                                <span class="material-symbols-rounded">folder_off</span>
+                                <div class="empty__title">Nenhum processo neste filtro</div>
+                                <div>
+                                    {% if filtro_atual == 'comigo' %}
+                                        Quando você assumir um processo na fila, ele aparece aqui.
+                                    {% elif filtro_atual == 'feitos' %}
+                                        Processos que você já analisou ou liberou ficam neste histórico.
+                                    {% else %}
+                                        Ainda não há processos seus.
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}

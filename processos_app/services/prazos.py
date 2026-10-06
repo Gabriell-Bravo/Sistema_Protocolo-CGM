@@ -28,6 +28,7 @@ from django.utils import timezone
 PRAZO_POR_PRIORIDADE = {
     'URGENTE': 1,
     'PRIORITARIO': 2,
+    'RECORRENTE': 3,
     'NORMAL': 7,
 }
 

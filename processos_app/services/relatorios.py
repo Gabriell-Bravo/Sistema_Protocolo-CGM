@@ -1054,12 +1054,35 @@ def editar_linha(usuario, linha_id, dados):
     if data is None:
         raise RelatorioInvalido('Informe a data do relatório.')
 
+    novo_numero = _numero_relatorio_celula(dados.get('numero_relatorio'))
+    if not novo_numero:
+        raise RelatorioInvalido('Informe o número do relatório.')
+
+    grupo = (linha.sequencia or '').strip() or GRUPO_PADRAO
+    anterior_numero = (linha.numero_relatorio or '').strip()
+    if novo_numero != anterior_numero:
+        if linha.situacao_linha == LinhaControleRelatorio.SITUACAO_CANCELADA:
+            raise RelatorioInvalido(
+                'Não é possível trocar o número de uma linha cancelada.')
+        conflito = (
+            LinhaControleRelatorio.objects
+            .select_for_update()
+            .filter(filtro_sequencia(grupo), numero_relatorio=novo_numero)
+            .exclude(pk=linha.pk)
+            .exclude(situacao_linha=LinhaControleRelatorio.SITUACAO_CANCELADA)
+            .exists()
+        )
+        if conflito:
+            raise RelatorioInvalido(
+                f'O número {novo_numero} já está em uso neste grupo.')
+
     valor_bruto = dados.get('valor')
     if valor_bruto in (None, ''):
         valor = ''
     else:
         valor = formatar_valor(valor_bruto)
 
+    linha.numero_relatorio = novo_numero
     linha.data_relatorio = data
     linha.numero_processo = str(dados.get('numero_processo') or '').strip()[:255]
     linha.secretaria = str(dados.get('secretaria') or '').strip()[:255]
@@ -1075,9 +1098,20 @@ def editar_linha(usuario, linha_id, dados):
         '1', 'true', 'True', 'on', 'sim')
     linha.save()
 
+    if novo_numero != anterior_numero:
+        numero_int = _inteiro(novo_numero)
+        if numero_int:
+            _atualizar_proximo_numero_grupo(grupo, numero_int)
+            reserva = reserva_do_numero(numero_int, grupo)
+            if reserva is not None:
+                reserva.delete()
+
     processo = linha.processo
     if processo is not None:
         campos = []
+        if (processo.numero_relatorio or '').strip() != novo_numero:
+            processo.numero_relatorio = novo_numero
+            campos.append('numero_relatorio')
         if processo.data_analise != data:
             processo.data_analise = data
             campos.append('data_analise')
@@ -1526,7 +1560,15 @@ def listar(usuario, sequencia=None):
         pass
     elif perm.is_analista(usuario):
         grupo = perm.grupo_do_analista(usuario)
-        if grupo:
+        if grupo == GRUPO_PADRAO:
+            # Liquidações vê toda a planilha (todas as sequências).
+            # Inclui histórico antigo importado com grupo vazio.
+            consulta = consulta.filter(
+                Q(grupo=GRUPO_PADRAO)
+                | Q(grupo='')
+                | Q(sequencia__in=SEQUENCIAS_ATIVAS)
+            )
+        elif grupo:
             consulta = consulta.filter(grupo=grupo)
         else:
             return consulta.none()
@@ -2284,7 +2326,9 @@ def _importar_linhas_aba(planilha, linha_cabecalho, colunas, grupo, existentes):
             'destino': destino,
             'analista': analista,
             'observacao': ' · '.join(obs),
-            'grupo': GRUPO_PADRAO if grupo == GRUPO_PADRAO else '',
+            # Sempre LIQUIDACOES: o analista filtra por genero/grupo.
+            # A aba (Adiantamento, Bolsa…) fica em `sequencia`.
+            'grupo': GRUPO_PADRAO,
             'sequencia': grupo,
             'situacao_linha': LinhaControleRelatorio.SITUACAO_HISTORICA,
             'sem_relatorio': amarela,

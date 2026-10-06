@@ -45,6 +45,7 @@ urlpatterns = [
          name='get_especies_by_genero'),
     path('api/get_all_especies/', views.get_all_especies, name='get_all_especies'),
     path('analista/', views.area_analista, name='area_analista'),
+    path('analista/meus-processos/', views.meus_processos, name='meus_processos'),
     path('analista/processo/<int:process_id>/',
          views.analista_processo, name='analista_processo'),
     path('analista/processo/<int:process_id>/assumir/',

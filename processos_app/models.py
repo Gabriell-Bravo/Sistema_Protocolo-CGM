@@ -11,7 +11,8 @@ from django.contrib.auth.models import User
 class Processo(models.Model):
     PRIORIDADE_CHOICES = [
         ('NORMAL', 'Normal'),
-        ('PRIORITARIO', 'Prioritário'),
+        ('PRIORITARIO', 'Prioridade de obras'),
+        ('RECORRENTE', 'Prioridade recorrente'),
         ('URGENTE', 'Urgente'),
     ]
 
@@ -291,9 +292,10 @@ class Processo(models.Model):
     def prioridade_display(self):
         labels = {
             'NORMAL': 'Normal',
-            'PRIORITARIO': 'Prioritário',
+            'PRIORITARIO': 'Prioridade de obras',
+            'RECORRENTE': 'Prioridade recorrente',
             'URGENTE': 'Urgente',
-            'SIM': 'Prioritário',
+            'SIM': 'Prioridade de obras',
             'NAO': 'Normal',
         }
         if self.prioridade in labels:
@@ -308,16 +310,20 @@ class Processo(models.Model):
         if self.prioridade == 'URGENTE':
             return 'badge--danger'
         if self.prioridade in ('PRIORITARIO', 'SIM'):
-            return 'badge--warning'
+            return 'badge--obras'
+        if self.prioridade == 'RECORRENTE':
+            return 'badge--recorrente'
         return ''
 
     @property
     def prioridade_linha_class(self):
-        """Cor da linha na lista: verde (normal), amarelo (prioritário), vermelho (urgente)."""
+        """Cor da linha: verde normal, amarelo recorrente, laranja obras, vermelho urgente."""
         if self.prioridade == 'URGENTE':
             return 'tr-prio-urgente'
         if self.prioridade in ('PRIORITARIO', 'SIM'):
-            return 'tr-prio-prioritario'
+            return 'tr-prio-obras'
+        if self.prioridade == 'RECORRENTE':
+            return 'tr-prio-recorrente'
         if self.prioridade in ('NORMAL', 'NAO'):
             return 'tr-prio-normal'
         return ''
@@ -925,6 +931,14 @@ class Prioridade(models.Model):
     prazo_dias = models.PositiveIntegerField(verbose_name="Prazo (dias)")
     ordem = models.PositiveIntegerField(default=100, verbose_name="Ordem")
     ativo = models.BooleanField(default=True, verbose_name="Ativo")
+    palavras_chave = models.TextField(
+        blank=True, default='',
+        verbose_name="Palavras-chave",
+        help_text=(
+            'Uma por linha. Se contratada/objeto/secretaria contiver o termo '
+            'na entrada, o processo nasce com esta prioridade.'
+        ),
+    )
 
     def __str__(self):
         return self.nome

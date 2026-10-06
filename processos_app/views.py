@@ -33,6 +33,7 @@ from . import views_tramitacao
 from .services import cadastros as svc_cadastros
 from .services import indicadores
 from .services import monitoramento as svc_monitoramento
+from .services import meus_processos as svc_meus_processos
 from .services import pendencias as svc_pendencias
 from .services import processos as svc_processos
 from .services import permissions as perm
@@ -1500,6 +1501,29 @@ def area_analista(request):
         'termo_pesquisa': termo_pesquisa,
         'modo_gestao': False,
         'pode_assumir': pode_assumir_processos(request.user),
+    })
+
+
+@login_required
+@user_passes_test(pode_usar_area_analista)
+def meus_processos(request):
+    """Processos com o analista agora e os em que ele já atuou."""
+    filtro = (request.GET.get('filtro') or 'comigo').strip()
+    termo = request.GET.get('pesquisa', '').strip()
+    processos, totais, filtro = svc_meus_processos.listar(
+        request.user, filtro=filtro, termo=termo)
+    filtros = [
+        ('comigo', 'Comigo agora', totais['comigo']),
+        ('feitos', 'Já analisados', totais['feitos']),
+        ('todos', 'Todos', totais['todos']),
+    ]
+    return render(request, 'analista/meus_processos.html', {
+        'processos': processos,
+        'filtro_atual': filtro,
+        'filtros': filtros,
+        'totais': totais,
+        'termo_pesquisa': termo,
+        'total': len(processos),
     })
 
 

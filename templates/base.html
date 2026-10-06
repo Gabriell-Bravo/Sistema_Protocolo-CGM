@@ -87,6 +87,12 @@
                     <span class="material-symbols-rounded">fact_check</span>
                     <span class="nav-item__label">Fila de análise</span>
                 </a>
+                <a href="{% url 'meus_processos' %}"
+                   class="nav-item {% if nav == 'meus_processos' %}is-active{% endif %}"
+                   title="Meus processos">
+                    <span class="material-symbols-rounded">folder_shared</span>
+                    <span class="nav-item__label">Meus processos</span>
+                </a>
                 <a href="{% url 'meus_atendimentos' %}"
                    class="nav-item {% if nav == 'meus_atendimentos' %}is-active{% endif %}"
                    title="Atendimentos indicados">

@@ -86,10 +86,17 @@ CADASTROS = {
     'prioridades': {
         'modelo': Prioridade,
         'titulo': 'Prioridades',
-        'subtitulo': ('Prazo em dias de cada prioridade. A política de contagem '
-                      '(dias corridos ou úteis) segue pendente de definição administrativa.'),
-        'campos': [('codigo', 'Código', 'texto'), ('nome', 'Nome', 'texto'),
-                   ('prazo_dias', 'Prazo (dias)', 'numero'), ('ordem', 'Ordem', 'numero')],
+        'subtitulo': (
+            'Prazo em dias e palavras-chave (uma por linha). Na entrada, '
+            'contratada/objeto com o termo recebe esta prioridade automaticamente.'
+        ),
+        'campos': [
+            ('codigo', 'Código', 'texto'),
+            ('nome', 'Nome', 'texto'),
+            ('prazo_dias', 'Prazo (dias)', 'numero'),
+            ('ordem', 'Ordem', 'numero'),
+            ('palavras_chave', 'Palavras-chave (uma por linha)', 'texto_longo'),
+        ],
         'obrigatorios': ['codigo', 'nome', 'prazo_dias'],
         'relacionados': ['processos'],
         'travados_se_usado': ['codigo'],
