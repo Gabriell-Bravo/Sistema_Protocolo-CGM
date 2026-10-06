@@ -2334,14 +2334,64 @@ def _importar_linhas_aba(planilha, linha_cabecalho, colunas, grupo, existentes):
 
 
 def _atualizar_proximo_numero_grupo(grupo, maior_inteiro):
-    if maior_inteiro <= 0:
-        return
+    """Recalcula o próximo nº pelo maior inteiro ainda usado no grupo."""
+    usados = set(numeros_usados(grupo)) | set(_numeros_reservados(grupo))
+    if maior_inteiro:
+        usados.add(int(maior_inteiro))
+    if usados:
+        proximo = max(usados) + 1
+    else:
+        proximo = _proximo_padrao(grupo)
     seq, _ = SequenciaRelatorio.objects.select_for_update().get_or_create(
         grupo=grupo,
-        defaults={'proximo_numero': maior_inteiro + 1})
-    if int(seq.proximo_numero or 0) <= maior_inteiro:
-        seq.proximo_numero = maior_inteiro + 1
+        defaults={'proximo_numero': proximo})
+    if int(seq.proximo_numero or 0) != proximo:
+        seq.proximo_numero = proximo
         seq.save(update_fields=['proximo_numero'])
+
+
+def _limpar_historico_substituivel(grupo):
+    """Remove histórico antigo do grupo antes de reimportar a planilha.
+
+    Mantém linhas ATIVAS ligadas a processo (análise viva no sistema).
+    """
+    return (
+        LinhaControleRelatorio.objects
+        .filter(filtro_sequencia(grupo), processo__isnull=True)
+        .filter(situacao_linha__in=[
+            LinhaControleRelatorio.SITUACAO_HISTORICA,
+            LinhaControleRelatorio.SITUACAO_CANCELADA,
+            LinhaControleRelatorio.SITUACAO_RESERVADA,
+        ])
+        .delete()
+    )
+
+
+_CAMPOS_OBRIGATORIOS_IMPORT = {
+    'ADIANTAMENTO': ('numero_relatorio', 'contratada'),
+    'COTA_PATROCINIO': ('numero_relatorio', 'contratada'),
+    'SUBVENCAO': ('numero_relatorio', 'contratada'),
+    'ALUGUEL_SOCIAL': ('numero_relatorio', 'contratada'),
+    'BOLSA_ATLETA': ('numero_relatorio', 'contratada'),
+    'AUXILIO_COMPETICAO': ('numero_relatorio', 'contratada'),
+    'DIARIA': ('numero_relatorio', 'secretaria'),
+    'BLOCOS_CARNAVALESCOS': ('numero_relatorio', 'contratada'),
+}
+
+
+def _validar_cabecalho_grupo(grupo, colunas):
+    """Impede importar planilha de Liquidação no grupo errado (e vice-versa)."""
+    obrigatorios = _CAMPOS_OBRIGATORIOS_IMPORT.get(grupo)
+    if not obrigatorios:
+        return
+    faltando = [c for c in obrigatorios if c not in colunas]
+    if faltando:
+        raise RelatorioInvalido(
+            f'A aba não parece ser de {info_sequencia(grupo)["nome"]}. '
+            f'Confira se escolheu o arquivo/aba certos '
+            f'(ex.: Adiantamento tem coluna Servidor; '
+            f'Liquidação tem Relator/Objeto).'
+        )
 
 
 def _existentes_por_grupo(grupo):
@@ -2358,6 +2408,9 @@ def _existentes_por_grupo(grupo):
 
 def _importar_aba_excel(planilha, grupo):
     linha_cabecalho, colunas = _localizar_cabecalho(planilha, grupo=grupo)
+    _validar_cabecalho_grupo(grupo, colunas)
+    # Substitui o histórico antigo desse grupo (não mistura com outra planilha).
+    apagadas, _ = _limpar_historico_substituivel(grupo)
     existentes = _existentes_por_grupo(grupo)
     criadas, atualizadas, ignoradas, maior_inteiro = _importar_linhas_aba(
         planilha, linha_cabecalho, colunas, grupo, existentes)
@@ -2368,6 +2421,7 @@ def _importar_aba_excel(planilha, grupo):
         'criadas': criadas,
         'atualizadas': atualizadas,
         'ignoradas': ignoradas,
+        'apagadas': apagadas or 0,
         'proximo': estado_sequencia(grupo)['proximo'],
     }
 
@@ -2376,9 +2430,9 @@ def _importar_aba_excel(planilha, grupo):
 def importar_planilha_excel(usuario, arquivo, grupo=GRUPO_PADRAO):
     """Importa números antigos de um .xlsx para o Controle de relatório.
 
-    Linhas entram como HISTORICA (não apagam análises atuais). Linhas
-    amarelas da planilha viram \"sem relatório\". O contador do grupo
-    avança para depois do maior número inteiro importado.
+    Antes de importar cada grupo, apaga o histórico antigo desse grupo
+    (HISTORICA/CANCELADA/RESERVADA sem processo) e recalcula o próximo nº.
+    Análises ATIVAS ligadas a processo não são apagadas nem sobrescritas.
 
     Com ``grupo=GRUPO_IMPORTACAO_COMPLETA`` importa todas as abas
     reconhecidas (arquivo unificado Controle Relatórios 2026).

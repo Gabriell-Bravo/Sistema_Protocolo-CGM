@@ -181,10 +181,12 @@ def importar_planilha(request):
         resumos = []
         for aba in resultado.get('abas') or []:
             trecho = (
-                f'{aba["nome"]}: {aba["criadas"]} nova(s)'
+                f'{aba["nome"]}: {aba["criadas"]} linha(s)'
                 f', próximo nº {aba["proximo"]}')
+            if aba.get('apagadas'):
+                trecho += f', {aba["apagadas"]} antiga(s) substituída(s)'
             if aba['atualizadas']:
-                trecho += f', {aba["atualizadas"]} atualizada(s)'
+                trecho += f', {aba["atualizadas"]} ativa(s) preservada(s)/atualizada(s)'
             if aba['ignoradas']:
                 trecho += f', {aba["ignoradas"]} ignorada(s)'
             resumos.append(trecho)
@@ -206,6 +208,9 @@ def importar_planilha(request):
     partes = [
         f'{resultado["nome"]}: {resultado["criadas"]} linha(s) importada(s)',
     ]
+    if resultado.get('apagadas'):
+        partes.append(
+            f'{resultado["apagadas"]} antiga(s) do histórico substituída(s)')
     if resultado['atualizadas']:
         partes.append(f'{resultado["atualizadas"]} atualizada(s)')
     if resultado['ignoradas']:

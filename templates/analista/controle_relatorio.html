@@ -788,11 +788,12 @@
                 <p style="margin:0 0 14px; color:var(--text-muted, #5b6472); line-height:1.45;">
                     Envie o .xlsx do Controle de Relatórios (Liquidações ou o
                     arquivo único de 2026 com várias abas). Use
-                    <strong>Todas as abas do arquivo</strong> para importar
-                    Adiantamento, Cota, Subvenção, Bolsa Atleta, Diárias,
-                    Blocos etc. de uma vez. As linhas entram como histórico;
-                    amarelas viram “sem relatório”. Números já ativos no
-                    sistema não são sobrescritos.
+                    <strong>Todas as abas do arquivo</strong> para Adiantamento,
+                    Cota, Subvenção, Bolsa Atleta, Diárias, Blocos etc.
+                    A importação <strong>substitui o histórico antigo</strong>
+                    daquele grupo (não mistura com planilha errada).
+                    Análises ativas no sistema não são apagadas. Amarelas
+                    viram “sem relatório”.
                 </p>
                 <form method="post" action="{% url 'controle_relatorio_importar' %}"
                       enctype="multipart/form-data" class="stack" style="gap:12px;">
@@ -821,7 +822,7 @@
                     </div>
                     <div class="form-actions">
                         <button type="submit" class="btn btn--primary"
-                                onclick="return confirm('Importar esta planilha para o grupo selecionado?');">
+                                onclick="return confirm('Importar e substituir o histórico antigo do(s) grupo(s) selecionado(s)?\n\nAnálises ativas (com processo) não são apagadas.');">
                             <span class="material-symbols-rounded">upload_file</span>
                             Importar Excel
                         </button>

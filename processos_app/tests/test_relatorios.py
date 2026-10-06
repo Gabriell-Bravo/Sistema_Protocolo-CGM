@@ -1268,6 +1268,63 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertContains(planilha, '200/2026')
         self.assertContains(planilha, '56 A')
 
+    def test_reimporta_substitui_historico_misturado(self):
+        """Histórico errado (ex.: Liquidação no Adiantamento) some na reimportação."""
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from openpyxl import Workbook
+
+        admin = criar_usuario('admin_reimp_limpo', 'GESTAO', is_superuser=True)
+        LinhaControleRelatorio.objects.create(
+            processo=None,
+            numero_relatorio='1932',
+            numero_processo='13289/2026',
+            objeto='aquisição material (não é adiantamento)',
+            data_relatorio=datetime.date(2026, 10, 2),
+            situacao_linha='HISTORICA',
+            grupo='',
+            sequencia='ADIANTAMENTO',
+        )
+        from processos_app.models import SequenciaRelatorio
+        SequenciaRelatorio.objects.update_or_create(
+            grupo='ADIANTAMENTO', defaults={'proximo_numero': 1933})
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'ADIANTAMENTOS'
+        ws.append([
+            'NUMERO', 'SERVIDOR', ' VALOR ', 'Nº do Processo', 'Assunto',
+            'Data', 'Enviado para', 'Secretaria de Origem',
+        ])
+        ws.append([
+            '072', 'Jade Santos', 3000, '11792/2026', 'Concessão',
+            datetime.date(2026, 7, 1), 'Planejamento', 'Sec. Agricultura',
+        ])
+        buffer = BytesIO()
+        wb.save(buffer)
+        arquivo = SimpleUploadedFile(
+            'adiant.xlsx',
+            buffer.getvalue(),
+            content_type=(
+                'application/vnd.openxmlformats-officedocument.'
+                'spreadsheetml.sheet'
+            ),
+        )
+        self.client.force_login(admin)
+        resp = self.client.post(
+            reverse('controle_relatorio_importar'),
+            {'grupo': 'ADIANTAMENTO', 'planilha': arquivo},
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(
+            LinhaControleRelatorio.objects.filter(
+                sequencia='ADIANTAMENTO', numero_relatorio='1932').exists())
+        linha = LinhaControleRelatorio.objects.get(
+            sequencia='ADIANTAMENTO', numero_relatorio='072')
+        self.assertEqual(linha.contratada, 'Jade Santos')
+        self.assertEqual(relatorios.estado_sequencia('ADIANTAMENTO')['proximo'], 73)
+
     def test_importa_planilha_adiantamento_aba_correta(self):
         from io import BytesIO
 
