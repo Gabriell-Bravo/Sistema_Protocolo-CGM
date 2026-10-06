@@ -282,7 +282,8 @@ _LAYOUT_PLANILHA = {
             'contratada': 'Nome do atleta',
             'periodo': 'Nome do responsável',
             'valor': 'Valor',
-            'numero_processo': 'Nº do Processo',
+            'volume': 'Processo de concessão',
+            'numero_processo': 'Processo de prestação',
             'objeto': 'Assunto / Modalidade',
             'data_relatorio': 'Data',
             'destino': 'Enviado para',
@@ -293,19 +294,21 @@ _LAYOUT_PLANILHA = {
         },
         'colunas': (
             'numero_relatorio', 'contratada', 'periodo', 'valor',
-            'numero_processo', 'objeto', 'data_relatorio', 'destino',
-            'observacao',
+            'volume', 'numero_processo', 'objeto', 'data_relatorio',
+            'destino', 'observacao',
         ),
         'formulario': (
-            'contratada', 'periodo', 'valor', 'objeto', 'destino',
-            'status_analise', 'observacao',
+            'contratada', 'periodo', 'valor',
+            'processo_concessao', 'processo_prestacao',
+            'objeto', 'destino', 'status_analise', 'observacao',
         ),
         'dicas': {
-            'objeto': 'Informe o assunto e a modalidade (ex.: Prestação 2º semestre — Jiu-Jitsu).',
-            'observacao': (
-                'Se houver processo relacionado (concessão ou prestação), '
-                'registre aqui.'
+            'objeto': (
+                'Informe o assunto e a modalidade '
+                '(ex.: Prestação 2º semestre — Jiu-Jitsu).'
             ),
+            'processo_concessao': 'Nº do processo de concessão da bolsa.',
+            'processo_prestacao': 'Nº do processo de prestação de contas.',
         },
     },
     'AUXILIO_COMPETICAO': {
@@ -315,7 +318,8 @@ _LAYOUT_PLANILHA = {
             'contratada': 'Nome do atleta',
             'periodo': 'Nome do responsável',
             'valor': 'Valor',
-            'numero_processo': 'Nº do Processo',
+            'volume': 'Processo de concessão',
+            'numero_processo': 'Processo de prestação',
             'objeto': 'Assunto / Modalidade',
             'data_relatorio': 'Data',
             'destino': 'Enviado para',
@@ -326,13 +330,18 @@ _LAYOUT_PLANILHA = {
         },
         'colunas': (
             'numero_relatorio', 'contratada', 'periodo', 'valor',
-            'numero_processo', 'objeto', 'data_relatorio', 'destino',
-            'observacao',
+            'volume', 'numero_processo', 'objeto', 'data_relatorio',
+            'destino', 'observacao',
         ),
         'formulario': (
-            'contratada', 'periodo', 'valor', 'objeto', 'destino',
-            'status_analise', 'observacao',
+            'contratada', 'periodo', 'valor',
+            'processo_concessao', 'processo_prestacao',
+            'objeto', 'destino', 'status_analise', 'observacao',
         ),
+        'dicas': {
+            'processo_concessao': 'Nº do processo de concessão do auxílio.',
+            'processo_prestacao': 'Nº do processo de prestação de contas.',
+        },
     },
     'DIARIA': {
         'titulo': 'Dados do relatório — Diária',
@@ -392,6 +401,9 @@ def layout_planilha(codigo=None):
     base = _LAYOUT_PLANILHA.get(GRUPO_PADRAO)
     layout = _LAYOUT_PLANILHA.get(codigo) or base
     rotulos = {**base['rotulos'], **layout.get('rotulos', {})}
+    # Campos virtuais do formulário (Bolsa/Auxílio) usam rótulos próprios.
+    rotulos.setdefault('processo_concessao', 'Processo de concessão')
+    rotulos.setdefault('processo_prestacao', 'Processo de prestação')
     return {
         'codigo': codigo,
         'titulo': layout.get('titulo', base['titulo']),
@@ -402,6 +414,51 @@ def layout_planilha(codigo=None):
         ],
         'formulario': list(layout.get('formulario', base['formulario'])),
         'dicas': dict(layout.get('dicas') or {}),
+    }
+
+
+def _especie_e_prestacao(processo):
+    """Espécie de prestação de contas (P.C.), não a concessão."""
+    nome = ''
+    especie = getattr(processo, 'especie_fk', None)
+    if especie is not None:
+        nome = especie.nome or ''
+    if not nome:
+        nome = getattr(processo, 'especie', None) or ''
+    nome = str(nome).casefold()
+    return (
+        nome.startswith('p.c.')
+        or 'prestação' in nome
+        or 'prestacao' in nome
+    )
+
+
+def processos_relacionados_formulario(processo):
+    """Valores dos campos Processo de concessão / prestação (Bolsa e Auxílio).
+
+    O nº do processo atual fica só leitura; o relacionado grava em `volume`.
+    """
+    sequencia = sequencia_do_processo(processo)
+    if sequencia not in ('BOLSA_ATLETA', 'AUXILIO_COMPETICAO'):
+        return None
+    atual = (processo.numero_processo or '').strip()
+    relacionado = (processo.volume or '').strip()
+    if _especie_e_prestacao(processo):
+        return {
+            'concessao': relacionado,
+            'concessao_name': 'volume',
+            'concessao_readonly': False,
+            'prestacao': atual,
+            'prestacao_name': '',
+            'prestacao_readonly': True,
+        }
+    return {
+        'concessao': atual,
+        'concessao_name': '',
+        'concessao_readonly': True,
+        'prestacao': relacionado,
+        'prestacao_name': 'volume',
+        'prestacao_readonly': False,
     }
 
 
@@ -1605,9 +1662,22 @@ def contagens_por_sequencia(usuario):
 
 def _dados_da_linha(processo):
     data = processo.data_analise or timezone.localdate()
+    sequencia = sequencia_do_processo(processo) or GRUPO_PADRAO
+    numero_processo = processo.numero_processo or ''
+    volume = processo.volume or ''
+    # Bolsa/Auxílio: volume = concessão; numero_processo = prestação.
+    if sequencia in ('BOLSA_ATLETA', 'AUXILIO_COMPETICAO'):
+        atual = (processo.numero_processo or '').strip()
+        relacionado = (processo.volume or '').strip()
+        if _especie_e_prestacao(processo):
+            numero_processo = atual
+            volume = relacionado
+        else:
+            volume = atual
+            numero_processo = relacionado
     return {
-        'numero_processo': processo.numero_processo or '',
-        'volume': processo.volume or '',
+        'numero_processo': numero_processo,
+        'volume': volume,
         'numero_relatorio': processo.numero_relatorio or '',
         'sem_relatorio': bool(getattr(processo, 'sem_relatorio', False)),
         'data_relatorio': data,
@@ -1621,7 +1691,7 @@ def _dados_da_linha(processo):
         'status_analise': processo.status_analise or '',
         'observacao': processo.observacao or '',
         'grupo': processo.genero or '',
-        'sequencia': sequencia_do_processo(processo) or GRUPO_PADRAO,
+        'sequencia': sequencia,
     }
 
 
@@ -2245,7 +2315,18 @@ def _importar_linhas_aba(planilha, linha_cabecalho, colunas, grupo, existentes):
 
         pagamento = _texto_celula(cel('processo_pagamento'))
         origem = _texto_celula(cel('processo_origem'))
-        numero_processo = pagamento or origem
+        # Bolsa/Auxílio: prestação → numero_processo; concessão → volume.
+        if grupo in ('BOLSA_ATLETA', 'AUXILIO_COMPETICAO'):
+            if pagamento and origem:
+                numero_processo, volume_proc = pagamento, origem
+            elif pagamento:
+                numero_processo, volume_proc = pagamento, ''
+            else:
+                # Só concessão: coluna prestação vazia; nº fica em volume.
+                numero_processo, volume_proc = '', origem
+        else:
+            numero_processo = pagamento or origem
+            volume_proc = ''
         data_bruta = cel('data_relatorio')
         data = _data_celula(data_bruta)
         nota_data = ''
@@ -2291,8 +2372,8 @@ def _importar_linhas_aba(planilha, linha_cabecalho, colunas, grupo, existentes):
         # Amarelo só conta como "saiu sem análise" se tiver algum dado
         # (data, relator, processo…). Só tinta amarela em linha vazia não entra.
         tem_conteudo = any((
-            numero_processo, data, nota_data, analista, secretaria, contratada,
-            objeto, periodo, destino, valor,
+            numero_processo, volume_proc, data, nota_data, analista,
+            secretaria, contratada, objeto, periodo, destino, valor,
         ))
         if not tem_conteudo:
             continue
@@ -2306,13 +2387,11 @@ def _importar_linhas_aba(planilha, linha_cabecalho, colunas, grupo, existentes):
             obs.append(nota_data)
         if obs_planilha:
             obs.append(obs_planilha)
-        if origem and pagamento and origem != pagamento:
-            rotulo = (
-                'Processo concessão'
-                if grupo in ('BOLSA_ATLETA', 'AUXILIO_COMPETICAO')
-                else 'Processo origem'
-            )
-            obs.append(f'{rotulo}: {origem}')
+        if (
+            origem and pagamento and origem != pagamento
+            and grupo not in ('BOLSA_ATLETA', 'AUXILIO_COMPETICAO')
+        ):
+            obs.append(f'Processo origem: {origem}')
 
         dados = {
             'numero_processo': numero_processo,
@@ -2332,7 +2411,7 @@ def _importar_linhas_aba(planilha, linha_cabecalho, colunas, grupo, existentes):
             'sequencia': grupo,
             'situacao_linha': LinhaControleRelatorio.SITUACAO_HISTORICA,
             'sem_relatorio': amarela,
-            'volume': '',
+            'volume': volume_proc,
             'status_analise': '',
         }
 

@@ -677,3 +677,45 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         self.assertEqual([g['codigo'] for g in grupos], ['LIQUIDACOES', 'BOLSA_ATLETA'])
         self.assertEqual(grupos[0]['processos'][0].id, liquidacao.id)
         self.assertEqual(grupos[1]['processos'][0].id, bolsa.id)
+
+    def test_analise_bolsa_atleta_mostra_processo_de_prestacao(self):
+        especie_pc, _ = EspecieProcesso.objects.get_or_create(
+            nome='P.C. Bolsa Atleta', grupo=LIQ,
+            defaults={'ativo': True, 'gera_relatorio': True,
+                      'sequencia_numeracao': 'BOLSA_ATLETA'})
+        if especie_pc.sequencia_numeracao != 'BOLSA_ATLETA':
+            especie_pc.sequencia_numeracao = 'BOLSA_ATLETA'
+            especie_pc.gera_relatorio = True
+            especie_pc.ativo = True
+            especie_pc.save(update_fields=[
+                'sequencia_numeracao', 'gera_relatorio', 'ativo'])
+        processo = self.novo_processo(
+            especie=especie_pc, numero_processo='24099/2025')
+        tramitacao.assumir(processo.id, self.analista_liq)
+        processo.refresh_from_db()
+
+        self.client.force_login(self.analista_liq)
+        tela = self.client.get(reverse('analista_processo', args=[processo.id]))
+        self.assertEqual(tela.status_code, 200)
+        self.assertContains(tela, 'Processo de prestação')
+        self.assertContains(tela, 'Processo de concessão')
+        self.assertContains(tela, 'id="processo_prestacao"')
+        self.assertContains(tela, '24099/2025')
+
+        resp = self.client.post(reverse('analista_processo', args=[processo.id]), {
+            'valor': 'R$ 3.000,00',
+            'destino': 'Unidade de Teste',
+            'periodo': 'Aline Resp',
+            'contratada': 'Laura Atleta',
+            'objeto': 'Prestação 2º semestre — Jiu-Jitsu',
+            'volume': '22.140/2024',
+            'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+            'observacao': '',
+        })
+        self.assertEqual(resp.status_code, 302)
+        processo.refresh_from_db()
+        self.assertEqual(processo.volume, '22.140/2024')
+        from processos_app.services import relatorios
+        dados_linha = relatorios._dados_da_linha(processo)
+        self.assertEqual(dados_linha['numero_processo'], '24099/2025')
+        self.assertEqual(dados_linha['volume'], '22.140/2024')

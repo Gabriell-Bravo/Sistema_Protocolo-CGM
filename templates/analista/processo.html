@@ -424,6 +424,24 @@
                             <input type="text" id="periodo" name="periodo" class="input" value="{{ processo.periodo|default:'' }}" {% if not pode_editar %}readonly{% endif %}>
                             {% if layout_planilha.dicas.periodo %}<span class="field__hint">{{ layout_planilha.dicas.periodo }}</span>{% endif %}
                         </div>
+                        {% elif campo == 'processo_concessao' and processos_relacionados %}
+                        <div class="field">
+                            <label class="field__label" for="processo_concessao">{{ layout_planilha.rotulos.processo_concessao }}</label>
+                            <input type="text" id="processo_concessao" class="input"
+                                   value="{{ processos_relacionados.concessao|default:'' }}"
+                                   {% if processos_relacionados.concessao_name and pode_editar %}name="{{ processos_relacionados.concessao_name }}"{% endif %}
+                                   {% if processos_relacionados.concessao_readonly or not pode_editar %}readonly{% endif %}>
+                            {% if layout_planilha.dicas.processo_concessao %}<span class="field__hint">{{ layout_planilha.dicas.processo_concessao }}</span>{% endif %}
+                        </div>
+                        {% elif campo == 'processo_prestacao' and processos_relacionados %}
+                        <div class="field">
+                            <label class="field__label" for="processo_prestacao">{{ layout_planilha.rotulos.processo_prestacao }}</label>
+                            <input type="text" id="processo_prestacao" class="input"
+                                   value="{{ processos_relacionados.prestacao|default:'' }}"
+                                   {% if processos_relacionados.prestacao_name and pode_editar %}name="{{ processos_relacionados.prestacao_name }}"{% endif %}
+                                   {% if processos_relacionados.prestacao_readonly or not pode_editar %}readonly{% endif %}>
+                            {% if layout_planilha.dicas.processo_prestacao %}<span class="field__hint">{{ layout_planilha.dicas.processo_prestacao }}</span>{% endif %}
+                        </div>
                         {% elif campo == 'contratada' %}
                         <div class="field">
                             <label class="field__label" for="contratada_analise">{{ layout_planilha.rotulos.contratada }}</label>

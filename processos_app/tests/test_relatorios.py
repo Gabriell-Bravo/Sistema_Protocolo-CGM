@@ -1577,10 +1577,10 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         bolsa = LinhaControleRelatorio.objects.get(
             sequencia='BOLSA_ATLETA', numero_relatorio='001')
         self.assertEqual(bolsa.numero_processo, '13024/2025')
+        self.assertEqual(bolsa.volume, '22.950/2024')
         self.assertEqual(bolsa.contratada, 'Laura Atleta')
         self.assertEqual(bolsa.periodo, 'Aline Resp')
         self.assertIn('Canoa', bolsa.objeto)
-        self.assertIn('concessão: 22.950/2024', bolsa.observacao.casefold())
 
         subv = LinhaControleRelatorio.objects.get(
             sequencia='SUBVENCAO', numero_relatorio='001')

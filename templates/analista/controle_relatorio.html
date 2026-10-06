@@ -106,10 +106,12 @@
                                     {{ linha.data_relatorio|date:"d/m/Y"|default:"—" }}
                                 {% elif col.campo == 'numero_processo' %}
                                     {% if linha.processo_id %}
-                                    <a href="{% url 'analista_processo' linha.processo_id %}">{{ linha.numero_processo }}</a>
+                                    <a href="{% url 'analista_processo' linha.processo_id %}">{{ linha.numero_processo|default:"—" }}</a>
                                     {% else %}
                                     {{ linha.numero_processo|default:"—" }}
                                     {% endif %}
+                                {% elif col.campo == 'volume' %}
+                                    {{ linha.volume|default:"—" }}
                                 {% elif col.campo == 'analista' %}
                                     {{ linha.analista|default:"—" }}
                                 {% elif col.campo == 'secretaria' %}
@@ -385,6 +387,10 @@
                                 <input type="date" id="editar_data" name="data_relatorio" class="input" required>
                             </div>
                             <div class="field">
+                                <label class="field__label" for="editar_volume">{{ layout_planilha.rotulos.volume|default:"Volume" }}</label>
+                                <input type="text" id="editar_volume" name="volume" class="input" autocomplete="off">
+                            </div>
+                            <div class="field">
                                 <label class="field__label" for="editar_processo">{{ layout_planilha.rotulos.numero_processo }}</label>
                                 <input type="text" id="editar_processo" name="numero_processo" class="input" autocomplete="off">
                             </div>
@@ -399,10 +405,6 @@
                             <div class="field field--wide">
                                 <label class="field__label" for="editar_objeto">{{ layout_planilha.rotulos.objeto }}</label>
                                 <textarea id="editar_objeto" name="objeto" class="textarea" rows="2"></textarea>
-                            </div>
-                            <div class="field">
-                                <label class="field__label" for="editar_volume">Volume</label>
-                                <input type="text" id="editar_volume" name="volume" class="input">
                             </div>
                             <div class="field field--wide">
                                 <label class="field__label" for="editar_contratada">{{ layout_planilha.rotulos.contratada }}</label>

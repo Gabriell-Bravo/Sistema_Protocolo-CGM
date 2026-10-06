@@ -1790,6 +1790,10 @@ def analista_processo(request, process_id):
             if processo.genero == 'LIQUIDACOES'
             else None
         ),
+        'processos_relacionados': (
+            svc_relatorios.processos_relacionados_formulario(processo)
+            if processo.genero == 'LIQUIDACOES' else None
+        ),
         'sequencias_relatorio': [
             item for item in svc_relatorios.sequencias_disponiveis()
             if svc_relatorios.sequencia_ativa(item['codigo'])
