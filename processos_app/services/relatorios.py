@@ -713,12 +713,62 @@ def proximo_numero(grupo):
     return str(numero)
 
 
+def _linha_pre_reservada_do_processo(processo):
+    """Linha da planilha já marcada com este nº de processo, reutilizável.
+
+    Cobre reserva/desvínculo/histórico em que o cadastro perdeu o número,
+    mas a planilha ainda mostra a reserva (ex.: 1918 ligado a 7992/2024).
+
+    Cancelada (vermelha) fica de fora: só volta por número específico ou
+    vínculo na planilha — "Gerar número" emite o próximo sequencial.
+    """
+    numero = (processo.numero_processo or '').strip()
+    if not numero:
+        return None
+    sequencia = sequencia_do_processo(processo) or GRUPO_PADRAO
+    return (
+        LinhaControleRelatorio.objects
+        .select_for_update()
+        .filter(filtro_sequencia(sequencia))
+        .filter(numero_processo__iexact=numero)
+        .exclude(numero_relatorio='')
+        .filter(situacao_linha__in=[
+            LinhaControleRelatorio.SITUACAO_RESERVADA,
+            LinhaControleRelatorio.SITUACAO_HISTORICA,
+        ])
+        .filter(Q(processo__isnull=True) | Q(processo=processo))
+        .order_by('-data_relatorio', '-id')
+        .first()
+    )
+
+
+def _remover_linhas_duplicadas_do_numero(numero_txt, sequencia, manter_id):
+    """Remove reservas/históricos órfãos do mesmo nº após ativar uma linha."""
+    if not numero_txt or manter_id is None:
+        return
+    (
+        LinhaControleRelatorio.objects
+        .filter(filtro_sequencia(sequencia), numero_relatorio=numero_txt)
+        .exclude(id=manter_id)
+        .filter(situacao_linha__in=[
+            LinhaControleRelatorio.SITUACAO_RESERVADA,
+            LinhaControleRelatorio.SITUACAO_CANCELADA,
+            LinhaControleRelatorio.SITUACAO_HISTORICA,
+        ])
+        .delete()
+    )
+
+
 def atribuir_se_preciso(processo):
     """Gera o número só se a espécie gera relatório e o processo ainda não tem.
 
     Não grava o processo: o chamador inclui `numero_relatorio` no save.
     Funciona também com "sem relatório" — o nº e a data são obrigatórios
     para encaminhar ao Controlador.
+
+    Se a planilha já tiver número reservado ou histórico marcado com o
+    mesmo nº de processo, reaproveita esse número em vez de emitir um
+    sequencial novo.
     """
     if not especie_gera_relatorio(processo):
         return False
@@ -728,6 +778,13 @@ def atribuir_se_preciso(processo):
     sequencia = sequencia_do_processo(processo)
     if not sequencia:
         return False
+    pre = _linha_pre_reservada_do_processo(processo)
+    if pre is not None:
+        processo.numero_relatorio = (pre.numero_relatorio or '').strip()
+        if not processo.data_analise:
+            processo.data_analise = pre.data_relatorio or timezone.localdate()
+        registrar(processo)
+        return True
     processo.numero_relatorio = proximo_numero(sequencia)
     if not processo.data_analise:
         processo.data_analise = timezone.localdate()
@@ -745,14 +802,14 @@ def _inteiro_atual(processo):
 def registrar(processo):
     """Cria ou atualiza a linha da planilha a partir do processo.
 
-    Se o número informado já existir em uma linha cancelada (verde/vermelha)
-    da mesma sequência, essa linha é reaproveitada e volta ao normal.
+    Se o número informado já existir em uma linha cancelada, reservada ou
+    histórica da mesma sequência, essa linha é reaproveitada e volta ao normal.
 
     Se o número já estiver ATIVO em outro processo, esse processo é
     desvinculado (perde o número) e a linha passa para o processo atual.
 
     Se o processo trocar de número, o número antigo permanece na planilha
-    como linha verde (reservada), com número e data, para reuso posterior.
+    como linha vermelha (cancelada), com número e data, para reuso posterior.
     """
     sem_relatorio = bool(getattr(processo, 'sem_relatorio', False))
     if not processo.numero_relatorio and not sem_relatorio:
@@ -784,6 +841,7 @@ def registrar(processo):
             .filter(situacao_linha__in=[
                 LinhaControleRelatorio.SITUACAO_RESERVADA,
                 LinhaControleRelatorio.SITUACAO_CANCELADA,
+                LinhaControleRelatorio.SITUACAO_HISTORICA,
             ])
             .order_by('-atualizado_em', '-id')
             .first()
@@ -817,15 +875,22 @@ def registrar(processo):
         reaproveitar.processo = processo
         reaproveitar.situacao_linha = LinhaControleRelatorio.SITUACAO_ATIVA
         obs = (reaproveitar.observacao or '').strip()
-        if obs.startswith('Relatório cancelado') or obs.startswith('Número liberado'):
+        if (
+            obs.startswith('Relatório cancelado')
+            or obs.startswith('Número liberado')
+            or 'desvinculado' in obs.casefold()
+        ):
             reaproveitar.observacao = processo.observacao or ''
         reaproveitar.save()
         _limpar_outros_donos_do_numero(processo, numero_txt, sequencia)
+        _remover_linhas_duplicadas_do_numero(
+            numero_txt, sequencia, reaproveitar.id)
         return reaproveitar
 
     _limpar_outros_donos_do_numero(processo, numero_txt, sequencia)
     linha, _ = LinhaControleRelatorio.objects.update_or_create(
         processo=processo, defaults=dados)
+    _remover_linhas_duplicadas_do_numero(numero_txt, sequencia, linha.id)
     return linha
 
 
@@ -2272,9 +2337,10 @@ def _importar_linhas_aba(planilha, linha_cabecalho, colunas, grupo, existentes):
     atualizar_lote = []
     atualizar_ids = set()
     campos_update = [
-        'numero_processo', 'data_relatorio', 'secretaria', 'contratada',
-        'objeto', 'valor', 'periodo', 'destino', 'analista', 'observacao',
-        'grupo', 'sequencia', 'situacao_linha', 'sem_relatorio',
+        'numero_processo', 'volume', 'data_relatorio', 'secretaria',
+        'contratada', 'objeto', 'valor', 'periodo', 'destino', 'analista',
+        'observacao', 'grupo', 'sequencia', 'situacao_linha', 'sem_relatorio',
+        'status_analise',
     ]
 
     for row in planilha.iter_rows(min_row=linha_cabecalho + 1):
@@ -2465,16 +2531,12 @@ def _atualizar_proximo_numero_grupo(grupo, maior_inteiro):
 def _limpar_historico_substituivel(grupo):
     """Remove histórico antigo do grupo antes de reimportar a planilha.
 
-    Mantém linhas ATIVAS ligadas a processo (análise viva no sistema).
+    Mantém só linhas ATIVAS ainda ligadas a processo (análise viva).
+    Qualquer linha sem processo (histórico, órfã, reservada…) é substituída.
     """
     return (
         LinhaControleRelatorio.objects
         .filter(filtro_sequencia(grupo), processo__isnull=True)
-        .filter(situacao_linha__in=[
-            LinhaControleRelatorio.SITUACAO_HISTORICA,
-            LinhaControleRelatorio.SITUACAO_CANCELADA,
-            LinhaControleRelatorio.SITUACAO_RESERVADA,
-        ])
         .delete()
     )
 

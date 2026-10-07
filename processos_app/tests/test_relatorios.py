@@ -166,6 +166,90 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         # Processo finalizado não recebe o número de relatório.
         self.assertFalse(processo.numero_relatorio)
 
+    def test_gerar_numero_reusa_historico_do_mesmo_processo(self):
+        """Planilha com reserva/histórico do processo: Gerar não emite nº novo."""
+        admin = criar_usuario('admin_reusa_hist', 'GESTAO', is_superuser=True)
+        relatorios.definir_ultimo_numero(admin, 1910)
+        processo = self.novo_processo(
+            self.especie_liq, numero_processo='7992/2024')
+        LinhaControleRelatorio.objects.create(
+            processo=None,
+            numero_relatorio='1918',
+            numero_processo='7992/2024',
+            data_relatorio=datetime.date(2026, 10, 2),
+            secretaria='SMEC',
+            situacao_linha='HISTORICA',
+            sem_relatorio=True,
+            grupo='LIQUIDACOES',
+            sequencia='LIQUIDACOES',
+        )
+        self._salvar_liquidacao(processo)
+        self.assertEqual(processo.numero_relatorio, '1918')
+        linhas_1918 = list(
+            LinhaControleRelatorio.objects.filter(numero_relatorio='1918'))
+        self.assertEqual(len(linhas_1918), 1)
+        self.assertEqual(linhas_1918[0].situacao_linha, 'ATIVA')
+        self.assertEqual(linhas_1918[0].processo_id, processo.id)
+        self.assertFalse(
+            LinhaControleRelatorio.objects.filter(
+                numero_relatorio='1911').exists())
+
+    def test_vincular_historico_apos_gerar_nao_duplica_linha(self):
+        """Fluxo do bug: Gerar nº novo → vincular histórico → uma linha ATIVA."""
+        admin = criar_usuario('admin_vinc_dup', 'GESTAO', is_superuser=True)
+        relatorios.definir_ultimo_numero(admin, 1950)
+        processo = self.novo_processo(
+            self.especie_liq, numero_processo='7992b/2024')
+        historica = LinhaControleRelatorio.objects.create(
+            processo=None,
+            numero_relatorio='1918',
+            numero_processo='outro/2024',
+            data_relatorio=datetime.date(2026, 10, 2),
+            secretaria='SMEC',
+            situacao_linha='HISTORICA',
+            sem_relatorio=True,
+            grupo='LIQUIDACOES',
+            sequencia='LIQUIDACOES',
+        )
+        # Sem marcar o histórico com o nº do processo, Gerar emite 1951.
+        self._salvar_liquidacao(processo)
+        self.assertEqual(processo.numero_relatorio, '1951')
+        self.assertEqual(
+            LinhaControleRelatorio.objects.filter(processo=processo).count(), 1)
+
+        self.client.force_login(admin)
+        resp = self.client.post(
+            reverse('controle_relatorio_vincular_linha', args=[historica.id]), {
+                'grupo': 'LIQUIDACOES',
+                'numero_processo': '7992b/2024',
+            })
+        self.assertEqual(resp.status_code, 302)
+        processo.refresh_from_db()
+        self.assertEqual(processo.numero_relatorio, '1918')
+
+        linhas_1918 = list(
+            LinhaControleRelatorio.objects.filter(numero_relatorio='1918'))
+        self.assertEqual(len(linhas_1918), 1)
+        self.assertEqual(linhas_1918[0].situacao_linha, 'ATIVA')
+        self.assertEqual(linhas_1918[0].processo_id, processo.id)
+
+        liberado = LinhaControleRelatorio.objects.get(numero_relatorio='1951')
+        self.assertEqual(liberado.situacao_linha, 'CANCELADA')
+        self.assertIsNone(liberado.processo_id)
+
+        # Salvar período na análise não recria linha fantasma.
+        svc_processos.aplicar_analise(processo, {
+            'destino': 'Unidade de Teste',
+            'valor': '1000',
+            'periodo': 'Out/2026',
+            'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+        }, self.analista_liq)
+        self.assertEqual(
+            LinhaControleRelatorio.objects.filter(numero_relatorio='1918').count(),
+            1)
+        linha = LinhaControleRelatorio.objects.get(numero_relatorio='1918')
+        self.assertEqual(linha.periodo, 'Out/2026')
+
     def test_editar_linha_historica_pela_planilha(self):
         admin = criar_usuario('admin_edit_hist', 'GESTAO', is_superuser=True)
         linha = LinhaControleRelatorio.objects.create(
@@ -1581,6 +1665,29 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertEqual(bolsa.contratada, 'Laura Atleta')
         self.assertEqual(bolsa.periodo, 'Aline Resp')
         self.assertIn('Canoa', bolsa.objeto)
+
+        # Reimportar deve manter/atualizar a concessão em `volume`
+        # (bug: bulk_update omitia o campo e a coluna ficava vazia).
+        LinhaControleRelatorio.objects.filter(
+            sequencia='BOLSA_ATLETA', numero_relatorio='001'
+        ).update(volume='', numero_processo='errado')
+        arquivo2 = SimpleUploadedFile(
+            'multi2.xlsx',
+            buffer.getvalue(),
+            content_type=(
+                'application/vnd.openxmlformats-officedocument.'
+                'spreadsheetml.sheet'
+            ),
+        )
+        resp2 = self.client.post(
+            reverse('controle_relatorio_importar'),
+            {'grupo': 'BOLSA_ATLETA', 'planilha': arquivo2},
+        )
+        self.assertEqual(resp2.status_code, 302)
+        bolsa = LinhaControleRelatorio.objects.get(
+            sequencia='BOLSA_ATLETA', numero_relatorio='001')
+        self.assertEqual(bolsa.numero_processo, '13024/2025')
+        self.assertEqual(bolsa.volume, '22.950/2024')
 
         subv = LinhaControleRelatorio.objects.get(
             sequencia='SUBVENCAO', numero_relatorio='001')
