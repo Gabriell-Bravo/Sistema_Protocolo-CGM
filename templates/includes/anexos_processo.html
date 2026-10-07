@@ -6,48 +6,95 @@
     </div>
 
     {% if pode_anexar %}
-    <form method="post" action="{% url 'anexar_arquivo' processo.id %}" enctype="multipart/form-data" class="anexo-form">
+    <form method="post" action="{% url 'anexar_arquivo' processo.id %}"
+          enctype="multipart/form-data" class="anexo-form" id="formAnexos">
         {% csrf_token %}
-        <div class="anexo-form__linha">
-            <label class="anexo-picker">
-                <input type="file" name="arquivos" class="anexo-picker__input" multiple required
-                       aria-label="Arquivos para anexar">
-                <span class="btn btn--outline">
-                    <span class="material-symbols-rounded">folder_open</span>
-                    Escolher arquivos
-                </span>
-                <span class="anexo-picker__rotulo" data-vazio="Nenhum arquivo escolhido">Nenhum arquivo escolhido</span>
-            </label>
-            <button type="submit" class="btn btn--primary">
+        <div class="anexo-dropzone" id="anexoDropzone" tabindex="0"
+             role="button" aria-label="Arraste arquivos ou clique para escolher">
+            <input type="file" name="arquivos" id="anexoInput" class="anexo-picker__input"
+                   multiple required accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.odt,.ods,.txt,application/pdf,image/*"
+                   aria-label="Arquivos para anexar">
+            <span class="material-symbols-rounded anexo-dropzone__icone">cloud_upload</span>
+            <div class="anexo-dropzone__titulo">Arraste o arquivo para cá</div>
+            <div class="anexo-dropzone__texto">
+                ou <span class="anexo-dropzone__link">escolher arquivos</span>
+            </div>
+            <div class="anexo-dropzone__dica">PDF, Word, Excel, imagem ou texto · até 15 MB cada</div>
+        </div>
+
+        <ul class="anexo-pendentes" id="anexoPendentes" hidden></ul>
+
+        <div class="anexo-form__acoes">
+            <button type="submit" class="btn btn--primary" id="btnAnexar" disabled>
                 <span class="material-symbols-rounded">attach_file</span>
                 Anexar
             </button>
         </div>
-        <p class="anexo-form__dica">PDF, Word, Excel, imagem ou texto. Até 15 MB cada. Análise, diligências e encaminhamento continuam disponíveis e não são obrigatórios.</p>
+        <p class="anexo-form__dica">
+            Análise, diligências e encaminhamento continuam disponíveis e não são obrigatórios.
+            Depois de anexado, o arquivo aparece abaixo com preview — inclusive após a análise.
+        </p>
     </form>
     {% endif %}
 
     {% if anexos %}
     <ul class="anexo-lista">
         {% for anexo in anexos %}
-        <li class="anexo-item">
-            <span class="material-symbols-rounded anexo-item__icone">draft</span>
-            <div class="anexo-item__corpo">
-                <a class="anexo-item__nome" href="{% url 'baixar_anexo' anexo.id %}">{{ anexo.nome_original }}</a>
-                <div class="anexo-item__meta">
-                    {{ anexo.tamanho_legivel }}
-                    · {{ anexo.enviado_por.get_full_name|default:anexo.enviado_por.username|default:"—" }}
-                    · {{ anexo.enviado_em|date:"d/m/Y H:i" }}
+        <li class="anexo-card">
+            <div class="anexo-card__topo">
+                <span class="material-symbols-rounded anexo-item__icone">{{ anexo.icone_material }}</span>
+                <div class="anexo-item__corpo">
+                    <span class="anexo-item__nome">{{ anexo.nome_original }}</span>
+                    <div class="anexo-item__meta">
+                        {{ anexo.tamanho_legivel }}
+                        · {{ anexo.enviado_por.get_full_name|default:anexo.enviado_por.username|default:"—" }}
+                        · {{ anexo.enviado_em|date:"d/m/Y H:i" }}
+                    </div>
+                </div>
+                <div class="anexo-item__acoes">
+                    {% if anexo.eh_previsualizavel %}
+                    <button type="button" class="icon-btn icon-btn--primary"
+                            title="Ampliar preview"
+                            data-anexo-preview
+                            data-anexo-tipo="{% if anexo.extensao == '.pdf' %}pdf{% elif anexo.extensao == '.txt' %}texto{% else %}imagem{% endif %}"
+                            data-anexo-nome="{{ anexo.nome_original|escape }}"
+                            data-anexo-url="{% url 'ver_anexo' anexo.id %}"
+                            data-anexo-baixar="{% url 'baixar_anexo' anexo.id %}">
+                        <span class="material-symbols-rounded">open_in_full</span>
+                    </button>
+                    {% endif %}
+                    <a class="icon-btn" href="{% url 'baixar_anexo' anexo.id %}" title="Baixar arquivo">
+                        <span class="material-symbols-rounded">download</span>
+                    </a>
+                    {% if pode_anexar %}
+                    <form method="post" action="{% url 'remover_anexo' anexo.id %}"
+                          onsubmit="return confirm('Remover este arquivo?');">
+                        {% csrf_token %}
+                        <button type="submit" class="icon-btn icon-btn--danger" title="Remover arquivo">
+                            <span class="material-symbols-rounded">delete</span>
+                        </button>
+                    </form>
+                    {% endif %}
                 </div>
             </div>
-            {% if pode_anexar %}
-            <form method="post" action="{% url 'remover_anexo' anexo.id %}"
-                  onsubmit="return confirm('Remover este arquivo?');">
-                {% csrf_token %}
-                <button type="submit" class="icon-btn icon-btn--danger" title="Remover arquivo">
-                    <span class="material-symbols-rounded">delete</span>
-                </button>
-            </form>
+
+            {% if anexo.eh_previsualizavel %}
+            <div class="anexo-card__preview">
+                {% if anexo.extensao == '.pdf' %}
+                <iframe class="anexo-embed"
+                        src="{% url 'ver_anexo' anexo.id %}"
+                        title="Preview de {{ anexo.nome_original }}"></iframe>
+                {% elif anexo.extensao == '.txt' %}
+                <iframe class="anexo-embed anexo-embed--txt"
+                        src="{% url 'ver_anexo' anexo.id %}"
+                        title="Preview de {{ anexo.nome_original }}"></iframe>
+                {% else %}
+                <img class="anexo-embed-img"
+                     src="{% url 'ver_anexo' anexo.id %}"
+                     alt="{{ anexo.nome_original }}"
+                     loading="lazy">
+                {% endif %}
+            </div>
             {% endif %}
         </li>
         {% endfor %}
@@ -56,7 +103,213 @@
     <div class="empty empty--compact">
         <span class="material-symbols-rounded">attach_file</span>
         <div class="empty__title">Nenhum arquivo anexado</div>
+        {% if pode_anexar %}
+        <div>Arraste um arquivo para a área acima ou escolha no computador.</div>
+        {% endif %}
     </div>
     {% endif %}
 </section>
+
+<div class="modal" id="modalAnexoPreview" role="dialog" aria-labelledby="tituloAnexoPreview">
+    <div class="modal__dialog modal__dialog--wide">
+        <div class="modal__header">
+            <span class="modal__title" id="tituloAnexoPreview">Arquivo</span>
+            <button type="button" class="icon-btn" data-modal-close="modalAnexoPreview" aria-label="Fechar">
+                <span class="material-symbols-rounded">close</span>
+            </button>
+        </div>
+        <div class="modal__body anexo-preview-body">
+            <iframe id="anexoPreviewFrame" class="anexo-preview-frame" title="Preview do arquivo" hidden></iframe>
+            <img id="anexoPreviewImg" class="anexo-preview-img" alt="" hidden>
+            <pre id="anexoPreviewTxt" class="anexo-preview-txt" hidden></pre>
+        </div>
+        <div class="anexo-preview-footer">
+            <a id="anexoPreviewBaixar" class="btn btn--outline" href="#">
+                <span class="material-symbols-rounded">download</span>
+                Baixar
+            </a>
+            <button type="button" class="btn btn--primary" data-modal-close="modalAnexoPreview">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var dropzone = document.getElementById('anexoDropzone');
+    var input = document.getElementById('anexoInput');
+    var pendentes = document.getElementById('anexoPendentes');
+    var btnAnexar = document.getElementById('btnAnexar');
+    var form = document.getElementById('formAnexos');
+    var modal = document.getElementById('modalAnexoPreview');
+    var dt = new DataTransfer();
+
+    function limparPreview() {
+        var frame = document.getElementById('anexoPreviewFrame');
+        var img = document.getElementById('anexoPreviewImg');
+        var txt = document.getElementById('anexoPreviewTxt');
+        if (frame) { frame.src = 'about:blank'; frame.hidden = true; }
+        if (img) { img.removeAttribute('src'); img.hidden = true; }
+        if (txt) { txt.textContent = ''; txt.hidden = true; }
+    }
+
+    function formatBytes(n) {
+        if (n < 1024) return n + ' B';
+        if (n < 1024 * 1024) return Math.round(n / 1024) + ' KB';
+        return (n / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function syncInput() {
+        if (!input) return;
+        input.files = dt.files;
+        if (btnAnexar) btnAnexar.disabled = dt.files.length === 0;
+        renderPendentes();
+    }
+
+    function renderPendentes() {
+        if (!pendentes) return;
+        pendentes.innerHTML = '';
+        if (!dt.files.length) {
+            pendentes.hidden = true;
+            return;
+        }
+        pendentes.hidden = false;
+        Array.prototype.forEach.call(dt.files, function (file, index) {
+            var li = document.createElement('li');
+            li.className = 'anexo-item anexo-item--pendente';
+            var isImg = /^image\//.test(file.type);
+            var isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+            var mid = '';
+            if (isImg) {
+                mid = '<div class="anexo-card__preview"><img class="anexo-embed-img" alt=""></div>';
+            } else if (isPdf) {
+                mid = '<div class="anexo-card__preview"><iframe class="anexo-embed" title="Preview"></iframe></div>';
+            }
+            li.innerHTML =
+                '<div class="anexo-card__topo">' +
+                '<span class="material-symbols-rounded anexo-item__icone">draft</span>' +
+                '<div class="anexo-item__corpo">' +
+                '<span class="anexo-item__nome"></span>' +
+                '<div class="anexo-item__meta"></div>' +
+                '</div>' +
+                '<button type="button" class="icon-btn icon-btn--danger" title="Retirar da seleção">' +
+                '<span class="material-symbols-rounded">close</span></button>' +
+                '</div>' + mid;
+            li.querySelector('.anexo-item__nome').textContent = file.name;
+            li.querySelector('.anexo-item__meta').textContent =
+                formatBytes(file.size) + ' · pronto para anexar';
+            var url = URL.createObjectURL(file);
+            if (isImg) li.querySelector('.anexo-embed-img').src = url;
+            if (isPdf) li.querySelector('.anexo-embed').src = url;
+            li.querySelector('button').addEventListener('click', function () {
+                var novo = new DataTransfer();
+                Array.prototype.forEach.call(dt.files, function (f, i) {
+                    if (i !== index) novo.items.add(f);
+                });
+                dt = novo;
+                syncInput();
+            });
+            pendentes.appendChild(li);
+        });
+    }
+
+    function addFiles(fileList) {
+        Array.prototype.forEach.call(fileList || [], function (file) {
+            dt.items.add(file);
+        });
+        syncInput();
+    }
+
+    if (dropzone && input) {
+        dropzone.addEventListener('click', function () { input.click(); });
+        dropzone.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                input.click();
+            }
+        });
+        ['dragenter', 'dragover'].forEach(function (evt) {
+            dropzone.addEventListener(evt, function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.classList.add('is-dragover');
+            });
+        });
+        ['dragleave', 'drop'].forEach(function (evt) {
+            dropzone.addEventListener(evt, function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.classList.remove('is-dragover');
+            });
+        });
+        dropzone.addEventListener('drop', function (e) {
+            addFiles(e.dataTransfer.files);
+        });
+        input.addEventListener('change', function () {
+            addFiles(input.files);
+            input.files = dt.files;
+        });
+    }
+
+    if (form) {
+        form.addEventListener('submit', function (e) {
+            if (!dt.files.length) {
+                e.preventDefault();
+                return;
+            }
+            input.files = dt.files;
+        });
+    }
+
+    document.querySelectorAll('[data-anexo-preview]').forEach(function (el) {
+        el.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var tipo = el.getAttribute('data-anexo-tipo');
+            var nome = el.getAttribute('data-anexo-nome') || 'Arquivo';
+            var url = el.getAttribute('data-anexo-url');
+            var urlBaixar = el.getAttribute('data-anexo-baixar') || url;
+            var titulo = document.getElementById('tituloAnexoPreview');
+            var frame = document.getElementById('anexoPreviewFrame');
+            var img = document.getElementById('anexoPreviewImg');
+            var txt = document.getElementById('anexoPreviewTxt');
+            var baixar = document.getElementById('anexoPreviewBaixar');
+            limparPreview();
+            if (titulo) titulo.textContent = nome;
+            if (baixar) baixar.href = urlBaixar;
+
+            if (tipo === 'imagem' && img) {
+                img.src = url;
+                img.alt = nome;
+                img.hidden = false;
+            } else if (tipo === 'texto' && txt) {
+                fetch(url, { credentials: 'same-origin' })
+                    .then(function (r) { return r.text(); })
+                    .then(function (body) {
+                        txt.textContent = body;
+                        txt.hidden = false;
+                    })
+                    .catch(function () {
+                        if (frame) { frame.src = url; frame.hidden = false; }
+                    });
+            } else if (frame) {
+                frame.src = url;
+                frame.hidden = false;
+            }
+            if (modal) modal.classList.add('is-open');
+        });
+    });
+
+    if (modal) {
+        modal.addEventListener('click', function (e) {
+            if (e.target === modal) {
+                modal.classList.remove('is-open');
+                limparPreview();
+            }
+        });
+        modal.querySelectorAll('[data-modal-close="modalAnexoPreview"]').forEach(function (btn) {
+            btn.addEventListener('click', function () { limparPreview(); });
+        });
+    }
+})();
+</script>
 {% endif %}

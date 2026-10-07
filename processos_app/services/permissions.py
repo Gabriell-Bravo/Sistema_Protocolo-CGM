@@ -236,11 +236,14 @@ def pode_devolver_da_assinatura(user):
 
 
 def pode_analisar_processo(user, processo):
-    """Editar a análise: só o analista que assumiu."""
+    """Editar a análise: analista responsável, inclusive com o Controlador."""
     return (is_analista(user)
             and processo.analista_responsavel_id == user.id
-            and processo.situacao_tramite in ('EM_ANALISE',
-                                              'ASSINATURA_DIRECIONADA'))
+            and processo.situacao_tramite in (
+                'EM_ANALISE',
+                'ASSINATURA_DIRECIONADA',
+                'AGUARDANDO_ASSINATURA',
+            ))
 
 
 def pode_direcionar_assinatura(user, processo):
@@ -293,8 +296,13 @@ def pode_consultar_assinatura_e_diligencias(user):
 
 
 def pode_consultar_controle_relatorio(user):
-    """Planilha de relatórios: analista e administrador."""
-    return is_analista(user) or eh_administrador(user)
+    """Planilha de relatórios: Liquidações e administrador.
+
+    Licitações usa o Controle de análise (lista de processos do grupo).
+    """
+    if eh_administrador(user):
+        return True
+    return grupo_do_analista(user) == GRUPO_LIQUIDACOES
 
 
 def pode_definir_ultimo_relatorio(user):

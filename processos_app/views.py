@@ -34,6 +34,7 @@ from .services import cadastros as svc_cadastros
 from .services import indicadores
 from .services import monitoramento as svc_monitoramento
 from .services import meus_processos as svc_meus_processos
+from .services import controle_analise as svc_controle_analise
 from .services import pendencias as svc_pendencias
 from .services import processos as svc_processos
 from .services import permissions as perm
@@ -1528,6 +1529,35 @@ def meus_processos(request):
 
 
 @login_required
+def controle_analise(request):
+    """Controle de análise: processos de Licitações e Contratos ativos."""
+    if not svc_controle_analise.pode_consultar(request.user):
+        return HttpResponse(
+            'Você não tem permissão para acessar o Controle de análise.',
+            status=403)
+    filtro = (request.GET.get('filtro') or 'todos').strip()
+    termo = request.GET.get('pesquisa', '').strip()
+    try:
+        processos, totais, filtro = svc_controle_analise.listar(
+            request.user, filtro=filtro, termo=termo)
+    except PermissionDenied as exc:
+        return HttpResponse(str(exc), status=403)
+    filtros = [
+        (chave, rotulo, totais[chave])
+        for chave, rotulo in svc_controle_analise.FILTROS
+    ]
+    return render(request, 'analista/controle_analise.html', {
+        'processos': processos,
+        'filtro_atual': filtro,
+        'filtros': filtros,
+        'totais': totais,
+        'termo_pesquisa': termo,
+        'total': len(processos),
+        'nav': 'controle_analise',
+    })
+
+
+@login_required
 @user_passes_test(perm.pode_acessar_fila_gestao)
 def gestao_processos(request):
     (
@@ -1627,7 +1657,7 @@ def analista_processo(request, process_id):
     pode_editar = (
         perm.eh_administrador(request.user)
         or (perm.is_analista(request.user) and (
-            (processo.situacao_tramite == 'EM_ANALISE' and eh_responsavel)
+            perm.pode_analisar_processo(request.user, processo)
             or pode_editar_controle))
     )
 

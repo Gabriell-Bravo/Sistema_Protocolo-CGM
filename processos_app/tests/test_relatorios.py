@@ -1189,13 +1189,13 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertEqual(
             self.client.get(reverse('controle_relatorio')).status_code, 403)
 
-    def test_analista_de_licitacoes_nao_ve_linha_de_liquidacao(self):
+    def test_analista_de_licitacoes_nao_acessa_controle_relatorio(self):
+        """Licitações usa Controle de análise; planilha fica com Liquidações."""
         processo = self.novo_processo(self.especie_liq, numero_processo='13/2026')
         self._salvar_liquidacao(processo)
         self.client.force_login(self.analista_lic)
-        pagina = self.client.get(reverse('controle_relatorio'))
-        self.assertEqual(pagina.status_code, 200)
-        self.assertNotContains(pagina, '13/2026')
+        self.assertEqual(
+            self.client.get(reverse('controle_relatorio')).status_code, 403)
 
     def test_analista_liquidacoes_ve_historico_importado_de_outras_sequencias(self):
         """Importação antiga gravava grupo vazio; analista precisa ver igual ao admin."""

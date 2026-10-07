@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}Controle de análise{% endblock %}
+{% block page_title %}Controle de análise{% endblock %}
+{% block page_subtitle %}Processos de Licitações e Contratos que entram para análise deste grupo.{% endblock %}
+
+{% block content %}
+<div class="stack">
+    <section class="stats">
+        <a class="stat stat--primary stat--link {% if filtro_atual == 'todos' %}is-active{% endif %}"
+           href="?filtro=todos{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}">
+            <span class="stat__icon"><span class="material-symbols-rounded">folder_open</span></span>
+            <div>
+                <div class="stat__value">{{ totais.todos }}</div>
+                <div class="stat__label">Todos ativos</div>
+            </div>
+        </a>
+        <a class="stat stat--success stat--link {% if filtro_atual == 'disponiveis' %}is-active{% endif %}"
+           href="?filtro=disponiveis{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}">
+            <span class="stat__icon"><span class="material-symbols-rounded">inbox</span></span>
+            <div>
+                <div class="stat__value">{{ totais.disponiveis }}</div>
+                <div class="stat__label">Disponíveis</div>
+            </div>
+        </a>
+        <a class="stat stat--violet stat--link {% if filtro_atual == 'em_analise' %}is-active{% endif %}"
+           href="?filtro=em_analise{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}">
+            <span class="stat__icon"><span class="material-symbols-rounded">edit_note</span></span>
+            <div>
+                <div class="stat__value">{{ totais.em_analise }}</div>
+                <div class="stat__label">Em análise</div>
+            </div>
+        </a>
+        <a class="stat stat--warning stat--link {% if filtro_atual == 'assinatura' %}is-active{% endif %}"
+           href="?filtro=assinatura{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}">
+            <span class="stat__icon"><span class="material-symbols-rounded">draw</span></span>
+            <div>
+                <div class="stat__value">{{ totais.assinatura }}</div>
+                <div class="stat__label">Para assinar</div>
+            </div>
+        </a>
+    </section>
+
+    <section class="filters">
+        <div class="filters__chips">
+            {% for chave, rotulo, quantidade in filtros %}
+                <a href="?filtro={{ chave }}{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}"
+                   class="chip {% if filtro_atual == chave %}chip--ativo{% endif %}">
+                    {{ rotulo }} <span class="chip__label">{{ quantidade }}</span>
+                </a>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="filters">
+        <div class="filters__bar">
+            <form method="get" class="search">
+                <input type="hidden" name="filtro" value="{{ filtro_atual }}">
+                <div class="search__field">
+                    <span class="material-symbols-rounded search__icon">search</span>
+                    <input type="text" name="pesquisa" class="input"
+                           placeholder="Buscar por nº, secretaria, objeto, espécie…"
+                           value="{{ termo_pesquisa|default:'' }}">
+                </div>
+                <button type="submit" class="btn btn--primary">Buscar</button>
+            </form>
+            {% if termo_pesquisa %}
+                <a href="{% url 'controle_analise' %}?filtro={{ filtro_atual }}" class="btn btn--ghost">
+                    <span class="material-symbols-rounded">filter_alt_off</span>
+                    Limpar
+                </a>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="table-card">
+        <div class="table-card__header">
+            <span class="table-card__title">Processos para análise</span>
+            <span class="table-card__count">{{ total }} registro{{ total|pluralize:"s" }}</span>
+        </div>
+        <div class="table-scroll">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th class="col-sticky">Processo</th>
+                        <th>Volume</th>
+                        <th>Espécie</th>
+                        <th>Secretaria</th>
+                        <th>Objeto</th>
+                        <th>Analista</th>
+                        <th>Situação</th>
+                        <th>Prazo</th>
+                        <th class="col-actions">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for processo in processos %}
+                    <tr class="{% if processo.eh_comigo %}tr-situacao-voce{% endif %} {{ processo.prioridade_linha_class }}">
+                        <td class="col-sticky"><strong>{{ processo.numero_processo }}</strong></td>
+                        <td>{{ processo.volume|default:"—" }}</td>
+                        <td>{{ processo.especie|default:"—" }}</td>
+                        <td>{{ processo.secretaria }}</td>
+                        <td class="cell-wrap">
+                            <span class="cell-preview">{{ processo.objeto|truncatechars:70 }}</span>
+                        </td>
+                        <td>{{ processo.nome_analista|default:"—" }}</td>
+                        <td>
+                            <span class="badge badge--situacao {{ processo.classe_controle }}">{{ processo.rotulo_controle }}</span>
+                        </td>
+                        <td>
+                            <span class="badge badge--dot {% if processo.prazo_status == 'atrasado' %}badge--danger{% elif processo.prazo_status == 'hoje' or processo.prazo_status == 'atencao' %}badge--warning{% elif processo.prazo_status == 'ok' %}badge--success{% endif %}">
+                                {{ processo.prazo_formatado }}
+                            </span>
+                        </td>
+                        <td class="col-actions">
+                            <div class="actions">
+                                {% if processo.pode_editar_analise %}
+                                <a href="{% url 'analista_processo' processo.id %}?next={% url 'controle_analise' %}"
+                                   class="btn btn--primary btn--sm" title="Editar análise">
+                                    <span class="material-symbols-rounded">edit</span>
+                                    Editar
+                                </a>
+                                {% else %}
+                                <a href="{% url 'analista_processo' processo.id %}?next={% url 'controle_analise' %}"
+                                   class="btn btn--outline btn--sm" title="Visualizar processo">
+                                    <span class="material-symbols-rounded">visibility</span>
+                                    Ver
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9">
+                            <div class="empty" style="padding:32px 16px;">
+                                <span class="material-symbols-rounded">fact_check</span>
+                                <div class="empty__title">Nenhum processo neste filtro</div>
+                                <div>Quando o Protocolo cadastrar um processo de Licitações e Contratos, ele aparece aqui.</div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}

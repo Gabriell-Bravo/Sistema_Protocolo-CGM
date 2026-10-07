@@ -47,6 +47,10 @@ class TelasPorPapelTest(BaseProcessoTestCase):
         self._get(self.analista_lic, 'listar_finalizados')
         self._get(self.analista_lic, 'gestao_liberados_assinatura')
         self._get(self.analista_lic, 'gestao_diligencias')
+        self._get(self.analista_lic, 'controle_analise')
+        self._get(self.analista_lic, 'controle_analise', query='?filtro=disponiveis')
+        self._get(self.analista_lic, 'controle_relatorio', esperado=403)
+        self._get(self.analista_liq, 'controle_analise', esperado=403)
 
     def test_gestao(self):
         for nome in ('gestao_dashboard', 'gestao_processos', 'gestao_diligencias',

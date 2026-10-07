@@ -87,8 +87,7 @@ def campos_editaveis(usuario, processo=None):
     if perm.is_analista(usuario):
         if processo is None:
             return _campos_analista_e_cadastro()
-        if (processo.situacao_tramite == 'EM_ANALISE'
-                and processo.analista_responsavel_id == usuario.id):
+        if perm.pode_analisar_processo(usuario, processo):
             return _campos_analista_e_cadastro()
         if ((processo.numero_relatorio or processo.sem_relatorio)
                 and perm.pode_editar_linha_relatorio(usuario, processo)):

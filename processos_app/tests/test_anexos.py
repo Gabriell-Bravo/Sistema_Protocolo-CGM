@@ -60,25 +60,41 @@ class AnexoProcessoTest(BaseProcessoTestCase):
 
         self.client.force_login(self.analista_lic)
         pagina = self.client.get(reverse('analista_processo', args=[self.processo.id]))
-        self.assertContains(pagina, 'Escolher arquivos')
+        self.assertContains(pagina, 'Arraste o arquivo para cá')
+        self.assertContains(pagina, 'escolher arquivos')
         self.assertContains(pagina, 'parecer.pdf')
         self.assertContains(pagina, 'não são obrigatórios')
+        self.assertContains(pagina, 'anexo-embed')
+        self.assertContains(pagina, 'data-anexo-preview')
+        self.assertContains(pagina, reverse('ver_anexo', args=[anexo.id]))
 
         self.client.force_login(self.gestao)
         consulta = self.client.get(reverse('analista_processo', args=[self.processo.id]))
         self.assertContains(consulta, 'parecer.pdf')
-        self.assertNotContains(consulta, 'Escolher arquivos')
+        self.assertContains(consulta, 'data-anexo-preview')
+        self.assertNotContains(consulta, 'Arraste o arquivo para cá')
 
         for usuario in (self.gestao, self.protocolo, self.analista_lic2):
             self.client.force_login(usuario)
             baixa = self.client.get(reverse('baixar_anexo', args=[anexo.id]))
             self.assertEqual(baixa.status_code, 200, usuario.username)
             self.assertIn(b'%PDF', b''.join(baixa.streaming_content))
+            preview = self.client.get(reverse('ver_anexo', args=[anexo.id]))
+            self.assertEqual(preview.status_code, 200, usuario.username)
+            self.assertIn(b'%PDF', b''.join(preview.streaming_content))
+            # Preview abre no navegador/iframe; download força anexo.
+            self.assertNotIn(
+                'attachment',
+                (preview.get('Content-Disposition') or '').lower())
+            # Precisa permitir iframe na mesma origem (senão o olho quebra).
+            self.assertEqual(
+                (preview.get('X-Frame-Options') or '').upper(), 'SAMEORIGIN')
 
         self.client.force_login(self.protocolo)
         historico = self.client.get(reverse('ver_historico_processo', args=[self.processo.id]))
         self.assertContains(historico, 'parecer.pdf')
-        self.assertNotContains(historico, 'Escolher arquivos')
+        self.assertContains(historico, 'data-anexo-preview')
+        self.assertNotContains(historico, 'Arraste o arquivo para cá')
 
     def test_liquidacao_nao_anexa_e_outro_grupo_nao_baixa(self):
         resposta = self._post_anexo(self.analista_liq, self.processo, _pdf())
@@ -91,7 +107,7 @@ class AnexoProcessoTest(BaseProcessoTestCase):
 
         self.client.force_login(self.analista_liq)
         tela = self.client.get(reverse('analista_processo', args=[self.liquidacao.id]))
-        self.assertNotContains(tela, 'Escolher arquivos')
+        self.assertNotContains(tela, 'Arraste o arquivo para cá')
 
         self._post_anexo(self.analista_lic, self.processo, _pdf())
         anexo = AnexoProcesso.objects.get()
@@ -120,6 +136,26 @@ class AnexoProcessoTest(BaseProcessoTestCase):
         self._post_anexo(self.analista_lic, self.processo, _pdf())
         tramitacao.declinar_analise(self.processo.id, self.analista_lic, 'Teste')
         self.assertTrue(AnexoProcesso.objects.filter(processo=self.processo).exists())
+
+    def test_preview_permanece_apos_encaminhar_analise(self):
+        tramitacao.assumir(self.processo.id, self.analista_lic)
+        self._post_anexo(self.analista_lic, self.processo, _pdf())
+        anexo = AnexoProcesso.objects.get()
+        self.client.force_login(self.analista_lic)
+        self.client.post(
+            reverse('analista_processo', args=[self.processo.id]),
+            {'acao': 'concluir'},
+        )
+        self.processo.refresh_from_db()
+        self.assertEqual(self.processo.situacao_tramite, 'AGUARDANDO_ASSINATURA')
+
+        self.client.force_login(self.gestao)
+        pagina = self.client.get(reverse('analista_processo', args=[self.processo.id]))
+        self.assertContains(pagina, 'parecer.pdf')
+        self.assertContains(pagina, reverse('ver_anexo', args=[anexo.id]))
+        preview = self.client.get(reverse('ver_anexo', args=[anexo.id]))
+        self.assertEqual(preview.status_code, 200)
+        self.assertIn(b'%PDF', b''.join(preview.streaming_content))
 
     def test_encaminha_para_assinatura_so_com_anexo(self):
         tramitacao.assumir(self.processo.id, self.analista_lic)

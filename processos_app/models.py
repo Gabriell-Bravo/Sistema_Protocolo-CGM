@@ -679,6 +679,31 @@ class AnexoProcesso(models.Model):
             return f'{n / 1024:.0f} KB'
         return f'{n / (1024 * 1024):.1f} MB'
 
+    @property
+    def extensao(self):
+        from pathlib import Path
+        return Path(self.nome_original or '').suffix.lower()
+
+    @property
+    def eh_previsualizavel(self):
+        """PDF, imagem e texto abrem no navegador; Office só baixa."""
+        return self.extensao in {
+            '.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.txt',
+        }
+
+    @property
+    def icone_material(self):
+        ext = self.extensao
+        if ext == '.pdf':
+            return 'picture_as_pdf'
+        if ext in {'.png', '.jpg', '.jpeg', '.gif', '.webp'}:
+            return 'image'
+        if ext in {'.xls', '.xlsx', '.ods'}:
+            return 'table'
+        if ext in {'.doc', '.docx', '.odt'}:
+            return 'description'
+        return 'draft'
+
     class Meta:
         db_table = 'anexos_processo'
         ordering = ['-enviado_em', '-id']

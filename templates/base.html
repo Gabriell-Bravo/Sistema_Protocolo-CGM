@@ -116,12 +116,21 @@
                     <span class="material-symbols-rounded">campaign</span>
                     <span class="nav-item__label">Diligências</span>
                 </a>
+                {% if grupo_analista == 'LIQUIDACOES' %}
                 <a href="{% url 'controle_relatorio' %}"
                    class="nav-item {% if nav == 'controle_relatorio' %}is-active{% endif %}"
                    title="Controle de relatório">
                     <span class="material-symbols-rounded">table_chart</span>
                     <span class="nav-item__label">Controle de relatório</span>
                 </a>
+                {% elif grupo_analista == 'LICITACOES_E_CONTRATOS' %}
+                <a href="{% url 'controle_analise' %}"
+                   class="nav-item {% if nav == 'controle_analise' %}is-active{% endif %}"
+                   title="Controle de análise">
+                    <span class="material-symbols-rounded">fact_check</span>
+                    <span class="nav-item__label">Controle de análise</span>
+                </a>
+                {% endif %}
             {% endif %}
 
             {% if is_gestao or user.is_superuser %}

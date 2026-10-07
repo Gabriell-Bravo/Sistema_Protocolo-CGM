@@ -312,10 +312,10 @@
         <div class="form-section">
             <div class="form-section__title">
                 <span class="material-symbols-rounded">edit_note</span>
-                {% if layout_planilha %}{{ layout_planilha.titulo }}{% elif eh_liquidacao %}Informações da liquidação{% else %}Alimentar análise{% endif %}
+                {% if layout_planilha %}{{ layout_planilha.titulo }}{% elif eh_liquidacao %}Informações da liquidação{% elif eh_licitacao %}Observação{% else %}Alimentar análise{% endif %}
             </div>
             {% if eh_licitacao %}
-            <p class="field__hint" style="margin:-6px 0 14px;">Opcional para este grupo. O registro principal é o arquivo anexado acima.</p>
+            <p class="field__hint" style="margin:-6px 0 14px;">Opcional. O registro principal é o arquivo anexado acima.</p>
             {% elif layout_planilha %}
             <p class="field__hint" style="margin:-6px 0 14px;">
                 Campos iguais à planilha de <strong>{{ sequencia_relatorio_nome }}</strong>
@@ -534,43 +534,7 @@
                 {% endif %}
 
                 {% else %}
-                <div class="field">
-                    <label class="field__label" for="valor">Valor</label>
-                    <input type="text" id="valor" name="valor" class="input" inputmode="decimal" autocomplete="off"
-                           value="{{ valor_exibicao }}" placeholder="R$ 0,00" {% if not pode_editar %}readonly{% endif %}>
-                </div>
-                <div class="field">
-                    <label class="field__label" for="destino">Destino</label>
-                    <select id="destino" name="destino" class="select" {% if not pode_editar %}disabled{% endif %}>
-                        <option value="">Selecione a secretaria</option>
-                        {% for nome in secretarias %}
-                            <option value="{{ nome }}" {% if processo.destino == nome %}selected{% endif %}>{{ nome }}</option>
-                        {% endfor %}
-                        {% if processo.destino and processo.destino not in secretarias %}
-                            <option value="{{ processo.destino }}" selected>{{ processo.destino }}</option>
-                        {% endif %}
-                    </select>
-                </div>
-                <div class="field">
-                    <label class="field__label" for="periodo">Período</label>
-                    <input type="text" id="periodo" name="periodo" class="input" value="{{ processo.periodo|default:'' }}" {% if not pode_editar %}readonly{% endif %}>
-                </div>
-                <div class="field">
-                    <label class="field__label" for="tecnico">Analista / relator</label>
-                    <input type="text" id="tecnico" class="input" value="{{ processo.nome_analista|default:'' }}" readonly>
-                </div>
-                <div class="field">
-                    <label class="field__label" for="numero_despacho">Nº de despacho</label>
-                    <input type="text" id="numero_despacho" name="numero_despacho" class="input" value="{{ processo.numero_despacho|default:'' }}" {% if not pode_editar %}readonly{% endif %}>
-                </div>
-                <div class="field">
-                    <label class="field__label" for="status_analise">Status da análise</label>
-                    <select id="status_analise" name="status_analise" class="select" {% if not pode_editar %}disabled{% endif %}>
-                        {% for value, label in all_status_analise %}
-                            <option value="{{ value }}" {% if processo.status_analise == value %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+                {# Licitações e Contratos: só observação; o arquivo anexado é o registro principal. #}
                 <div class="field field--wide">
                     <label class="field__label" for="observacao">Observação</label>
                     <textarea id="observacao" name="observacao" class="textarea" rows="4" {% if not pode_editar %}readonly{% endif %}>{{ processo.observacao|default:'' }}</textarea>
@@ -680,7 +644,7 @@
                         <span class="material-symbols-rounded">{% if eh_licitacao %}attach_file{% else %}edit_note{% endif %}</span>
                         <span>
                             {% if eh_licitacao %}
-                            Para o Controlador ou outro analista, anexe ao menos um arquivo. Os campos da análise são opcionais.
+                            Para o Controlador ou outro analista, anexe ao menos um arquivo. A observação é opcional.
                             {% else %}
                             Para o Controlador ou outro analista, preencha: <strong>{{ campos_faltantes|join:", " }}</strong>.
                             {% endif %}
@@ -867,7 +831,7 @@
     <section class="card" id="acoesAnalise" style="margin-top:14px;">
         <div class="card__header">
             <span class="card__title">Finalizar</span>
-            <span class="card__hint">Salve, gere o número e encaminhe</span>
+            <span class="card__hint">{% if eh_licitacao %}Salve a observação (opcional) e encaminhe{% else %}Salve, gere o número e encaminhe{% endif %}</span>
         </div>
         <div class="card__body">
             <div class="form-actions" style="margin:0; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
