@@ -1,0 +1,387 @@
+{% extends "base.html" %}
+
+{% block title %}Exportar saídas{% endblock %}
+{% block page_title %}Exportar saídas{% endblock %}
+{% block page_subtitle %}Modelos prontos com preview de impressão em folha A4{% endblock %}
+{% block content_class %}content--export-saidas{% endblock %}
+
+{% block topbar_actions %}
+    <button type="button" class="btn btn--primary" id="btnImprimirSaidas">
+        <span class="material-symbols-rounded">print</span>
+        Imprimir
+    </button>
+    <a href="{{ url_excel }}" class="btn btn--success">
+        <span class="material-symbols-rounded">download</span>
+        Baixar Excel
+    </a>
+    <a href="{% url 'listar_finalizados' %}" class="btn btn--outline">
+        <span class="material-symbols-rounded">arrow_back</span>
+        Voltar
+    </a>
+{% endblock %}
+
+{% block content %}
+<div class="export-saidas">
+    <aside class="export-saidas__painel no-print">
+        <section class="card">
+            <div class="card__header">
+                <span class="card__title">Período</span>
+            </div>
+            <div class="card__body">
+                <div class="filters__chips">
+                    {% for item in periodos %}
+                    <a class="chip {% if filtros.periodo == item.codigo %}chip--ativo{% endif %}"
+                       href="?periodo={{ item.codigo }}{% if filtros.genero %}&genero={{ filtros.genero|urlencode }}{% endif %}{% if filtros.sequencia %}&sequencia={{ filtros.sequencia|urlencode }}{% endif %}{% if filtros.especie %}&especie={{ filtros.especie|urlencode }}{% endif %}{% if filtros.termo %}&termo={{ filtros.termo|urlencode }}{% endif %}{% if item.codigo == 'personalizado' and filtros.data_inicial %}&data_inicial={{ filtros.data_inicial }}{% endif %}{% if item.codigo == 'personalizado' and filtros.data_final %}&data_final={{ filtros.data_final }}{% endif %}">
+                        <span class="chip__label">{{ item.nome }}</span>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% if filtros.periodo == 'personalizado' %}
+                <form method="get" class="export-saidas__datas" id="formPeriodoPersonalizado">
+                    <input type="hidden" name="periodo" value="personalizado">
+                    {% if filtros.genero %}<input type="hidden" name="genero" value="{{ filtros.genero }}">{% endif %}
+                    {% if filtros.sequencia %}<input type="hidden" name="sequencia" value="{{ filtros.sequencia }}">{% endif %}
+                    {% if filtros.especie %}<input type="hidden" name="especie" value="{{ filtros.especie }}">{% endif %}
+                    {% if filtros.termo %}<input type="hidden" name="termo" value="{{ filtros.termo }}">{% endif %}
+                    <div class="filters__grid" style="margin-top:12px;">
+                        <div class="field">
+                            <label class="field__label" for="data_inicial">De</label>
+                            <input type="date" class="input" id="data_inicial" name="data_inicial"
+                                   value="{{ filtros.data_inicial }}" required>
+                        </div>
+                        <div class="field">
+                            <label class="field__label" for="data_final">Até</label>
+                            <input type="date" class="input" id="data_final" name="data_final"
+                                   value="{{ filtros.data_final }}" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn--outline btn--sm" style="margin-top:10px;">
+                        Aplicar período
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </section>
+
+        <section class="card">
+            <div class="card__header">
+                <span class="card__title">Grupo</span>
+            </div>
+            <div class="card__body">
+                <div class="filters__chips">
+                    {% for item in grupos %}
+                    <a class="chip {% if filtros.genero == item.codigo %}chip--ativo{% endif %}"
+                       href="?periodo={{ filtros.periodo|urlencode }}&genero={{ item.codigo|urlencode }}{% if filtros.periodo == 'personalizado' and filtros.data_inicial %}&data_inicial={{ filtros.data_inicial }}{% endif %}{% if filtros.periodo == 'personalizado' and filtros.data_final %}&data_final={{ filtros.data_final }}{% endif %}{% if filtros.termo %}&termo={{ filtros.termo|urlencode }}{% endif %}">
+                        <span class="chip__label">{{ item.nome }}</span>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </section>
+
+        {% if subgrupos %}
+        <section class="card">
+            <div class="card__header">
+                <span class="card__title">Subgrupo (Liquidações)</span>
+            </div>
+            <div class="card__body">
+                <div class="filters__chips">
+                    <a class="chip {% if not filtros.sequencia %}chip--ativo{% endif %}"
+                       href="?periodo={{ filtros.periodo|urlencode }}&genero=LIQUIDACOES{% if filtros.periodo == 'personalizado' and filtros.data_inicial %}&data_inicial={{ filtros.data_inicial }}{% endif %}{% if filtros.periodo == 'personalizado' and filtros.data_final %}&data_final={{ filtros.data_final }}{% endif %}{% if filtros.termo %}&termo={{ filtros.termo|urlencode }}{% endif %}">
+                        <span class="chip__label">Todos</span>
+                    </a>
+                    {% for item in subgrupos %}
+                    <a class="chip {% if filtros.sequencia == item.codigo %}chip--ativo{% endif %}"
+                       href="?periodo={{ filtros.periodo|urlencode }}&genero=LIQUIDACOES&sequencia={{ item.codigo|urlencode }}{% if filtros.periodo == 'personalizado' and filtros.data_inicial %}&data_inicial={{ filtros.data_inicial }}{% endif %}{% if filtros.periodo == 'personalizado' and filtros.data_final %}&data_final={{ filtros.data_final }}{% endif %}{% if filtros.termo %}&termo={{ filtros.termo|urlencode }}{% endif %}">
+                        <span class="chip__label">{{ item.nome }}</span>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </section>
+        {% endif %}
+
+        <section class="card">
+            <div class="card__header">
+                <span class="card__title">Espécie</span>
+            </div>
+            <div class="card__body">
+                <form method="get" id="formEspecie">
+                    <input type="hidden" name="periodo" value="{{ filtros.periodo }}">
+                    {% if filtros.genero %}<input type="hidden" name="genero" value="{{ filtros.genero }}">{% endif %}
+                    {% if filtros.sequencia %}<input type="hidden" name="sequencia" value="{{ filtros.sequencia }}">{% endif %}
+                    {% if filtros.periodo == 'personalizado' and filtros.data_inicial %}
+                    <input type="hidden" name="data_inicial" value="{{ filtros.data_inicial }}">
+                    {% endif %}
+                    {% if filtros.periodo == 'personalizado' and filtros.data_final %}
+                    <input type="hidden" name="data_final" value="{{ filtros.data_final }}">
+                    {% endif %}
+                    {% if filtros.termo %}<input type="hidden" name="termo" value="{{ filtros.termo }}">{% endif %}
+                    <select name="especie" class="select" onchange="this.form.submit()">
+                        <option value="">Todas as espécies</option>
+                        {% for esp in especies %}
+                        <option value="{{ esp }}" {% if filtros.especie == esp %}selected{% endif %}>{{ esp }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
+            </div>
+        </section>
+
+        <section class="card">
+            <div class="card__header">
+                <span class="card__title">Busca</span>
+            </div>
+            <div class="card__body">
+                <form method="get">
+                    <input type="hidden" name="periodo" value="{{ filtros.periodo }}">
+                    {% if filtros.genero %}<input type="hidden" name="genero" value="{{ filtros.genero }}">{% endif %}
+                    {% if filtros.sequencia %}<input type="hidden" name="sequencia" value="{{ filtros.sequencia }}">{% endif %}
+                    {% if filtros.especie %}<input type="hidden" name="especie" value="{{ filtros.especie }}">{% endif %}
+                    {% if filtros.periodo == 'personalizado' and filtros.data_inicial %}
+                    <input type="hidden" name="data_inicial" value="{{ filtros.data_inicial }}">
+                    {% endif %}
+                    {% if filtros.periodo == 'personalizado' and filtros.data_final %}
+                    <input type="hidden" name="data_final" value="{{ filtros.data_final }}">
+                    {% endif %}
+                    <div class="pendencia-add__row">
+                        <input type="search" name="termo" class="input" value="{{ filtros.termo }}"
+                               placeholder="Nº processo, secretaria, objeto…">
+                        <button type="submit" class="btn btn--outline btn--sm">Filtrar</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </aside>
+
+    <div class="export-saidas__preview-wrap">
+        {% if erro %}
+        <div class="alert alert--warning no-print">
+            <span class="material-symbols-rounded">warning</span>
+            <span>{{ erro }}</span>
+        </div>
+        {% endif %}
+
+        <p class="export-saidas__preview-hint no-print">
+            Preview da impressão — {{ total }} registro{{ total|pluralize:"s" }}.
+            O que você vê na folha é o que sai na impressora.
+        </p>
+
+        <article class="folha-a4" id="folhaSaidas">
+            <header class="folha-a4__cabecalho">
+                <div class="folha-a4__org">Controladoria Geral do Município — Saquarema</div>
+                <h1 class="folha-a4__titulo">Relatório de saídas</h1>
+                <div class="folha-a4__meta">
+                    <div><strong>Modelo:</strong> {{ titulo }}</div>
+                    <div><strong>Total:</strong> {{ total }}</div>
+                    <div><strong>Emitido em:</strong> {{ emitido_em|date:"d/m/Y H:i" }}</div>
+                </div>
+            </header>
+
+            {% if processos %}
+            <table class="folha-a4__tabela">
+                <thead>
+                    <tr>
+                        <th>Nº processo</th>
+                        <th>Secretaria</th>
+                        <th>Saída</th>
+                        <th>Destino</th>
+                        <th>Grupo / Espécie</th>
+                        <th>Objeto</th>
+                        <th>Analista</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in processos %}
+                    <tr>
+                        <td>{{ p.numero_processo }}</td>
+                        <td>{{ p.secretaria }}</td>
+                        <td class="folha-a4__saida">
+                            {% if p.data_saida %}{{ p.data_saida|date:"d/m/Y" }}{% endif %}
+                            {% if p.hora_saida %}<br>{{ p.hora_saida|time:"H:i" }}{% endif %}
+                        </td>
+                        <td>{{ p.destino }}</td>
+                        <td>
+                            <span class="folha-a4__grupo">{{ p.genero_display }}</span>
+                            {% if p.especie %}<br>{{ p.especie }}{% endif %}
+                        </td>
+                        <td class="folha-a4__objeto">{{ p.objeto }}</td>
+                        <td>{{ p.nome_analista|default:p.tecnico }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="folha-a4__vazio">Nenhuma saída neste filtro.</p>
+            {% endif %}
+
+            <footer class="folha-a4__rodape">
+                Sistema de Protocolo CGM · página gerada para impressão
+            </footer>
+        </article>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<style>
+.export-saidas {
+    display: grid;
+    grid-template-columns: minmax(260px, 320px) 1fr;
+    gap: 18px;
+    align-items: start;
+}
+.export-saidas__painel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: sticky;
+    top: 12px;
+}
+.export-saidas__preview-hint {
+    margin: 0 0 10px;
+    color: var(--text-muted, #667);
+    font-size: 0.9rem;
+}
+.export-saidas__preview-wrap {
+    min-width: 0;
+}
+.folha-a4 {
+    background: #fff;
+    color: #111;
+    width: 210mm;
+    max-width: 100%;
+    min-height: 297mm;
+    margin: 0 auto;
+    padding: 12mm 12mm 14mm;
+    box-shadow: 0 8px 28px rgba(0,0,0,.12);
+    border: 1px solid #ddd;
+    box-sizing: border-box;
+}
+.folha-a4__cabecalho {
+    border-bottom: 2px solid #222;
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+}
+.folha-a4__org {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #444;
+}
+.folha-a4__titulo {
+    margin: 4px 0 8px;
+    font-size: 18px;
+    font-weight: 700;
+}
+.folha-a4__meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 12px;
+    font-size: 11px;
+}
+.folha-a4__tabela {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10px;
+    line-height: 1.25;
+}
+.folha-a4__tabela th,
+.folha-a4__tabela td {
+    border: 1px solid #bbb;
+    padding: 4px 5px;
+    vertical-align: top;
+    text-align: left;
+}
+.folha-a4__tabela th {
+    background: #f0f0f0;
+    font-weight: 600;
+}
+.folha-a4__grupo {
+    font-weight: 600;
+}
+.folha-a4__objeto {
+    max-width: 42mm;
+    word-break: break-word;
+}
+.folha-a4__saida {
+    white-space: nowrap;
+}
+.folha-a4__vazio {
+    margin: 40px 0;
+    text-align: center;
+    color: #666;
+}
+.folha-a4__rodape {
+    margin-top: 14px;
+    padding-top: 6px;
+    border-top: 1px solid #ccc;
+    font-size: 9px;
+    color: #666;
+    text-align: center;
+}
+@media (max-width: 1100px) {
+    .export-saidas {
+        grid-template-columns: 1fr;
+    }
+    .export-saidas__painel {
+        position: static;
+    }
+}
+@media print {
+    @page {
+        size: A4 portrait;
+        margin: 10mm;
+    }
+    body {
+        background: #fff !important;
+    }
+    .sidebar,
+    .sidebar-overlay,
+    .topbar,
+    .no-print,
+    .export-saidas__painel,
+    .export-saidas__preview-hint {
+        display: none !important;
+    }
+    .app-shell,
+    .main,
+    .content,
+    .export-saidas,
+    .export-saidas__preview-wrap {
+        display: block !important;
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+        box-shadow: none !important;
+    }
+    .folha-a4 {
+        width: 100% !important;
+        max-width: none !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+    .folha-a4__tabela thead {
+        display: table-header-group;
+    }
+    .folha-a4__tabela tr {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+}
+</style>
+<script>
+(function () {
+    var btn = document.getElementById('btnImprimirSaidas');
+    if (btn) {
+        btn.addEventListener('click', function () {
+            window.print();
+        });
+    }
+})();
+</script>
+{% endblock %}

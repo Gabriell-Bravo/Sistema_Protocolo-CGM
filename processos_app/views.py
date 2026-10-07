@@ -19,8 +19,6 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from .forms import AdminResetPasswordForm, CustomUserCreationForm
 from django.contrib.auth.models import User
 from .forms import ProcessoForm
-import openpyxl
-from openpyxl.styles import Font, Alignment, Border, Side
 from django.utils import timezone, dateformat
 from django.contrib.auth.forms import AuthenticationForm
 from django.views.decorators.http import require_POST
@@ -862,164 +860,6 @@ def listar_finalizados(request):
 
 
 @login_required
-@user_passes_test(lambda u: u.is_superuser or perm.is_protocolo(u) or perm.is_gestao(u))
-def exportar_finalizados_excel(request):
-    data_inicial_str = request.GET.get('data_inicial')
-    data_final_str = request.GET.get('data_final')
-    prioridade = request.GET.get('prioridade')
-    termo_pesquisa = request.GET.get('termo')
-    status_monitoramento = request.GET.get('status_monitoramento', 'todas')
-    especie = request.GET.get('especie', 'todas')
-    genero = request.GET.get('genero', 'todas')
-    status_analise = request.GET.get('status_analise', 'todas')
-
-    if not data_inicial_str or not data_final_str:
-        return HttpResponse('{"success": false, "message": "Por favor, selecione uma Data Inicial e uma Data Final para exportar os processos por período."}',
-                            content_type='application/json', status=400)
-
-    try:
-        data_inicial = datetime.strptime(data_inicial_str, '%Y-%m-%d').date()
-        data_final = datetime.strptime(data_final_str, '%Y-%m-%d').date()
-    except ValueError:
-        return HttpResponse('{"success": false, "message": "Formato de data inválido. Use AAAA-MM-DD."}',
-                            content_type='application/json', status=400)
-
-    if data_inicial > data_final:
-        return HttpResponse(
-            '{"success": false, "message": "A data inicial não pode ser maior que a data final."}',
-            content_type='application/json', status=400)
-
-    # Cancelados ficam fora (item 35): o registro existe, mas não é saída.
-    processes = tramitacao.finalizados().filter(
-        data_saida__range=[data_inicial, data_final]
-    ).order_by('data_saida')
-
-    processes = filter_processes_by_user_level(request.user, processes)
-
-    if prioridade and prioridade != 'todas':
-        processes = processes.filter(prioridade=prioridade)
-    if termo_pesquisa:
-        processes = processes.filter(
-            Q(numero_processo__icontains=termo_pesquisa) |
-            Q(secretaria__icontains=termo_pesquisa) |
-            Q(destino__icontains=termo_pesquisa) |
-            Q(genero__icontains=termo_pesquisa) |
-            Q(especie__icontains=termo_pesquisa) |
-            Q(objeto__icontains=termo_pesquisa) |
-            Q(contratada__icontains=termo_pesquisa) |
-            Q(tecnico__icontains=termo_pesquisa) |
-            Q(observacao__icontains=termo_pesquisa) |
-            Q(observacao_protocolo__icontains=termo_pesquisa) |
-            Q(valor__icontains=termo_pesquisa) |
-            Q(periodo__icontains=termo_pesquisa)
-        )
-
-    if status_monitoramento != 'todas':
-        processes = processes.filter(
-            svc_monitoramento.filtro_status(status_monitoramento))
-
-    if genero and genero != 'todas':
-        if can_access_genero(request.user, genero):
-            processes = processes.filter(genero=genero)
-        else:
-            processes = processes.none()
-
-    if especie and especie != 'todas':
-        processes = processes.filter(especie=especie)
-
-    if status_analise != 'todas':
-        processes = processes.filter(status_analise=status_analise)
-
-    workbook = openpyxl.Workbook()
-    sheet = workbook.active
-    sheet.title = "Processos Finalizados"
-
-    headers = [
-        "N° Processo", "Volume", "Secretaria", "Data Entrada", "Hora Entrada",
-        "Data Saída", "Hora Saída", "Destino", "Gênero", "Espécie", "Objeto",
-        "Contratada", "Recorrente", "Prioridade", "Técnico", "N° Despacho",
-        "Observação", "Valor"
-    ]
-    sheet.append(headers)
-
-    header_font = Font(bold=True, color="FFFFFF")
-    header_fill = openpyxl.styles.PatternFill(
-        start_color="4CAF50", end_color="4CAF50", fill_type="solid")
-    thin_border = Border(left=Side(style='thin'),
-                         right=Side(style='thin'),
-                         top=Side(style='thin'),
-                         bottom=Side(style='thin'))
-
-    for col_num, header_title in enumerate(headers, 1):
-        cell = sheet.cell(row=1, column=col_num)
-        cell.value = header_title
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = Alignment(horizontal='center', vertical='center')
-        cell.border = thin_border
-
-    for process in processes:
-        row_data = [
-            process.numero_processo,
-            process.volume,
-            process.secretaria,
-            process.data_entrada.strftime(
-                '%Y-%m-%d') if process.data_entrada else '',
-            process.hora_entrada.strftime(
-                '%H:%M') if process.hora_entrada else '',
-            process.data_saida.strftime(
-                '%Y-%m-%d') if process.data_saida else '',
-            # Formatacao Excel
-            process.hora_saida.strftime('%H:%M') if process.hora_saida else '',
-            process.destino,
-            process.genero,
-            process.especie,
-            process.objeto,
-            process.contratada,
-            process.recorrente,
-            process.prioridade,
-            process.tecnico,
-            process.numero_despacho,
-            process.observacao_protocolo or process.observacao or '',
-            process.valor,
-
-        ]
-        sheet.append(row_data)
-
-    for row in sheet.iter_rows(min_row=2):
-        for cell in row:
-            cell.border = thin_border
-            if cell.column_letter in ['K', 'O', 'P', 'Q', 'R', 'U', 'V', 'W']:
-                cell.alignment = Alignment(wrapText=True, vertical='top')
-
-    for column in sheet.columns:
-        max_length = 0
-        column_letter = column[0].column_letter
-        for cell in column:
-            try:
-                if cell.value is not None:
-                    cell_length = len(str(cell.value))
-                    if cell_length > max_length:
-                        max_length = cell_length
-            except:
-                pass
-
-        adjusted_width = (max_length + 2)
-        if column_letter in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W']:
-            sheet.column_dimensions[column_letter].width = min(
-                adjusted_width, 100)
-        else:
-            sheet.column_dimensions[column_letter].width = adjusted_width
-
-    response = HttpResponse(
-        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = f'attachment; filename=processos_finalizados_{data_inicial_str}_a_{data_final_str}.xlsx'
-    workbook.save(response)
-
-    return response
-
-
-@login_required
 def get_process_by_number(request, numero_processo):
     try:
         processo = Processo.objects.filter(numero_processo=numero_processo).order_by(
@@ -1833,6 +1673,10 @@ def analista_processo(request, process_id):
                 svc_relatorios.sequencia_do_processo(processo)
                 or svc_relatorios.GRUPO_PADRAO)
             if processo.genero == 'LIQUIDACOES' else {}
+        ),
+        'aviso_numero_reaproveitavel': (
+            svc_relatorios.aviso_numero_reaproveitavel(processo)
+            if processo.genero == 'LIQUIDACOES' else None
         ),
     })
 

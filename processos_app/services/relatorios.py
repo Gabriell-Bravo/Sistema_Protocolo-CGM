@@ -713,50 +713,134 @@ def proximo_numero(grupo):
     return str(numero)
 
 
+def _consulta_linha_pre_reservada(processo):
+    """Query da linha reservada/histórica/sem relatório reutilizável."""
+    numero = (processo.numero_processo or '').strip()
+    if not numero:
+        return LinhaControleRelatorio.objects.none()
+    sequencia = sequencia_do_processo(processo) or GRUPO_PADRAO
+    return (
+        LinhaControleRelatorio.objects
+        .filter(filtro_sequencia(sequencia))
+        .filter(numero_processo__iexact=numero)
+        .exclude(numero_relatorio='')
+        .filter(
+            Q(situacao_linha__in=[
+                LinhaControleRelatorio.SITUACAO_RESERVADA,
+                LinhaControleRelatorio.SITUACAO_HISTORICA,
+            ])
+            # Amarelo "saiu sem relatório" ainda ATIVO na planilha.
+            | Q(
+                situacao_linha=LinhaControleRelatorio.SITUACAO_ATIVA,
+                sem_relatorio=True,
+            )
+        )
+        .filter(Q(processo__isnull=True) | Q(processo=processo))
+        .order_by('-data_relatorio', '-id')
+    )
+
+
 def _linha_pre_reservada_do_processo(processo):
     """Linha da planilha já marcada com este nº de processo, reutilizável.
 
-    Cobre reserva/desvínculo/histórico em que o cadastro perdeu o número,
-    mas a planilha ainda mostra a reserva (ex.: 1918 ligado a 7992/2024).
+    Cobre reserva/desvínculo/histórico/"saiu sem relatório" em que o
+    cadastro perdeu o número, mas a planilha ainda mostra a reserva.
 
     Cancelada (vermelha) fica de fora: só volta por número específico ou
     vínculo na planilha — "Gerar número" emite o próximo sequencial.
     """
-    numero = (processo.numero_processo or '').strip()
-    if not numero:
+    return _consulta_linha_pre_reservada(processo).select_for_update().first()
+
+
+def aviso_numero_reaproveitavel(processo):
+    """Dados para confirmação na tela do analista, ou None.
+
+    Só quando o processo ainda não tem número e a planilha já tem
+    reserva/histórico/sem relatório com o mesmo nº de processo.
+    """
+    if not processo or (processo.numero_relatorio or '').strip():
         return None
-    sequencia = sequencia_do_processo(processo) or GRUPO_PADRAO
-    return (
-        LinhaControleRelatorio.objects
-        .select_for_update()
-        .filter(filtro_sequencia(sequencia))
-        .filter(numero_processo__iexact=numero)
-        .exclude(numero_relatorio='')
-        .filter(situacao_linha__in=[
-            LinhaControleRelatorio.SITUACAO_RESERVADA,
-            LinhaControleRelatorio.SITUACAO_HISTORICA,
-        ])
-        .filter(Q(processo__isnull=True) | Q(processo=processo))
-        .order_by('-data_relatorio', '-id')
-        .first()
-    )
+    if not especie_gera_relatorio(processo):
+        return None
+    linha = _consulta_linha_pre_reservada(processo).first()
+    if linha is None:
+        return None
+    situacao = (linha.situacao_linha or '').strip()
+    if linha.sem_relatorio:
+        rotulo = 'saiu sem relatório'
+        origem = 'quando este processo saiu sem relatório'
+    elif situacao == LinhaControleRelatorio.SITUACAO_RESERVADA:
+        rotulo = 'reservado'
+        origem = 'e ficou reservado na planilha'
+    else:
+        rotulo = 'histórico'
+        origem = 'em passagem anterior na planilha'
+    return {
+        'numero': (linha.numero_relatorio or '').strip(),
+        'data': linha.data_relatorio,
+        'situacao': situacao,
+        'rotulo': rotulo,
+        'origem': origem,
+        'sem_relatorio': bool(linha.sem_relatorio),
+    }
 
 
 def _remover_linhas_duplicadas_do_numero(numero_txt, sequencia, manter_id):
-    """Remove reservas/históricos órfãos do mesmo nº após ativar uma linha."""
+    """Remove qualquer outra linha do mesmo nº após ativar uma.
+
+    Cobre histórico/reserva/cancelada e ATIVA órfã (sem processo).
+    Linhas ATIVAS de outro processo já foram tratadas por
+    `_limpar_outros_donos_do_numero`.
+    """
     if not numero_txt or manter_id is None:
         return
-    (
+    outras = list(
         LinhaControleRelatorio.objects
         .filter(filtro_sequencia(sequencia), numero_relatorio=numero_txt)
         .exclude(id=manter_id)
+    )
+    for linha in outras:
+        if (
+            linha.situacao_linha == LinhaControleRelatorio.SITUACAO_ATIVA
+            and linha.processo_id
+        ):
+            continue
+        linha.delete()
+
+
+def _buscar_linha_reaproveitavel(sequencia, numero_txt, processo):
+    """Linha existente do mesmo nº para virar a ATIVA do processo."""
+    if not numero_txt:
+        return None
+    candidatos = list(
+        LinhaControleRelatorio.objects
+        .filter(filtro_sequencia(sequencia), numero_relatorio=numero_txt)
         .filter(situacao_linha__in=[
             LinhaControleRelatorio.SITUACAO_RESERVADA,
             LinhaControleRelatorio.SITUACAO_CANCELADA,
             LinhaControleRelatorio.SITUACAO_HISTORICA,
         ])
-        .delete()
+        .order_by('-atualizado_em', '-id')
     )
+    if not candidatos:
+        # ATIVA órfã (sem FK) — ex.: import/desvínculo incompleto.
+        candidatos = list(
+            LinhaControleRelatorio.objects
+            .filter(filtro_sequencia(sequencia), numero_relatorio=numero_txt)
+            .filter(
+                situacao_linha=LinhaControleRelatorio.SITUACAO_ATIVA,
+                processo__isnull=True,
+            )
+            .order_by('-atualizado_em', '-id')
+        )
+    if not candidatos:
+        return None
+    num_proc = (processo.numero_processo or '').strip().casefold()
+    if num_proc:
+        for linha in candidatos:
+            if (linha.numero_processo or '').strip().casefold() == num_proc:
+                return linha
+    return candidatos[0]
 
 
 def atribuir_se_preciso(processo):
@@ -834,18 +918,10 @@ def registrar(processo):
         antiga = None
 
     reaproveitar = None
-    if numero_txt and not sem_relatorio:
-        reaproveitar = (
-            LinhaControleRelatorio.objects
-            .filter(filtro_sequencia(sequencia), numero_relatorio=numero_txt)
-            .filter(situacao_linha__in=[
-                LinhaControleRelatorio.SITUACAO_RESERVADA,
-                LinhaControleRelatorio.SITUACAO_CANCELADA,
-                LinhaControleRelatorio.SITUACAO_HISTORICA,
-            ])
-            .order_by('-atualizado_em', '-id')
-            .first()
-        )
+    if numero_txt:
+        # Também com "sem relatório": o nº da planilha precisa ser único.
+        reaproveitar = _buscar_linha_reaproveitavel(
+            sequencia, numero_txt, processo)
         if reaproveitar is None:
             reaproveitar = (
                 LinhaControleRelatorio.objects

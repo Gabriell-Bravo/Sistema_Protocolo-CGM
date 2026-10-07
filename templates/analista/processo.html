@@ -221,6 +221,20 @@
         </div>
     {% endif %}
 
+    {% if aviso_numero_reaproveitavel %}
+        <div class="alert alert--warning" id="avisoNumeroReservado" role="status">
+            <span class="material-symbols-rounded">confirmation_number</span>
+            <span>
+                <strong>Número reservado na planilha:</strong>
+                relatório <strong>{{ aviso_numero_reaproveitavel.numero }}</strong>
+                ({% if aviso_numero_reaproveitavel.data %}{{ aviso_numero_reaproveitavel.data|date:"d/m/Y" }} · {% endif %}{{ aviso_numero_reaproveitavel.rotulo }}).
+                Este processo {{ aviso_numero_reaproveitavel.origem }}.
+                Ao clicar em <strong>Gerar número</strong>, o sistema pede confirmação para usar esse nº
+                (substitui a linha da planilha, sem duplicar).
+            </span>
+        </div>
+    {% endif %}
+
     {% if pode_devolver_assinatura %}
         <section class="card">
             <div class="card__header">
@@ -370,6 +384,10 @@
                         {% if pode_editar %}
                             {% if processo.numero_relatorio %}
                             Use o lápis para trocar o número e a data. Salvar análise grava os demais campos sem alterar o número.
+                            {% elif aviso_numero_reaproveitavel %}
+                            Use <strong>Usar nº {{ aviso_numero_reaproveitavel.numero }}</strong>
+                            e confirme para reaproveitar o número
+                            ({{ aviso_numero_reaproveitavel.rotulo }}) da planilha.
                             {% else %}
                             <strong>Salvar análise</strong> grava os dados sem emitir número.
                             <strong>Gerar número</strong> emite o sequencial.
@@ -840,11 +858,22 @@
                     <span class="material-symbols-rounded">save</span>
                     Salvar análise
                 </button>
-                {% if eh_liquidacao and not processo.numero_relatorio and not processo.sem_relatorio %}
-                <button type="submit" form="formAnalise" name="acao" value="gerar_numero" class="btn btn--primary" id="btnGerarNumero">
+                {% if eh_liquidacao and not processo.numero_relatorio %}
+                    {% if not processo.sem_relatorio or aviso_numero_reaproveitavel %}
+                <button type="submit" form="formAnalise" name="acao" value="gerar_numero"
+                        class="btn btn--primary" id="btnGerarNumero"
+                        {% if aviso_numero_reaproveitavel %}
+                        data-confirmar-numero="{{ aviso_numero_reaproveitavel.numero }}"
+                        data-confirmar-origem="{{ aviso_numero_reaproveitavel.origem }}"
+                        {% endif %}>
                     <span class="material-symbols-rounded">pin</span>
+                    {% if aviso_numero_reaproveitavel %}
+                    Usar nº {{ aviso_numero_reaproveitavel.numero }}
+                    {% else %}
                     Gerar número
+                    {% endif %}
                 </button>
+                    {% endif %}
                 {% endif %}
                 {% endif %}
                 {% if pode_liberar or pode_direcionar or pode_declinar %}
@@ -872,6 +901,26 @@
         form.querySelector('input[name="motivo"]').value = motivo.trim();
         return true;
     }
+
+    (function initConfirmarNumeroReservado() {
+        var btn = document.getElementById('btnGerarNumero');
+        if (!btn) return;
+        var numero = (btn.getAttribute('data-confirmar-numero') || '').trim();
+        if (!numero) return;
+        var origem = (btn.getAttribute('data-confirmar-origem') ||
+            'e ficou reservado na planilha').trim();
+        btn.addEventListener('click', function (event) {
+            var msg = (
+                'Este processo ' + origem + '.\n\n' +
+                'Deseja utilizar o nº de relatório ' + numero + '?\n\n' +
+                'OK = usar o ' + numero + ' (sem gerar sequencial novo)\n' +
+                'Cancelar = não gerar agora'
+            );
+            if (!window.confirm(msg)) {
+                event.preventDefault();
+            }
+        });
+    })();
 
     function mostrarPassoEncaminhar(passo) {
         var lista = document.getElementById('encaminharLista');

@@ -194,6 +194,81 @@ class ControleRelatorioTest(BaseProcessoTestCase):
             LinhaControleRelatorio.objects.filter(
                 numero_relatorio='1911').exists())
 
+    def test_tela_analista_mostra_aviso_numero_historico(self):
+        """Com histórico do mesmo processo, a tela avisa antes de Gerar."""
+        processo = self.novo_processo(
+            self.especie_liq, numero_processo='aviso-1918/2026')
+        tramitacao.assumir(processo.id, self.analista_liq)
+        processo.refresh_from_db()
+        LinhaControleRelatorio.objects.create(
+            processo=None,
+            numero_relatorio='1918',
+            numero_processo='aviso-1918/2026',
+            data_relatorio=datetime.date(2026, 10, 2),
+            secretaria='SMEC',
+            situacao_linha='HISTORICA',
+            sem_relatorio=True,
+            grupo='LIQUIDACOES',
+            sequencia='LIQUIDACOES',
+        )
+        aviso = relatorios.aviso_numero_reaproveitavel(processo)
+        self.assertIsNotNone(aviso)
+        self.assertEqual(aviso['numero'], '1918')
+        self.assertEqual(aviso['rotulo'], 'saiu sem relatório')
+
+        self.client.force_login(self.analista_liq)
+        tela = self.client.get(reverse('analista_processo', args=[processo.id]))
+        self.assertEqual(tela.status_code, 200)
+        self.assertContains(tela, 'id="avisoNumeroReservado"')
+        self.assertContains(tela, 'Número reservado na planilha')
+        self.assertContains(tela, '1918')
+        self.assertContains(tela, 'data-confirmar-numero="1918"')
+        self.assertContains(tela, 'Usar nº 1918')
+        self.assertContains(tela, 'saiu sem relatório')
+
+    def test_gerar_sequencial_depois_numero_manual_nao_duplica(self):
+        """Caso 17025: Gerar sequencial → informar 1929 manual → 1 linha só."""
+        admin = criar_usuario('admin_manual_1929', 'GESTAO', is_superuser=True)
+        relatorios.definir_ultimo_numero(admin, 1950)
+        processo = self.novo_processo(
+            self.especie_liq, numero_processo='17025/2025')
+        LinhaControleRelatorio.objects.create(
+            processo=None,
+            numero_relatorio='1929',
+            numero_processo='17025/2025',
+            data_relatorio=datetime.date(2026, 10, 2),
+            secretaria='SMTSP - SECRETARIA MUNICIPAL DE TRANPS',
+            situacao_linha='HISTORICA',
+            sem_relatorio=True,
+            grupo='LIQUIDACOES',
+            sequencia='LIQUIDACOES',
+        )
+        # Força o bug antigo: emite sequencial sem consumir o histórico.
+        tramitacao.assumir(processo.id, self.analista_liq)
+        processo.refresh_from_db()
+        processo.numero_relatorio = '1951'
+        processo.data_analise = datetime.date(2026, 10, 7)
+        processo.save(update_fields=['numero_relatorio', 'data_analise'])
+        relatorios.registrar(processo)
+        self.assertEqual(
+            LinhaControleRelatorio.objects.filter(numero_relatorio='1929').count(),
+            1)
+        self.assertEqual(
+            LinhaControleRelatorio.objects.filter(numero_relatorio='1951').count(),
+            1)
+
+        relatorios.alterar_numero(
+            self.analista_liq, processo.id, 1929, '2026-10-02')
+        processo.refresh_from_db()
+        self.assertEqual(processo.numero_relatorio, '1929')
+        linhas = list(
+            LinhaControleRelatorio.objects.filter(numero_relatorio='1929'))
+        self.assertEqual(len(linhas), 1, 'não pode ficar histórico + ativo 1929')
+        self.assertEqual(linhas[0].situacao_linha, 'ATIVA')
+        self.assertEqual(linhas[0].processo_id, processo.id)
+        liberado = LinhaControleRelatorio.objects.get(numero_relatorio='1951')
+        self.assertEqual(liberado.situacao_linha, 'CANCELADA')
+
     def test_vincular_historico_apos_gerar_nao_duplica_linha(self):
         """Fluxo do bug: Gerar nº novo → vincular histórico → uma linha ATIVA."""
         admin = criar_usuario('admin_vinc_dup', 'GESTAO', is_superuser=True)
