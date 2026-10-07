@@ -766,21 +766,10 @@ def aviso_numero_reaproveitavel(processo):
     if linha is None:
         return None
     situacao = (linha.situacao_linha or '').strip()
-    if linha.sem_relatorio:
-        rotulo = 'saiu sem relatório'
-        origem = 'quando este processo saiu sem relatório'
-    elif situacao == LinhaControleRelatorio.SITUACAO_RESERVADA:
-        rotulo = 'reservado'
-        origem = 'e ficou reservado na planilha'
-    else:
-        rotulo = 'histórico'
-        origem = 'em passagem anterior na planilha'
     return {
         'numero': (linha.numero_relatorio or '').strip(),
         'data': linha.data_relatorio,
         'situacao': situacao,
-        'rotulo': rotulo,
-        'origem': origem,
         'sem_relatorio': bool(linha.sem_relatorio),
     }
 

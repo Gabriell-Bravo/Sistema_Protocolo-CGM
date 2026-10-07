@@ -214,17 +214,17 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         aviso = relatorios.aviso_numero_reaproveitavel(processo)
         self.assertIsNotNone(aviso)
         self.assertEqual(aviso['numero'], '1918')
-        self.assertEqual(aviso['rotulo'], 'saiu sem relatório')
 
         self.client.force_login(self.analista_liq)
         tela = self.client.get(reverse('analista_processo', args=[processo.id]))
         self.assertEqual(tela.status_code, 200)
         self.assertContains(tela, 'id="avisoNumeroReservado"')
-        self.assertContains(tela, 'Número reservado na planilha')
-        self.assertContains(tela, '1918')
-        self.assertContains(tela, 'data-confirmar-numero="1918"')
-        self.assertContains(tela, 'Usar nº 1918')
         self.assertContains(tela, 'saiu sem relatório')
+        self.assertContains(tela, '1918')
+        self.assertContains(tela, 'id="modalNumeroReservado"')
+        self.assertContains(tela, 'Deseja utilizar esse número?')
+        self.assertContains(tela, 'data-modal-open="modalNumeroReservado"')
+        self.assertContains(tela, 'Usar nº 1918')
 
     def test_gerar_sequencial_depois_numero_manual_nao_duplica(self):
         """Caso 17025: Gerar sequencial → informar 1929 manual → 1 linha só."""
