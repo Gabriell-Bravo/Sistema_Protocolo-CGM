@@ -215,6 +215,33 @@ class TelasPorPapelTest(BaseProcessoTestCase):
         self.assertContains(pagina, reverse('exportar_saidas'))
         self.assertNotContains(pagina, 'modalExportarExcel')
 
+    def test_exportar_ativos_excel_protocolo_e_admin(self):
+        from .base import criar_usuario
+        from openpyxl import load_workbook
+        from io import BytesIO
+
+        ativo = self.novo_processo(numero_processo='exp-ativo/2026')
+        pagina = self._get(self.protocolo, 'listar_processos')
+        self.assertContains(pagina, 'Gerar planilha')
+        self.assertContains(pagina, reverse('exportar_ativos_excel'))
+
+        resp = self._get(self.protocolo, 'exportar_ativos_excel')
+        self.assertIn('spreadsheet', resp['Content-Type'])
+        wb = load_workbook(BytesIO(resp.content))
+        linhas = list(wb.active.iter_rows(values_only=True))
+        self.assertEqual(linhas[0][0], 'N° Processo')
+        numeros = {row[0] for row in linhas[1:]}
+        self.assertIn(ativo.numero_processo, numeros)
+
+        admin = criar_usuario('admin_exp_ativos', 'PROTOCOLO', is_superuser=True)
+        resp_admin = self._get(admin, 'exportar_ativos_excel')
+        self.assertIn('spreadsheet', resp_admin['Content-Type'])
+
+        # Analista não exporta ativos.
+        self.client.force_login(self.analista_liq)
+        bloqueado = self.client.get(reverse('exportar_ativos_excel'))
+        self.assertEqual(bloqueado.status_code, 403)
+
     def test_dashboard_mostra_graficos_para_gestao_e_administrador(self):
         from .base import criar_usuario
         self.novo_processo()

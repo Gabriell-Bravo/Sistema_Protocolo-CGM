@@ -26,6 +26,8 @@ urlpatterns = [
          name='exportar_saidas'),
     path('exportar_finalizados_excel', exp.exportar_finalizados_excel,
          name='exportar_finalizados_excel'),
+    path('exportar_ativos_excel', exp.exportar_ativos_excel,
+         name='exportar_ativos_excel'),
     path('get_process_by_number/<str:numero_processo>',
          views.get_process_by_number, name='get_process_by_number'),
     path('deletar/<int:id>', views.deletar_processo, name='deletar_processo'),

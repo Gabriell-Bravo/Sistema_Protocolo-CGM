@@ -481,6 +481,10 @@ def listar_processos(request):
         'can_mark_saida': pode_saida,
         'can_create_process': perm.pode_cadastrar_processo(request.user),
         'pode_desfazer': perm.pode_desfazer_tramite(request.user),
+        'can_export_ativos': (
+            perm.eh_administrador(request.user)
+            or perm.is_protocolo(request.user)
+        ),
         'dados_formulario': svc_cadastros.dados_para_formulario(),
         'aba_cgm': aba_cgm,
         'pode_ver_processos_cgm': svc_cgm.pode_ver_processos_cgm(request.user),

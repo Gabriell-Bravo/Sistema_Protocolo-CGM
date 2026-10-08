@@ -5,6 +5,13 @@
 {% block page_subtitle %}{% if aba_cgm %}Processos da {{ secretaria_cgm }} e da espécie Contabilidade — só Protocolo e Gestão{% else %}Processos em tramitação, sem data de saída registrada{% endif %}{% endblock %}
 
 {% block topbar_actions %}
+    {% if can_export_ativos %}
+        <a href="{% url 'exportar_ativos_excel' %}{% if querystring %}?{{ querystring }}{% endif %}"
+           class="btn btn--success" title="Baixar planilha Excel dos processos em tramitação">
+            <span class="material-symbols-rounded">download</span>
+            Gerar planilha
+        </a>
+    {% endif %}
     {% if can_create_process %}
         <a href="{% url 'cadastrar_processo' %}" class="btn btn--primary">
             <span class="material-symbols-rounded">add</span>

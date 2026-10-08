@@ -12,6 +12,7 @@ from django.views.decorators.http import require_GET
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
+from .services import exportacao_ativos as svc_ativos
 from .services import exportacao_saidas as svc
 
 
@@ -19,6 +20,44 @@ def _assert_pode_exportar(user):
     if not svc.pode_exportar(user):
         raise PermissionDenied(
             'Somente Protocolo, Gestão e o administrador exportam saídas.')
+
+
+def _assert_pode_exportar_ativos(user):
+    if not svc_ativos.pode_exportar_ativos(user):
+        raise PermissionDenied(
+            'Somente Protocolo e o administrador exportam processos ativos.')
+
+
+def _estilo_cabecalho(sheet, headers, cor='4CAF50'):
+    header_font = Font(bold=True, color='FFFFFF')
+    header_fill = PatternFill(
+        start_color=cor, end_color=cor, fill_type='solid')
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin'),
+    )
+    for col_num, _header in enumerate(headers, 1):
+        cell = sheet.cell(row=1, column=col_num)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.border = thin_border
+    return thin_border
+
+
+def _ajustar_larguras(sheet):
+    for column in sheet.columns:
+        max_length = 0
+        column_letter = column[0].column_letter
+        for cell in column:
+            try:
+                if cell.value is not None:
+                    max_length = max(max_length, len(str(cell.value)))
+            except Exception:
+                pass
+        sheet.column_dimensions[column_letter].width = min(max_length + 2, 100)
 
 
 @login_required
@@ -99,23 +138,7 @@ def exportar_finalizados_excel(request):
         'Observação', 'Valor',
     ]
     sheet.append(headers)
-
-    header_font = Font(bold=True, color='FFFFFF')
-    header_fill = PatternFill(
-        start_color='4CAF50', end_color='4CAF50', fill_type='solid')
-    thin_border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'),
-        top=Side(style='thin'),
-        bottom=Side(style='thin'),
-    )
-
-    for col_num, _header in enumerate(headers, 1):
-        cell = sheet.cell(row=1, column=col_num)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = Alignment(horizontal='center', vertical='center')
-        cell.border = thin_border
+    thin_border = _estilo_cabecalho(sheet, headers)
 
     for process in processes:
         sheet.append([
@@ -143,22 +166,78 @@ def exportar_finalizados_excel(request):
         for cell in row:
             cell.border = thin_border
 
-    for column in sheet.columns:
-        max_length = 0
-        column_letter = column[0].column_letter
-        for cell in column:
-            try:
-                if cell.value is not None:
-                    max_length = max(max_length, len(str(cell.value)))
-            except Exception:
-                pass
-        sheet.column_dimensions[column_letter].width = min(max_length + 2, 100)
+    _ajustar_larguras(sheet)
 
     ini, fim = filtros.get('intervalo') or (None, None)
     if ini and fim:
         nome = f'processos_finalizados_{ini.isoformat()}_a_{fim.isoformat()}.xlsx'
     else:
         nome = 'processos_finalizados_todas.xlsx'
+
+    response = HttpResponse(
+        content_type=(
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ),
+    )
+    response['Content-Disposition'] = f'attachment; filename={nome}'
+    workbook.save(response)
+    return response
+
+
+@login_required
+@require_GET
+def exportar_ativos_excel(request):
+    """Excel dos processos ativos, respeitando os filtros da lista."""
+    _assert_pode_exportar_ativos(request.user)
+    filtros = svc_ativos.filtros_de_request(request)
+    processes = svc_ativos.consultar_ativos(request.user, filtros)
+
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = 'Processos Ativos'
+
+    headers = [
+        'N° Processo', 'Volume', 'Secretaria', 'Data Entrada', 'Hora Entrada',
+        'Situação', 'Analista', 'Prioridade', 'Gênero', 'Espécie', 'Objeto',
+        'Contratada', 'Destino', 'N° Relatório', 'N° Despacho',
+        'Observação', 'Valor', 'Período',
+    ]
+    sheet.append(headers)
+    thin_border = _estilo_cabecalho(sheet, headers, cor='2563EB')
+
+    for process in processes:
+        sheet.append([
+            process.numero_processo,
+            process.volume,
+            process.secretaria,
+            process.data_entrada.strftime('%Y-%m-%d') if process.data_entrada else '',
+            process.hora_entrada.strftime('%H:%M') if process.hora_entrada else '',
+            process.get_situacao_tramite_display(),
+            process.tecnico or process.nome_analista or '',
+            process.prioridade,
+            process.genero,
+            process.especie,
+            process.objeto,
+            process.contratada,
+            process.destino or '',
+            process.numero_relatorio or '',
+            process.numero_despacho or '',
+            process.observacao_protocolo or process.observacao or '',
+            process.valor or '',
+            process.periodo or '',
+        ])
+
+    for row in sheet.iter_rows(min_row=2):
+        for cell in row:
+            cell.border = thin_border
+
+    _ajustar_larguras(sheet)
+
+    hoje = timezone.localdate().isoformat()
+    if filtros.get('aba_cgm'):
+        nome = f'processos_cgm_ativos_{hoje}.xlsx'
+    else:
+        nome = f'processos_ativos_{hoje}.xlsx'
 
     response = HttpResponse(
         content_type=(
