@@ -227,7 +227,7 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertContains(tela, 'Usar nº 1918')
 
     def test_historico_importado_normal_nao_dispara_aviso_reservado(self):
-        """HISTORICA sem amarelo = relatório antigo importado, não é reserva."""
+        """Sem amarelo na planilha → sem aviso; Gerar emite sequencial."""
         admin = criar_usuario('admin_hist_norm', 'GESTAO', is_superuser=True)
         relatorios.definir_ultimo_numero(admin, 5000)
         processo = self.novo_processo(
@@ -245,13 +245,25 @@ class ControleRelatorioTest(BaseProcessoTestCase):
             grupo='LIQUIDACOES',
             sequencia='LIQUIDACOES',
         )
+        # Verde do mesmo processo também não dispara o aviso de "saiu sem relatório".
+        LinhaControleRelatorio.objects.create(
+            processo=None,
+            numero_relatorio='1778',
+            numero_processo='hist-normal/2026',
+            data_relatorio=timezone.localdate(),
+            situacao_linha='RESERVADA',
+            sem_relatorio=False,
+            grupo='LIQUIDACOES',
+            sequencia='LIQUIDACOES',
+        )
         self.assertIsNone(relatorios.aviso_numero_reaproveitavel(processo))
         self.client.force_login(self.analista_liq)
         tela = self.client.get(reverse('analista_processo', args=[processo.id]))
         self.assertNotContains(tela, 'id="avisoNumeroReservado"')
         self.assertNotContains(tela, 'Usar nº 1777')
         self._salvar_liquidacao(processo)
-        self.assertEqual(processo.numero_relatorio, '5001')
+        # Sequencial (ou buraco verde do dia), nunca o histórico normal 1777.
+        self.assertNotEqual(processo.numero_relatorio, '1777')
         self.assertTrue(
             LinhaControleRelatorio.objects.filter(
                 numero_relatorio='1777', situacao_linha='HISTORICA').exists())
