@@ -467,7 +467,8 @@ def aplicar_analise(processo, dados, usuario):
             campos_extra = list(dict.fromkeys(
                 campos_extra + ['numero_relatorio', 'data_analise']))
             alteracoes += 1
-        if not processo.data_analise:
+        # Data do relatório acompanha o número — não preenche só por assumir.
+        if processo.numero_relatorio and not processo.data_analise:
             processo.data_analise = timezone.localdate()
             campos_extra.append('data_analise')
             alteracoes += 1

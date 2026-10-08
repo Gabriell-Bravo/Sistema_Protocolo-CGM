@@ -854,13 +854,13 @@ def atribuir_se_preciso(processo):
     pre = _linha_pre_reservada_do_processo(processo)
     if pre is not None:
         processo.numero_relatorio = (pre.numero_relatorio or '').strip()
-        if not processo.data_analise:
-            processo.data_analise = pre.data_relatorio or timezone.localdate()
+        # Data do número reaproveitado (não a data em que o processo foi assumido).
+        processo.data_analise = pre.data_relatorio or timezone.localdate()
         registrar(processo)
         return True
     processo.numero_relatorio = proximo_numero(sequencia)
-    if not processo.data_analise:
-        processo.data_analise = timezone.localdate()
+    # Data do número = dia em que foi gerado.
+    processo.data_analise = timezone.localdate()
     registrar(processo)
     return True
 
@@ -881,8 +881,9 @@ def registrar(processo):
     Se o número já estiver ATIVO em outro processo, esse processo é
     desvinculado (perde o número) e a linha passa para o processo atual.
 
-    Se o processo trocar de número, o número antigo permanece na planilha
-    como linha vermelha (cancelada), com número e data, para reuso posterior.
+    Se o processo trocar de número, o número antigo permanece na planilha:
+    verde (mesmo dia, reuso automático) ou vermelho (outro dia, só
+    número específico).
     """
     sem_relatorio = bool(getattr(processo, 'sem_relatorio', False))
     if not processo.numero_relatorio and not sem_relatorio:
@@ -903,7 +904,7 @@ def registrar(processo):
         and (antiga.numero_relatorio or '').strip()
         and (antiga.numero_relatorio or '').strip() != numero_txt
     ):
-        _preservar_numero_liberado(antiga)
+        _preservar_numero_apos_troca(antiga)
         antiga = None
 
     reaproveitar = None
@@ -932,7 +933,7 @@ def registrar(processo):
                 (antiga.numero_relatorio or '').strip()
                 and (antiga.numero_relatorio or '').strip() != numero_txt
             ):
-                _preservar_numero_liberado(antiga)
+                _preservar_numero_apos_troca(antiga)
             else:
                 antiga.delete()
         for campo, valor in dados.items():
@@ -942,7 +943,9 @@ def registrar(processo):
         obs = (reaproveitar.observacao or '').strip()
         if (
             obs.startswith('Relatório cancelado')
+            or obs.startswith('Relatório desfeito')
             or obs.startswith('Número liberado')
+            or obs.startswith('Número desfeito')
             or 'desvinculado' in obs.casefold()
         ):
             reaproveitar.observacao = processo.observacao or ''
@@ -959,8 +962,32 @@ def registrar(processo):
     return linha
 
 
+def _data_linha_e_hoje(linha):
+    data = getattr(linha, 'data_relatorio', None)
+    return bool(data) and data == timezone.localdate()
+
+
+def _preservar_numero_apos_troca(linha):
+    """Ao trocar o nº: verde se a data for hoje (Gerar reusa); senão vermelho."""
+    if linha is None:
+        return
+    numero = (linha.numero_relatorio or '').strip()
+    if not numero and not linha.sem_relatorio:
+        linha.delete()
+        return
+    if _data_linha_e_hoje(linha):
+        _preservar_numero_devolvido(
+            linha,
+            observacao=(
+                'Número desfeito — disponível para reuso automático no mesmo dia.'
+            ),
+        )
+        return
+    _preservar_numero_liberado(linha)
+
+
 def _preservar_numero_liberado(linha):
-    """Mantém número e data na planilha (vermelho) quando o processo troca de nº."""
+    """Mantém número e data na planilha em vermelho (só número específico)."""
     if linha is None:
         return
     numero = (linha.numero_relatorio or '').strip()
@@ -969,13 +996,15 @@ def _preservar_numero_liberado(linha):
         return
     linha.processo = None
     linha.situacao_linha = LinhaControleRelatorio.SITUACAO_CANCELADA
-    linha.observacao = 'Número liberado — disponível para uso com número específico.'
+    linha.observacao = (
+        'Número liberado — reuso só com número específico na análise.'
+    )
     linha.save(update_fields=[
         'processo', 'situacao_linha', 'observacao', 'atualizado_em'])
 
 
-def _preservar_numero_devolvido(linha):
-    """Mantém número e data na planilha (verde) ao devolver o processo à fila."""
+def _preservar_numero_devolvido(linha, observacao=None):
+    """Mantém número e data na planilha (verde) para reuso no mesmo dia."""
     if linha is None:
         return
     numero = (linha.numero_relatorio or '').strip()
@@ -984,7 +1013,7 @@ def _preservar_numero_devolvido(linha):
         return
     linha.processo = None
     linha.situacao_linha = LinhaControleRelatorio.SITUACAO_RESERVADA
-    linha.observacao = (
+    linha.observacao = observacao or (
         'Número liberado ao voltar à fila — disponível para reuso no mesmo dia.'
     )
     linha.save(update_fields=[
@@ -1258,6 +1287,30 @@ def editar_linha(usuario, linha_id, dados):
     else:
         valor = formatar_valor(valor_bruto)
 
+    # Troca de nº na planilha: o antigo fica verde (hoje) ou vermelho (outro dia).
+    if novo_numero != anterior_numero and anterior_numero:
+        liberada = LinhaControleRelatorio.objects.create(
+            processo=None,
+            numero_relatorio=anterior_numero,
+            data_relatorio=linha.data_relatorio,
+            numero_processo=linha.numero_processo or '',
+            volume=linha.volume or '',
+            secretaria=linha.secretaria or '',
+            contratada=linha.contratada or '',
+            objeto=linha.objeto or '',
+            valor=linha.valor or '',
+            periodo=linha.periodo or '',
+            destino=linha.destino or '',
+            analista=linha.analista or '',
+            status_analise=linha.status_analise or '',
+            observacao='',
+            sem_relatorio=False,
+            situacao_linha=LinhaControleRelatorio.SITUACAO_ATIVA,
+            grupo=linha.grupo or grupo,
+            sequencia=grupo,
+        )
+        _preservar_numero_apos_troca(liberada)
+
     linha.numero_relatorio = novo_numero
     linha.data_relatorio = data
     linha.numero_processo = str(dados.get('numero_processo') or '').strip()[:255]
@@ -1344,12 +1397,70 @@ def alternar_sem_relatorio(usuario, linha_id):
     return linha
 
 
+def _desligar_processo_da_linha(linha):
+    """Tira o nº do processo ligado à linha (se houver)."""
+    processo = linha.processo
+    if processo is None:
+        return
+    campos = []
+    if processo.numero_relatorio:
+        processo.numero_relatorio = None
+        campos.append('numero_relatorio')
+    if getattr(processo, 'sem_relatorio', False):
+        processo.sem_relatorio = False
+        campos.append('sem_relatorio')
+    if campos:
+        processo.save(update_fields=campos)
+    _liberar_reservas_do_processo(processo)
+
+
+@transaction.atomic
+def desfazer_linha(usuario, linha_id):
+    """Desfaz o relatório (verde): reuso automático se a data for hoje.
+
+    Use quando o número foi gerado/atribuído por engano no mesmo dia.
+    Dias anteriores: use cancelar (vermelho, só número específico).
+    """
+    perm.assert_permissao(
+        perm.pode_cancelar_linha_relatorio(usuario),
+        'Somente analista de Liquidações, a Gestão e o administrador '
+        'desfazem linha no Controle de relatório.')
+    linha = (LinhaControleRelatorio.objects
+             .select_for_update()
+             .filter(id=linha_id)
+             .first())
+    if linha is None:
+        raise RelatorioInvalido('Linha não encontrada.')
+    if linha.situacao_linha == LinhaControleRelatorio.SITUACAO_RESERVADA:
+        raise RelatorioInvalido('Esta linha já está disponível para reuso.')
+    if linha.situacao_linha == LinhaControleRelatorio.SITUACAO_CANCELADA:
+        raise RelatorioInvalido(
+            'Linha cancelada. Para reutilizar, informe o número específico '
+            'na análise ou vincule o processo.')
+    if not linha.numero_relatorio and not linha.sem_relatorio:
+        raise RelatorioInvalido('Não há número de relatório nesta linha.')
+    if not _data_linha_e_hoje(linha):
+        raise RelatorioInvalido(
+            'Desfazer (reuso automático) só vale no mesmo dia da data do '
+            'relatório. Para datas anteriores, use Cancelar relatório.')
+
+    _desligar_processo_da_linha(linha)
+    linha.processo = None
+    linha.situacao_linha = LinhaControleRelatorio.SITUACAO_RESERVADA
+    linha.observacao = (
+        'Relatório desfeito — disponível para reuso automático no mesmo dia.'
+    )
+    linha.save(update_fields=[
+        'processo', 'situacao_linha', 'observacao', 'atualizado_em'])
+    return linha
+
+
 @transaction.atomic
 def cancelar_linha(usuario, linha_id, destino_numero=None):
     """Cancela a linha na planilha (vermelha), mantendo número e data.
 
-    Vale para linha ativa, histórica ou reservada. O número fica
-    disponível para reuso (número específico ou geração automática).
+    O número NÃO entra no Gerar automático — só por número específico
+    na análise ou vínculo na planilha. Para reuso no mesmo dia, use Desfazer.
     """
     perm.assert_permissao(
         perm.pode_cancelar_linha_relatorio(usuario),
@@ -1368,22 +1479,12 @@ def cancelar_linha(usuario, linha_id, destino_numero=None):
     if not linha.numero_relatorio and not linha.sem_relatorio:
         raise RelatorioInvalido('Não há número de relatório nesta linha.')
 
-    processo = linha.processo
-    if processo is not None:
-        campos = []
-        if processo.numero_relatorio:
-            processo.numero_relatorio = None
-            campos.append('numero_relatorio')
-        if getattr(processo, 'sem_relatorio', False):
-            processo.sem_relatorio = False
-            campos.append('sem_relatorio')
-        if campos:
-            processo.save(update_fields=campos)
-        _liberar_reservas_do_processo(processo)
-
+    _desligar_processo_da_linha(linha)
     linha.processo = None
     linha.situacao_linha = LinhaControleRelatorio.SITUACAO_CANCELADA
-    linha.observacao = 'Relatório cancelado — número disponível para reuso.'
+    linha.observacao = (
+        'Relatório cancelado — reuso só com número específico na análise.'
+    )
     linha.save(update_fields=[
         'processo', 'situacao_linha', 'observacao', 'atualizado_em'])
     return linha

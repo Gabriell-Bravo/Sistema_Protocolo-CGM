@@ -33,6 +33,28 @@ def _voltar_controle(grupo=None, secao='analises'):
     return f"{reverse('controle_relatorio')}?aba={grupo}&secao={secao}"
 
 
+def _quer_json(request):
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return True
+    accept = (request.headers.get('Accept') or '').lower()
+    return 'application/json' in accept
+
+
+def _resposta_linha_acao(request, grupo, secao='analises', ok=True, mensagem='',
+                        extra=None):
+    if _quer_json(request):
+        payload = {'ok': ok, 'mensagem': mensagem, 'grupo': grupo}
+        if extra:
+            payload.update(extra)
+        return JsonResponse(payload, status=200 if ok else 400)
+    if mensagem:
+        if ok:
+            messages.success(request, mensagem)
+        else:
+            messages.error(request, mensagem)
+    return redirect(_voltar_controle(grupo, secao))
+
+
 def _resolver_aba_secao(request, pode_destinar, pode_definir):
     """Aceita aba=grupo e secao=analises|destinados|numeracao; mantém links antigos."""
     bruto = (request.GET.get('aba') or '').strip()
@@ -86,7 +108,8 @@ def controle_relatorio(request):
     if termo:
         linhas = svc.filtrar_por_termo(linhas, termo)
     total = linhas.count()
-    pagina = Paginator(linhas, 50).get_page(request.GET.get('page'))
+    por_pagina = 200 if secao == 'analises' else 50
+    pagina = Paginator(linhas, por_pagina).get_page(request.GET.get('page'))
 
     reservas = []
     abas_reserva = []
@@ -115,8 +138,13 @@ def controle_relatorio(request):
         ]
 
     layout = svc.layout_planilha(grupo)
+    template = (
+        'analista/controle_relatorio_planilha.html'
+        if secao == 'analises'
+        else 'analista/controle_relatorio.html'
+    )
 
-    return render(request, 'analista/controle_relatorio.html', {
+    return render(request, template, {
         'aba': grupo,
         'secao': secao,
         'info_aba': info,
@@ -366,15 +394,54 @@ def cancelar_linha(request, linha_id):
     try:
         linha = svc.cancelar_linha(
             request.user, linha_id, request.POST.get('destino_numero'))
-        messages.success(
-            request,
-            f'Relatório {linha.numero_relatorio} cancelado. '
-            f'Número disponível na planilha (linha vermelha).')
         if linha.sequencia:
             grupo = linha.sequencia
+        return _resposta_linha_acao(
+            request, grupo, ok=True,
+            mensagem=(
+                f'Relatório {linha.numero_relatorio} cancelado (vermelho). '
+                f'Reuso só com número específico na análise.'
+            ),
+            extra={
+                'linha_id': linha.id,
+                'situacao_linha': linha.situacao_linha,
+                'sem_relatorio': bool(linha.sem_relatorio),
+                'css_class': getattr(linha, 'linha_css_class', '') or '',
+            },
+        )
     except (PermissionDenied, ValidationError) as exc:
-        messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
-    return redirect(_voltar_controle(grupo, 'analises'))
+        return _resposta_linha_acao(
+            request, grupo, ok=False,
+            mensagem='; '.join(getattr(exc, 'messages', [str(exc)])),
+        )
+
+
+@login_required
+@require_POST
+def desfazer_linha(request, linha_id):
+    grupo = request.POST.get('grupo') or svc.GRUPO_PADRAO
+    try:
+        linha = svc.desfazer_linha(request.user, linha_id)
+        if linha.sequencia:
+            grupo = linha.sequencia
+        return _resposta_linha_acao(
+            request, grupo, ok=True,
+            mensagem=(
+                f'Relatório {linha.numero_relatorio} desfeito (verde). '
+                f'Disponível para reuso automático no mesmo dia.'
+            ),
+            extra={
+                'linha_id': linha.id,
+                'situacao_linha': linha.situacao_linha,
+                'sem_relatorio': bool(linha.sem_relatorio),
+                'css_class': getattr(linha, 'linha_css_class', '') or '',
+            },
+        )
+    except (PermissionDenied, ValidationError) as exc:
+        return _resposta_linha_acao(
+            request, grupo, ok=False,
+            mensagem='; '.join(getattr(exc, 'messages', [str(exc)])),
+        )
 
 
 @login_required
@@ -383,14 +450,24 @@ def editar_linha(request, linha_id):
     grupo = request.POST.get('grupo') or svc.GRUPO_PADRAO
     try:
         linha = svc.editar_linha(request.user, linha_id, request.POST)
-        messages.success(
-            request,
-            f'Linha do nº {linha.numero_relatorio or "—"} atualizada.')
         if linha.sequencia:
             grupo = linha.sequencia
+        return _resposta_linha_acao(
+            request, grupo, ok=True,
+            mensagem=f'Linha do nº {linha.numero_relatorio or "—"} atualizada.',
+            extra={
+                'linha_id': linha.id,
+                'numero_relatorio': linha.numero_relatorio or '',
+                'sem_relatorio': bool(linha.sem_relatorio),
+                'situacao_linha': linha.situacao_linha,
+                'css_class': getattr(linha, 'linha_css_class', '') or '',
+            },
+        )
     except (PermissionDenied, ValidationError) as exc:
-        messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
-    return redirect(_voltar_controle(grupo, 'analises'))
+        return _resposta_linha_acao(
+            request, grupo, ok=False,
+            mensagem='; '.join(getattr(exc, 'messages', [str(exc)])),
+        )
 
 
 @login_required
@@ -399,20 +476,31 @@ def alternar_sem_relatorio(request, linha_id):
     grupo = request.POST.get('grupo') or svc.GRUPO_PADRAO
     try:
         linha = svc.alternar_sem_relatorio(request.user, linha_id)
-        if linha.sem_relatorio:
-            messages.success(
-                request,
-                f'Nº {linha.numero_relatorio} marcado como sem relatório '
-                f'(amarelo).')
-        else:
-            messages.success(
-                request,
-                f'Nº {linha.numero_relatorio}: marca de sem relatório removida.')
         if linha.sequencia:
             grupo = linha.sequencia
+        if linha.sem_relatorio:
+            mensagem = (
+                f'Nº {linha.numero_relatorio} marcado como sem relatório '
+                f'(amarelo).'
+            )
+        else:
+            mensagem = (
+                f'Nº {linha.numero_relatorio}: marca de sem relatório removida.'
+            )
+        return _resposta_linha_acao(
+            request, grupo, ok=True, mensagem=mensagem,
+            extra={
+                'linha_id': linha.id,
+                'sem_relatorio': bool(linha.sem_relatorio),
+                'situacao_linha': linha.situacao_linha,
+                'css_class': getattr(linha, 'linha_css_class', '') or '',
+            },
+        )
     except (PermissionDenied, ValidationError) as exc:
-        messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
-    return redirect(_voltar_controle(grupo, 'analises'))
+        return _resposta_linha_acao(
+            request, grupo, ok=False,
+            mensagem='; '.join(getattr(exc, 'messages', [str(exc)])),
+        )
 
 
 @login_required
@@ -422,21 +510,31 @@ def vincular_processo_linha(request, linha_id):
     try:
         linha = svc.vincular_processo_linha(
             request.user, linha_id, request.POST.get('numero_processo'))
-        if linha.processo_id:
-            messages.success(
-                request,
-                f'Número {linha.numero_relatorio} vinculado ao processo '
-                f'{linha.numero_processo}.')
-        else:
-            messages.success(
-                request,
-                f'Nº {linha.numero_relatorio}: processo {linha.numero_processo} '
-                f'informado e dados preenchidos na planilha.')
         if linha.sequencia:
             grupo = linha.sequencia
+        if linha.processo_id:
+            mensagem = (
+                f'Número {linha.numero_relatorio} vinculado ao processo '
+                f'{linha.numero_processo}.'
+            )
+        else:
+            mensagem = (
+                f'Nº {linha.numero_relatorio}: processo {linha.numero_processo} '
+                f'informado e dados preenchidos na planilha.'
+            )
+        return _resposta_linha_acao(
+            request, grupo, ok=True, mensagem=mensagem,
+            extra={
+                'linha_id': linha.id,
+                'processo_id': linha.processo_id,
+                'numero_processo': linha.numero_processo or '',
+            },
+        )
     except (PermissionDenied, ValidationError) as exc:
-        messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
-    return redirect(_voltar_controle(grupo, 'analises'))
+        return _resposta_linha_acao(
+            request, grupo, ok=False,
+            mensagem='; '.join(getattr(exc, 'messages', [str(exc)])),
+        )
 
 
 @login_required
@@ -445,15 +543,25 @@ def desvincular_processo_linha(request, linha_id):
     grupo = request.POST.get('grupo') or svc.GRUPO_PADRAO
     try:
         linha = svc.desvincular_processo_linha(request.user, linha_id)
-        messages.success(
-            request,
-            f'Processo {linha.numero_processo or "—"} desvinculado do nº '
-            f'{linha.numero_relatorio}. O número permanece na planilha.')
         if linha.sequencia:
             grupo = linha.sequencia
+        return _resposta_linha_acao(
+            request, grupo, ok=True,
+            mensagem=(
+                f'Processo {linha.numero_processo or "—"} desvinculado do nº '
+                f'{linha.numero_relatorio}. O número permanece na planilha.'
+            ),
+            extra={
+                'linha_id': linha.id,
+                'processo_id': None,
+                'numero_processo': linha.numero_processo or '',
+            },
+        )
     except (PermissionDenied, ValidationError) as exc:
-        messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
-    return redirect(_voltar_controle(grupo, 'analises'))
+        return _resposta_linha_acao(
+            request, grupo, ok=False,
+            mensagem='; '.join(getattr(exc, 'messages', [str(exc)])),
+        )
 
 
 @login_required
@@ -463,11 +571,15 @@ def apagar_linha(request, linha_id):
     try:
         info = svc.apagar_linha(request.user, linha_id)
         numero = info.get('numero_relatorio') or '—'
-        messages.success(
-            request,
-            f'Linha do relatório {numero} apagada do Controle.')
         if info.get('sequencia'):
             grupo = info['sequencia']
+        return _resposta_linha_acao(
+            request, grupo, ok=True,
+            mensagem=f'Linha do relatório {numero} apagada do Controle.',
+            extra={'linha_id': linha_id, 'apagada': True},
+        )
     except (PermissionDenied, ValidationError) as exc:
-        messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
-    return redirect(_voltar_controle(grupo, 'analises'))
+        return _resposta_linha_acao(
+            request, grupo, ok=False,
+            mensagem='; '.join(getattr(exc, 'messages', [str(exc)])),
+        )

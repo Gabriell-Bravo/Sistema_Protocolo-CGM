@@ -156,6 +156,8 @@ urlpatterns = [
          rel.cancelar_destino, name='controle_relatorio_cancelar_destino'),
     path('controle-relatorio/linha/<int:linha_id>/cancelar/',
          rel.cancelar_linha, name='controle_relatorio_cancelar_linha'),
+    path('controle-relatorio/linha/<int:linha_id>/desfazer/',
+         rel.desfazer_linha, name='controle_relatorio_desfazer_linha'),
     path('controle-relatorio/linha/<int:linha_id>/editar/',
          rel.editar_linha, name='controle_relatorio_editar_linha'),
     path('controle-relatorio/linha/<int:linha_id>/sem-relatorio/',
