@@ -1543,7 +1543,7 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         from openpyxl import Workbook
 
         admin = criar_usuario('admin_import_xlsx', 'GESTAO', is_superuser=True)
-        # Linha ativa do sistema não pode ser sobrescrita pela importação.
+        # Linha ATIVA permanece vinculada; campos da planilha vêm do Excel.
         relatorios.definir_ultimo_numero(admin, 10)
         vivo = self.novo_processo(self.especie_liq, numero_processo='imp-vivo/2026')
         self._salvar_liquidacao(vivo)
@@ -1566,8 +1566,8 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         ])
         ws.append([
             'Bruno', 11, datetime.date(2026, 2, 2), '300/2025',
-            '400/2026', 'Secretaria Z', 'Não deve sobrescrever', None,
-            10, 'Destino Z',
+            '400/2026', 'Secretaria Z', 'Objeto corrigido pelo Excel', None,
+            11905867.35, 'Destino Z',
         ])
         ws.append([
             'Carla', '56 A', datetime.date(2026, 2, 3), '500/2025',
@@ -1622,7 +1622,13 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertEqual(vivo.numero_relatorio, '11')
         ativo = LinhaControleRelatorio.objects.get(processo=vivo)
         self.assertEqual(ativo.situacao_linha, 'ATIVA')
-        self.assertNotEqual(ativo.objeto, 'Não deve sobrescrever')
+        # Excel sobrescreve campos da planilha (corrige erros do sistema).
+        self.assertEqual(ativo.objeto, 'Objeto corrigido pelo Excel')
+        self.assertEqual(ativo.secretaria, 'Secretaria Z')
+        self.assertIn('11.905.867,35', ativo.valor)
+        self.assertEqual(ativo.processo_id, vivo.pk)
+        self.assertEqual(vivo.objeto, 'Objeto corrigido pelo Excel')
+        self.assertIn('11.905.867,35', vivo.valor or '')
 
         # Maior inteiro importado é 88 (amarelo); o 11 ativo já existia.
         self.assertEqual(relatorios.estado_sequencia()['proximo'], 89)

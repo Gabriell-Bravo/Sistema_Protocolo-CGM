@@ -214,7 +214,7 @@ def importar_planilha(request):
             if aba.get('apagadas'):
                 trecho += f', {aba["apagadas"]} antiga(s) substituída(s)'
             if aba['atualizadas']:
-                trecho += f', {aba["atualizadas"]} ativa(s) preservada(s)/atualizada(s)'
+                trecho += f', {aba["atualizadas"]} sobrescrita(s) pelo Excel'
             if aba['ignoradas']:
                 trecho += f', {aba["ignoradas"]} ignorada(s)'
             resumos.append(trecho)
@@ -240,10 +240,10 @@ def importar_planilha(request):
         partes.append(
             f'{resultado["apagadas"]} antiga(s) do histórico substituída(s)')
     if resultado['atualizadas']:
-        partes.append(f'{resultado["atualizadas"]} atualizada(s)')
-    if resultado['ignoradas']:
         partes.append(
-            f'{resultado["ignoradas"]} ignorada(s) (já ativas no sistema)')
+            f'{resultado["atualizadas"]} sobrescrita(s) pelo Excel')
+    if resultado['ignoradas']:
+        partes.append(f'{resultado["ignoradas"]} ignorada(s)')
     partes.append(f'próximo nº {resultado["proximo"]}')
     messages.success(request, '; '.join(partes) + '.')
     return redirect(_voltar_controle(grupo, 'analises'))

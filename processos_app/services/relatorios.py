@@ -1502,6 +1502,46 @@ def _preencher_linha_pela_passagem(linha, processo):
         linha.grupo = processo.genero
 
 
+def _sincronizar_processo_pela_importacao(processo, dados):
+    """Espelha no processo os campos corrigidos pela planilha Excel.
+
+    Não altera ``numero_processo`` (identidade do cadastro) nem o nº de
+    relatório — só texto de planilha (valor, objeto, secretaria…).
+    """
+    if processo is None:
+        return
+    pares = (
+        ('secretaria', 'secretaria'),
+        ('contratada', 'contratada'),
+        ('objeto', 'objeto'),
+        ('valor', 'valor'),
+        ('periodo', 'periodo'),
+        ('destino', 'destino'),
+        ('volume', 'volume'),
+        ('observacao', 'observacao'),
+    )
+    campos = []
+    for campo_proc, campo_dados in pares:
+        novo = dados.get(campo_dados)
+        if novo is None:
+            continue
+        novo = str(novo).strip()
+        if campo_proc in ('secretaria', 'contratada', 'valor',
+                          'periodo', 'destino', 'volume'):
+            novo = novo[:255]
+        if (getattr(processo, campo_proc, None) or '') == novo:
+            continue
+        setattr(processo, campo_proc, novo)
+        campos.append(campo_proc)
+    # nome_analista é property (sem setter) — fica só na linha da planilha.
+    data = dados.get('data_relatorio')
+    if data and processo.data_analise != data:
+        processo.data_analise = data
+        campos.append('data_analise')
+    if campos:
+        processo.save(update_fields=campos)
+
+
 def _processo_ativo_para_vincular(processo):
     """Só vincula de verdade (FK + nº no cadastro) se o processo ainda tramita."""
     if processo is None:
@@ -2527,8 +2567,13 @@ def _importar_linhas_aba(planilha, linha_cabecalho, colunas, grupo, existentes):
                 # Só concessão: coluna prestação vazia; nº fica em volume.
                 numero_processo, volume_proc = '', origem
         else:
+            # Pagamento = nº na planilha; origem fica em volume.
             numero_processo = pagamento or origem
-            volume_proc = ''
+            volume_proc = (
+                origem
+                if pagamento and origem and pagamento != origem
+                else ''
+            )
         data_bruta = cel('data_relatorio')
         data = _data_celula(data_bruta)
         nota_data = ''
@@ -2623,15 +2668,22 @@ def _importar_linhas_aba(planilha, linha_cabecalho, colunas, grupo, existentes):
 
         atual = existentes.get(numero_txt)
         if atual is not None:
-            if (
+            # Excel é a fonte da verdade: sobrescreve inclusive ATIVA ligada
+            # a processo (corrige valor/secretaria/objeto digitados errados).
+            # Mantém o vínculo e a situação ATIVA.
+            manter_ativa = (
                 atual.pk
                 and atual.situacao_linha == LinhaControleRelatorio.SITUACAO_ATIVA
                 and atual.processo_id
-            ):
-                ignoradas += 1
-                continue
+            )
             for campo, valor_campo in dados.items():
+                if manter_ativa and campo == 'situacao_linha':
+                    continue
+                if manter_ativa and campo == 'sem_relatorio':
+                    continue
                 setattr(atual, campo, valor_campo)
+            if manter_ativa:
+                _sincronizar_processo_pela_importacao(atual.processo, dados)
             if atual.pk:
                 if atual.pk not in atualizar_ids:
                     atualizar_lote.append(atual)
@@ -2682,7 +2734,8 @@ def _atualizar_proximo_numero_grupo(grupo, maior_inteiro):
 def _limpar_historico_substituivel(grupo):
     """Remove histórico antigo do grupo antes de reimportar a planilha.
 
-    Mantém só linhas ATIVAS ainda ligadas a processo (análise viva).
+    Mantém linhas ATIVAS ainda ligadas a processo (análise viva) — esses
+    campos serão sobrescritos pelo Excel na importação, sem desvincular.
     Qualquer linha sem processo (histórico, órfã, reservada…) é substituída.
     """
     return (
@@ -2757,7 +2810,9 @@ def importar_planilha_excel(usuario, arquivo, grupo=GRUPO_PADRAO):
 
     Antes de importar cada grupo, apaga o histórico antigo desse grupo
     (HISTORICA/CANCELADA/RESERVADA sem processo) e recalcula o próximo nº.
-    Análises ATIVAS ligadas a processo não são apagadas nem sobrescritas.
+    Análises ATIVAS ligadas a processo **permanecem vinculadas**, mas os
+    campos da planilha (valor, objeto, secretaria…) são sobrescritos —
+    a planilha Excel é a fonte da verdade.
 
     Com ``grupo=GRUPO_IMPORTACAO_COMPLETA`` importa todas as abas
     reconhecidas (arquivo unificado Controle Relatórios 2026).
