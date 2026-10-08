@@ -1401,10 +1401,10 @@ def _desligar_processo_da_linha(linha):
 
 @transaction.atomic
 def desfazer_linha(usuario, linha_id):
-    """Desfaz o relatório (verde): reuso automático se a data for hoje.
+    """Desfaz o relatório na planilha (⋮ → Desfazer).
 
-    Use quando o número foi gerado/atribuído por engano no mesmo dia.
-    Dias anteriores: use cancelar (vermelho, só número específico).
+    - Mesmo dia da data do relatório → verde (RESERVADA), reuso automático.
+    - Dia diferente → vermelho (CANCELADA), reuso só com nº específico.
     """
     perm.assert_permissao(
         perm.pode_cancelar_linha_relatorio(usuario),
@@ -1424,19 +1424,25 @@ def desfazer_linha(usuario, linha_id):
             'na análise ou vincule o processo.')
     if not linha.numero_relatorio and not linha.sem_relatorio:
         raise RelatorioInvalido('Não há número de relatório nesta linha.')
-    if not _data_linha_e_hoje(linha):
-        raise RelatorioInvalido(
-            'Desfazer (reuso automático) só vale no mesmo dia da data do '
-            'relatório. Para datas anteriores, use Cancelar relatório.')
 
     _desligar_processo_da_linha(linha)
-    linha.processo = None
-    linha.situacao_linha = LinhaControleRelatorio.SITUACAO_RESERVADA
-    linha.observacao = (
-        'Relatório desfeito — disponível para reuso automático no mesmo dia.'
-    )
-    linha.save(update_fields=[
-        'processo', 'situacao_linha', 'observacao', 'atualizado_em'])
+    if _data_linha_e_hoje(linha):
+        _preservar_numero_devolvido(
+            linha,
+            observacao=(
+                'Relatório desfeito — disponível para reuso automático '
+                'no mesmo dia.'
+            ),
+        )
+    else:
+        linha.processo = None
+        linha.situacao_linha = LinhaControleRelatorio.SITUACAO_CANCELADA
+        linha.observacao = (
+            'Relatório desfeito em data anterior — cancelado (vermelho); '
+            'reuso só com número específico na análise.'
+        )
+        linha.save(update_fields=[
+            'processo', 'situacao_linha', 'observacao', 'atualizado_em'])
     return linha
 
 

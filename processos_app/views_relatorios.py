@@ -424,12 +424,19 @@ def desfazer_linha(request, linha_id):
         linha = svc.desfazer_linha(request.user, linha_id)
         if linha.sequencia:
             grupo = linha.sequencia
-        return _resposta_linha_acao(
-            request, grupo, ok=True,
-            mensagem=(
+        if linha.situacao_linha == 'RESERVADA':
+            mensagem = (
                 f'Relatório {linha.numero_relatorio} desfeito (verde). '
                 f'Disponível para reuso automático no mesmo dia.'
-            ),
+            )
+        else:
+            mensagem = (
+                f'Relatório {linha.numero_relatorio} desfeito (vermelho). '
+                f'Reuso só com número específico na análise.'
+            )
+        return _resposta_linha_acao(
+            request, grupo, ok=True,
+            mensagem=mensagem,
             extra={
                 'linha_id': linha.id,
                 'situacao_linha': linha.situacao_linha,

@@ -465,21 +465,21 @@
                   <button type="button" data-acao="desfazer"
                           data-desfazer-linha="{{ linha.id }}"
                           data-desfazer-numero="{{ linha.numero_relatorio }}"
-                          title="Desfaz e deixa verde — próximo Gerar reusa se for o mesmo dia">
+                          title="Mesmo dia → verde (reuso automático). Outro dia → vermelho (só nº específico).">
                     <span class="material-symbols-rounded">undo</span>
-                    Desfazer relatório (reuso no dia)
+                    Desfazer relatório
                   </button>
                 </li>
                   {% endif %}
-                  {% if linha.situacao_linha != 'CANCELADA' %}
+                  {% if linha.situacao_linha != 'CANCELADA' and linha.situacao_linha != 'RESERVADA' %}
                 <li>
                   <button type="button" class="is-danger" data-acao="cancelar"
                           data-cancelar-linha="{{ linha.id }}"
                           data-cancelar-numero="{{ linha.numero_relatorio }}"
                           data-cancelar-grupo="{{ aba }}"
-                          title="Cancela em vermelho — reuso só com número específico">
+                          title="Força cancelamento em vermelho — reuso só com número específico">
                     <span class="material-symbols-rounded">cancel</span>
-                    Cancelar relatório
+                    Cancelar relatório (vermelho)
                   </button>
                 </li>
                   {% endif %}
@@ -743,7 +743,11 @@
         : ('Marcar o nº ' + numero + ' como sem relatório? A linha fica amarela.');
     } else if (acao === 'desfazer') {
       url = urlComId(app.dataset.urlDesfazer, id);
-      confirmar = 'Desfazer o relatório nº ' + numero + '?\nA linha fica verde e o próximo Gerar pode reusar no mesmo dia.';
+      confirmar = (
+        'Desfazer o relatório nº ' + numero + '?\n\n'
+        + '• Se a data for hoje → fica verde (reuso automático no Gerar)\n'
+        + '• Se for outro dia → fica vermelho (reuso só com nº específico)'
+      );
     } else if (acao === 'cancelar') {
       url = urlComId(app.dataset.urlCancelar, id);
       dados.destino_numero = 'excluir';

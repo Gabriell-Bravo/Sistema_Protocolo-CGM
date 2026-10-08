@@ -1312,7 +1312,7 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self._salvar_liquidacao(outro)
         self.assertEqual(outro.numero_relatorio, '8811')
 
-    def test_desfazer_linha_outro_dia_bloqueado(self):
+    def test_desfazer_linha_outro_dia_fica_vermelho(self):
         admin = criar_usuario('admin_desfazer_old', 'GESTAO', is_superuser=True)
         linha = LinhaControleRelatorio.objects.create(
             processo=None,
@@ -1322,8 +1322,33 @@ class ControleRelatorioTest(BaseProcessoTestCase):
             sequencia='LIQUIDACOES',
             grupo='LIQUIDACOES',
         )
-        with self.assertRaises(relatorios.RelatorioInvalido):
-            relatorios.desfazer_linha(admin, linha.id)
+        relatorios.desfazer_linha(admin, linha.id)
+        linha.refresh_from_db()
+        self.assertEqual(linha.situacao_linha, 'CANCELADA')
+        self.assertEqual(linha.numero_relatorio, '8820')
+
+    def test_analista_desfaz_relatorio_mesmo_dia_pela_planilha(self):
+        analista = criar_usuario('ana_desfaz_plan', 'ANALISTA_LIQUIDACOES')
+        admin = criar_usuario('admin_desfaz_ana', 'GESTAO', is_superuser=True)
+        relatorios.definir_ultimo_numero(admin, 8840)
+        processo = self.novo_processo(
+            self.especie_liq, numero_processo='ana-desfaz/2026')
+        self._salvar_liquidacao(processo, analista=analista)
+        linha = LinhaControleRelatorio.objects.get(processo=processo)
+
+        self.client.force_login(analista)
+        pagina = self.client.get(
+            reverse('controle_relatorio') + '?secao=analises')
+        self.assertContains(pagina, 'Desfazer relatório')
+        self.assertContains(pagina, f'data-desfazer-linha="{linha.id}"')
+
+        resp = self.client.post(
+            reverse('controle_relatorio_desfazer_linha', args=[linha.id]), {
+                'grupo': 'LIQUIDACOES',
+            })
+        self.assertEqual(resp.status_code, 302)
+        linha.refresh_from_db()
+        self.assertEqual(linha.situacao_linha, 'RESERVADA')
 
     def test_cancelar_nao_entra_no_gerar_automatico(self):
         admin = criar_usuario('admin_cancel_auto', 'GESTAO', is_superuser=True)
