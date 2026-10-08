@@ -1241,6 +1241,69 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertContains(pagina, 'Selecione')
         self.assertContains(pagina, 'Unidade de Teste')
 
+    def test_importacao_resolve_formula_de_valor_em_vez_de_colar_digitos(self):
+        """Célula =1455450+2023075,5 não pode virar R$ 14.554.502.023.075,50."""
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from openpyxl import Workbook
+
+        self.assertEqual(
+            relatorios._avaliar_formula_numerica('=1455450+2023075,5'),
+            3478525.5)
+        self.assertEqual(
+            relatorios._valor_celula_importacao('=1455450+2023075,5'),
+            'R$ 3.478.525,50')
+        # Sem avaliação, formatar_valor cola os dígitos (regressão antiga).
+        self.assertIn(
+            '14.554.502.023.075',
+            svc_processos.formatar_valor('=1455450+2023075,5'))
+        # Período na planilha costuma ser data formatada (jun.-26), não ISO.
+        self.assertEqual(
+            relatorios._texto_periodo_celula(datetime.date(2026, 6, 1)),
+            'jun.-26')
+        self.assertEqual(
+            relatorios._data_celula('07/10/2026'),
+            datetime.date(2026, 10, 7))
+
+        admin = criar_usuario('admin_formula_valor', 'GESTAO', is_superuser=True)
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'LIQUIDAÇÕES'
+        ws.append(['CONTROLADORIA'])
+        ws.append([])
+        ws.append([
+            'RELATOR', 'Nº relatório', 'DATA', 'PROCESSO ORIGEM',
+            'PROCESSO PAGAMENTO', 'SECRETARIA', 'OBJETO', 'PERÍODO',
+            'VALOR ', 'DESTINO',
+        ])
+        ws.append([
+            'Ingrid Cunha', 1319, datetime.date(2026, 7, 10),
+            '6100/2023', '13673/2025', 'SMTSP', 'aquis. De saibro',
+            datetime.date(2026, 6, 1), '=1455450+2023075,5', 'SMTSP',
+        ])
+        buffer = BytesIO()
+        wb.save(buffer)
+        arquivo = SimpleUploadedFile(
+            'controle_formula.xlsx',
+            buffer.getvalue(),
+            content_type=(
+                'application/vnd.openxmlformats-officedocument.'
+                'spreadsheetml.sheet'
+            ),
+        )
+        self.client.force_login(admin)
+        resp = self.client.post(
+            reverse('controle_relatorio_importar'),
+            {'grupo': 'LIQUIDACOES', 'planilha': arquivo},
+        )
+        self.assertEqual(resp.status_code, 302)
+        linha = LinhaControleRelatorio.objects.get(numero_relatorio='1319')
+        self.assertEqual(linha.valor, 'R$ 3.478.525,50')
+        self.assertNotIn('14.554.502.023.075', linha.valor)
+        self.assertEqual(linha.data_relatorio, datetime.date(2026, 7, 10))
+        self.assertEqual(linha.periodo, 'jun.-26')
+
     def test_data_relatorio_e_do_gerar_nao_do_assumir(self):
         """Data do número nasce no Gerar, não quando o processo é assumido."""
         processo = self.novo_processo(self.especie_liq, numero_processo='data-gerar/2026')

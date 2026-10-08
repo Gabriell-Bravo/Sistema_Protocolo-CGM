@@ -6,6 +6,8 @@ Cada espécie de Liquidações pertence a uma sequência de numeração
 último número de cada sequência. O número é gerado ao salvar a análise.
 """
 
+import ast
+import operator
 import re
 import unicodedata
 from datetime import date, datetime
@@ -22,6 +24,15 @@ from ..models import (
 from . import permissions as perm
 from .eventos import registrar_diff
 from .processos import converter_data, formatar_valor
+
+_OPS_ARITMETICOS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.UAdd: operator.pos,
+    ast.USub: operator.neg,
+}
 
 
 # Código legado da sequência geral (continua no banco como LIQUIDACOES).
@@ -2463,17 +2474,121 @@ def _texto_celula(valor, limite=255):
     return texto
 
 
+def _avaliar_formula_numerica(texto):
+    """Avalia fórmula simples do Excel (=a+b) com vírgula decimal BR.
+
+    openpyxl com ``data_only=False`` devolve a fórmula como texto. Sem isso,
+    ``formatar_valor('=1455450+2023075,5')`` cola os dígitos e gera valor absurdo.
+    Só aceita números e + - * / ( ); sem funções nem referências de célula.
+    """
+    if not isinstance(texto, str):
+        return None
+    expr = texto.strip()
+    if not expr.startswith('='):
+        return None
+    expr = expr[1:].strip()
+    if not expr or not re.fullmatch(r'[\d\s+\-*/().,]+', expr):
+        return None
+    # 2023075,5 → 2023075.5 (vírgula decimal BR na fórmula do Excel).
+    expr_py = re.sub(r'(?<![\d.])(\d+),(\d+)(?![\d.])', r'\1.\2', expr)
+    try:
+        arvore = ast.parse(expr_py, mode='eval')
+    except SyntaxError:
+        return None
+
+    def _eval(node):
+        if isinstance(node, ast.Expression):
+            return _eval(node.body)
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+            return node.value
+        if isinstance(node, ast.UnaryOp) and type(node.op) in _OPS_ARITMETICOS:
+            return _OPS_ARITMETICOS[type(node.op)](_eval(node.operand))
+        if isinstance(node, ast.BinOp) and type(node.op) in _OPS_ARITMETICOS:
+            return _OPS_ARITMETICOS[type(node.op)](
+                _eval(node.left), _eval(node.right))
+        raise ValueError('unsupported')
+
+    try:
+        return float(_eval(arvore))
+    except (ValueError, ZeroDivisionError, TypeError, OverflowError):
+        return None
+
+
+def _valor_celula_importacao(valor_bruto, valor_cache=None):
+    """Formata o valor da planilha; resolve fórmula pelo cache ou pela conta."""
+    if (
+        isinstance(valor_bruto, str)
+        and valor_bruto.strip().startswith('=')
+        and isinstance(valor_cache, (int, float))
+        and not isinstance(valor_cache, bool)
+    ):
+        valor_bruto = valor_cache
+    elif isinstance(valor_bruto, str) and valor_bruto.strip().startswith('='):
+        calculado = _avaliar_formula_numerica(valor_bruto)
+        if calculado is not None:
+            valor_bruto = calculado
+    if isinstance(valor_bruto, (int, float)) and not isinstance(valor_bruto, bool):
+        return (
+            f"R$ {float(valor_bruto):,.2f}"
+            .replace(',', 'X')
+            .replace('.', ',')
+            .replace('X', '.')
+        )
+    if valor_bruto in (None, ''):
+        return ''
+    return formatar_valor(valor_bruto)
+
+
+_MESES_ABREV_PLANILHA = (
+    'jan.', 'fev.', 'mar.', 'abr.', 'mai.', 'jun.',
+    'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.',
+)
+
+
 def _data_celula(valor):
+    """Interpreta data da planilha; textos no padrão BR (dd/mm/aaaa)."""
     if valor is None or valor == '':
         return None
     if isinstance(valor, datetime):
         return valor.date()
     if isinstance(valor, date):
         return valor
+    if isinstance(valor, (int, float)) and not isinstance(valor, bool):
+        # Número serial do Excel (às vezes vem sem tipagem de data).
+        try:
+            from openpyxl.utils.datetime import from_excel
+            convertido = from_excel(valor)
+        except Exception:
+            return None
+        if isinstance(convertido, datetime):
+            return convertido.date()
+        if isinstance(convertido, date):
+            return convertido
+        return None
+    texto = str(valor).strip()
+    if not texto:
+        return None
+    for formato in ('%Y-%m-%d', '%d/%m/%Y', '%d/%m/%y', '%d-%m-%Y', '%d-%m-%y'):
+        try:
+            return datetime.strptime(texto, formato).date()
+        except ValueError:
+            continue
     try:
-        return converter_data(valor)
+        return converter_data(texto)
     except ValidationError:
         return None
+
+
+def _texto_periodo_celula(valor):
+    """Mantém o estilo da planilha (jun.-26) quando o Excel guarda data."""
+    if isinstance(valor, datetime):
+        valor = valor.date()
+    if isinstance(valor, date):
+        return (
+            f'{_MESES_ABREV_PLANILHA[valor.month - 1]}-'
+            f'{str(valor.year)[2:]}'
+        )
+    return _texto_celula(valor)
 
 
 def _numero_relatorio_celula(valor):
@@ -2526,7 +2641,9 @@ def _linha_amarela(celulas):
     return any(_celula_amarela(celula) for celula in celulas[:12])
 
 
-def _importar_linhas_aba(planilha, linha_cabecalho, colunas, grupo, existentes):
+def _importar_linhas_aba(
+        planilha, linha_cabecalho, colunas, grupo, existentes,
+        planilha_valores=None):
     """Lê linhas de uma aba já com cabeçalho mapeado; retorna contadores."""
     idx_num = colunas['numero_relatorio']
     criadas = atualizadas = ignoradas = 0
@@ -2550,12 +2667,22 @@ def _importar_linhas_aba(planilha, linha_cabecalho, colunas, grupo, existentes):
             valores[idx_num] if idx_num < len(valores) else None)
         if not numero_txt:
             continue
+        linha_excel = row[0].row if row and row[0] is not None else None
 
         def cel(campo, _valores=valores):
             indice = colunas.get(campo)
             if indice is None or indice >= len(_valores):
                 return None
             return _valores[indice]
+
+        def cel_cache(campo):
+            if planilha_valores is None or linha_excel is None:
+                return None
+            indice = colunas.get(campo)
+            if indice is None:
+                return None
+            return planilha_valores.cell(
+                row=linha_excel, column=indice + 1).value
 
         pagamento = _texto_celula(cel('processo_pagamento'))
         origem = _texto_celula(cel('processo_origem'))
@@ -2601,30 +2728,19 @@ def _importar_linhas_aba(planilha, linha_cabecalho, colunas, grupo, existentes):
                 f'{objeto} — {modalidade}' if objeto else modalidade
             )[:5000]
         obs_planilha = _texto_celula(cel('observacao_planilha'), limite=500)
-        periodo = _texto_celula(cel('periodo'))
+        periodo = _texto_periodo_celula(cel('periodo'))
         idxs_parcelas = colunas.get('parcelas') or []
         if not periodo and idxs_parcelas:
             partes = []
             for n, idx in enumerate(idxs_parcelas, 1):
                 if idx >= len(valores):
                     continue
-                trecho = _texto_celula(valores[idx])
+                trecho = _texto_periodo_celula(valores[idx])
                 if trecho:
                     partes.append(f'{n}ª: {trecho}')
             periodo = ' · '.join(partes)[:255]
         destino = _texto_celula(cel('destino'))
-        valor_bruto = cel('valor')
-        if isinstance(valor_bruto, (int, float)):
-            valor = (
-                f"R$ {float(valor_bruto):,.2f}"
-                .replace(',', 'X')
-                .replace('.', ',')
-                .replace('X', '.')
-            )
-        elif valor_bruto in (None, ''):
-            valor = ''
-        else:
-            valor = formatar_valor(valor_bruto)
+        valor = _valor_celula_importacao(cel('valor'), cel_cache('valor'))
 
         # Pré-numerados vazios = ignorar.
         # Amarelo só conta como "saiu sem análise" se tiver algum dado
@@ -2795,14 +2911,15 @@ def _existentes_por_grupo(grupo):
     }
 
 
-def _importar_aba_excel(planilha, grupo):
+def _importar_aba_excel(planilha, grupo, planilha_valores=None):
     linha_cabecalho, colunas = _localizar_cabecalho(planilha, grupo=grupo)
     _validar_cabecalho_grupo(grupo, colunas)
     # Substitui o histórico antigo desse grupo (não mistura com outra planilha).
     apagadas, _ = _limpar_historico_substituivel(grupo)
     existentes = _existentes_por_grupo(grupo)
     criadas, atualizadas, ignoradas, maior_inteiro = _importar_linhas_aba(
-        planilha, linha_cabecalho, colunas, grupo, existentes)
+        planilha, linha_cabecalho, colunas, grupo, existentes,
+        planilha_valores=planilha_valores)
     _atualizar_proximo_numero_grupo(grupo, maior_inteiro)
     return {
         'grupo': grupo,
@@ -2846,12 +2963,24 @@ def importar_planilha_excel(usuario, arquivo, grupo=GRUPO_PADRAO):
             'Biblioteca openpyxl indisponível no servidor.') from exc
 
     # data_only=False: precisa da cor da célula para achar linhas amarelas.
+    # Segunda leitura com data_only=True: usa o resultado cacheado de fórmulas
+    # (=1455450+2023075,5 → 3478525.5) quando o Excel já calculou o arquivo.
     try:
+        if hasattr(arquivo, 'seek'):
+            arquivo.seek(0)
         workbook = load_workbook(arquivo, data_only=False)
     except Exception as exc:
         raise RelatorioInvalido(
             'Não foi possível ler o Excel. Verifique se o arquivo não está '
             'corrompido ou aberto em outro programa.') from exc
+
+    workbook_valores = None
+    try:
+        if hasattr(arquivo, 'seek'):
+            arquivo.seek(0)
+        workbook_valores = load_workbook(arquivo, data_only=True)
+    except Exception:
+        workbook_valores = None
 
     if grupo == GRUPO_IMPORTACAO_COMPLETA:
         resultados = []
@@ -2863,7 +2992,14 @@ def importar_planilha_excel(usuario, arquivo, grupo=GRUPO_PADRAO):
                 puladas.append(nome_aba)
                 continue
             try:
-                parcial = _importar_aba_excel(workbook[nome_aba], codigo)
+                aba_valores = (
+                    workbook_valores[nome_aba]
+                    if workbook_valores is not None
+                    and nome_aba in workbook_valores.sheetnames
+                    else None
+                )
+                parcial = _importar_aba_excel(
+                    workbook[nome_aba], codigo, planilha_valores=aba_valores)
             except RelatorioInvalido:
                 puladas.append(nome_aba)
                 continue
@@ -2891,7 +3027,14 @@ def importar_planilha_excel(usuario, arquivo, grupo=GRUPO_PADRAO):
         }
 
     planilha = _escolher_aba_planilha(workbook, grupo=grupo)
-    resultado = _importar_aba_excel(planilha, grupo)
+    aba_valores = None
+    if workbook_valores is not None:
+        try:
+            aba_valores = _escolher_aba_planilha(workbook_valores, grupo=grupo)
+        except RelatorioInvalido:
+            aba_valores = None
+    resultado = _importar_aba_excel(
+        planilha, grupo, planilha_valores=aba_valores)
     if (
         resultado['criadas'] + resultado['atualizadas'] == 0
         and resultado['ignoradas'] == 0
