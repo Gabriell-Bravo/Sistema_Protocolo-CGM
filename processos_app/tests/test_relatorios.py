@@ -1710,6 +1710,67 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertFalse(linha.sem_relatorio)
         self.assertNotIn('sem análise', (linha.observacao or '').casefold())
 
+    def test_amarelo_com_processo_nao_vira_sem_relatorio(self):
+        """Destaque amarelo com processo na planilha ≠ saiu sem análise."""
+        from io import BytesIO
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from openpyxl import Workbook
+        from openpyxl.styles import PatternFill
+
+        admin = criar_usuario('admin_amarelo_proc', 'GESTAO', is_superuser=True)
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'CONTROLE'
+        ws.append(['CONTROLADORIA'])
+        ws.append([])
+        ws.append([
+            'RELATOR', 'Nº relatório', 'DATA', 'PROCESSO ORIGEM',
+            'PROCESSO PAGAMENTO', 'SECRETARIA', 'OBJETO', 'PERÍODO',
+            'VALOR ', 'DESTINO',
+        ])
+        ws.append([
+            'Ana', 77, datetime.date(2026, 3, 1), '100/2025',
+            '200/2026', 'SMS', 'Objeto destacado', None, 500, 'SMF',
+        ])
+        amarelo = PatternFill(
+            start_color='FFFFFF00', end_color='FFFFFF00', fill_type='solid')
+        for celula in ws[ws.max_row]:
+            celula.fill = amarelo
+        # Amarelo sem processo continua sendo sem relatório.
+        ws.append([
+            'Bruno', 78, datetime.date(2026, 3, 2), None, None,
+            None, None, None, None, None,
+        ])
+        for celula in ws[ws.max_row]:
+            celula.fill = amarelo
+        buffer = BytesIO()
+        wb.save(buffer)
+        arquivo = SimpleUploadedFile(
+            'controle_amarelo.xlsx',
+            buffer.getvalue(),
+            content_type=(
+                'application/vnd.openxmlformats-officedocument.'
+                'spreadsheetml.sheet'
+            ),
+        )
+        self.client.force_login(admin)
+        resp = self.client.post(
+            reverse('controle_relatorio_importar'),
+            {'grupo': 'LIQUIDACOES', 'planilha': arquivo},
+        )
+        self.assertEqual(resp.status_code, 302)
+
+        destacado = LinhaControleRelatorio.objects.get(numero_relatorio='77')
+        self.assertEqual(destacado.situacao_linha, 'HISTORICA')
+        self.assertEqual(destacado.numero_processo, '200/2026')
+        self.assertFalse(destacado.sem_relatorio)
+        self.assertNotIn('sem análise', (destacado.observacao or '').casefold())
+
+        reservado = LinhaControleRelatorio.objects.get(numero_relatorio='78')
+        self.assertTrue(reservado.sem_relatorio)
+        self.assertIn('sem análise', reservado.observacao)
+
     def test_reimporta_substitui_historico_misturado(self):
         """Histórico errado (ex.: Liquidação no Adiantamento) some na reimportação."""
         from io import BytesIO

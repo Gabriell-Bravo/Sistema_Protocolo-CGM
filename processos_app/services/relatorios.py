@@ -2491,9 +2491,11 @@ def _numero_relatorio_celula(valor):
 
 
 def _celula_amarela(celula):
-    """Amarelo puro da planilha CGM = reservado / saiu sem análise.
+    """Amarelo puro da planilha CGM (candidato a “saiu sem análise”).
 
-    Não confundir com laranja (FFC000), usado em faixas vazias da planilha.
+    Na importação só vira ``sem_relatorio`` se a linha também estiver
+    sem processo — ver ``_importar_linhas_aba``. Não confundir com
+    laranja (FFC000), usado em faixas vazias da planilha.
     """
     if celula is None:
         return False
@@ -2549,12 +2551,6 @@ def _importar_linhas_aba(planilha, linha_cabecalho, colunas, grupo, existentes):
         if not numero_txt:
             continue
 
-        # Amarelo = “saiu sem análise” só na planilha de Liquidação.
-        # Nos demais grupos a cor da célula não altera o status.
-        amarela = (
-            grupo == GRUPO_PADRAO and _linha_amarela(row)
-        )
-
         def cel(campo, _valores=valores):
             indice = colunas.get(campo)
             if indice is None or indice >= len(_valores):
@@ -2580,6 +2576,15 @@ def _importar_linhas_aba(planilha, linha_cabecalho, colunas, grupo, existentes):
                 if pagamento and origem and pagamento != origem
                 else ''
             )
+        # Amarelo = “saiu sem análise” só em Liquidação, e só quando a
+        # linha está pintada E sem processo (pagamento/origem vazios).
+        # Amarelo com processo = destaque visual na planilha deles, não reserva.
+        amarela = (
+            grupo == GRUPO_PADRAO
+            and _linha_amarela(row)
+            and not pagamento
+            and not origem
+        )
         data_bruta = cel('data_relatorio')
         data = _data_celula(data_bruta)
         nota_data = ''
