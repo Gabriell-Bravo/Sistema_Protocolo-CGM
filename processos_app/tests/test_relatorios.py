@@ -226,6 +226,36 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertContains(tela, 'data-modal-open="modalNumeroReservado"')
         self.assertContains(tela, 'Usar nº 1918')
 
+    def test_historico_importado_normal_nao_dispara_aviso_reservado(self):
+        """HISTORICA sem amarelo = relatório antigo importado, não é reserva."""
+        admin = criar_usuario('admin_hist_norm', 'GESTAO', is_superuser=True)
+        relatorios.definir_ultimo_numero(admin, 5000)
+        processo = self.novo_processo(
+            self.especie_liq, numero_processo='hist-normal/2026')
+        tramitacao.assumir(processo.id, self.analista_liq)
+        processo.refresh_from_db()
+        LinhaControleRelatorio.objects.create(
+            processo=None,
+            numero_relatorio='1777',
+            numero_processo='hist-normal/2026',
+            data_relatorio=datetime.date(2025, 5, 10),
+            secretaria='SMEC',
+            situacao_linha='HISTORICA',
+            sem_relatorio=False,
+            grupo='LIQUIDACOES',
+            sequencia='LIQUIDACOES',
+        )
+        self.assertIsNone(relatorios.aviso_numero_reaproveitavel(processo))
+        self.client.force_login(self.analista_liq)
+        tela = self.client.get(reverse('analista_processo', args=[processo.id]))
+        self.assertNotContains(tela, 'id="avisoNumeroReservado"')
+        self.assertNotContains(tela, 'Usar nº 1777')
+        self._salvar_liquidacao(processo)
+        self.assertEqual(processo.numero_relatorio, '5001')
+        self.assertTrue(
+            LinhaControleRelatorio.objects.filter(
+                numero_relatorio='1777', situacao_linha='HISTORICA').exists())
+
     def test_gerar_sequencial_depois_numero_manual_nao_duplica(self):
         """Caso 17025: Gerar sequencial → informar 1929 manual → 1 linha só."""
         admin = criar_usuario('admin_manual_1929', 'GESTAO', is_superuser=True)

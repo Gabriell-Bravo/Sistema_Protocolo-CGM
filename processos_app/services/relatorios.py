@@ -714,7 +714,15 @@ def proximo_numero(grupo):
 
 
 def _consulta_linha_pre_reservada(processo):
-    """Query da linha reservada/histórica/sem relatório reutilizável."""
+    """Query da linha reutilizável automaticamente no Gerar.
+
+    Entra:
+    - verde (RESERVADA) do mesmo nº de processo;
+    - amarelo "saiu sem relatório" (ATIVA ou HISTORICA com sem_relatorio).
+
+    Não entra histórico importado normal (HISTORICA sem amarelo): senão
+    quase todo processo da planilha antiga dispara "número reservado".
+    """
     numero = (processo.numero_processo or '').strip()
     if not numero:
         return LinhaControleRelatorio.objects.none()
@@ -725,14 +733,13 @@ def _consulta_linha_pre_reservada(processo):
         .filter(numero_processo__iexact=numero)
         .exclude(numero_relatorio='')
         .filter(
-            Q(situacao_linha__in=[
-                LinhaControleRelatorio.SITUACAO_RESERVADA,
-                LinhaControleRelatorio.SITUACAO_HISTORICA,
-            ])
-            # Amarelo "saiu sem relatório" ainda ATIVO na planilha.
+            Q(situacao_linha=LinhaControleRelatorio.SITUACAO_RESERVADA)
             | Q(
-                situacao_linha=LinhaControleRelatorio.SITUACAO_ATIVA,
                 sem_relatorio=True,
+                situacao_linha__in=[
+                    LinhaControleRelatorio.SITUACAO_ATIVA,
+                    LinhaControleRelatorio.SITUACAO_HISTORICA,
+                ],
             )
         )
         .filter(Q(processo__isnull=True) | Q(processo=processo))
@@ -743,11 +750,11 @@ def _consulta_linha_pre_reservada(processo):
 def _linha_pre_reservada_do_processo(processo):
     """Linha da planilha já marcada com este nº de processo, reutilizável.
 
-    Cobre reserva/desvínculo/histórico/"saiu sem relatório" em que o
-    cadastro perdeu o número, mas a planilha ainda mostra a reserva.
+    Cobre reserva (verde) e "saiu sem relatório" (amarelo). Histórico
+    importado comum fica de fora do Gerar automático.
 
-    Cancelada (vermelha) fica de fora: só volta por número específico ou
-    vínculo na planilha — "Gerar número" emite o próximo sequencial.
+    Cancelada (vermelha) também fica de fora: só volta por número
+    específico ou vínculo na planilha.
     """
     return _consulta_linha_pre_reservada(processo).select_for_update().first()
 
@@ -756,7 +763,7 @@ def aviso_numero_reaproveitavel(processo):
     """Dados para confirmação na tela do analista, ou None.
 
     Só quando o processo ainda não tem número e a planilha já tem
-    reserva/histórico/sem relatório com o mesmo nº de processo.
+    reserva verde ou amarelo (saiu sem relatório) do mesmo nº de processo.
     """
     if not processo or (processo.numero_relatorio or '').strip():
         return None
