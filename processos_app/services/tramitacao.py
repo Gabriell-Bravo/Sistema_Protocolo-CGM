@@ -150,8 +150,8 @@ def assumir(processo_id, usuario):
     processo.situacao_tramite = 'EM_ANALISE'
     # Campos legados mantidos em sincronia enquanto as telas antigas existem.
     processo.tecnico = perm.nome_usuario(usuario)
-    if not processo.data_analise:
-        processo.data_analise = timezone.localdate()
+    # data_analise = data do número de relatório — só ao gerar/informar o nº,
+    # não no momento de assumir o processo.
     processo.save()
 
     registrar_evento(

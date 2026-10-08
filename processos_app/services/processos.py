@@ -256,12 +256,16 @@ def criar_processo(dados, usuario):
     processo.secretaria_fk = cadastros.resolver_unidade(processo.secretaria)
 
     # Prioridade na entrada: (1) urgência recorrente por número;
-    # (2) palavra-chave da contratada/objeto (listas da CGM);
+    # (2) palavra-chave da contratada/objeto (listas da CGM),
+    #     salvo se o Protocolo recusou a sugestão no formulário;
     # (3) o que o Protocolo informou no formulário.
     codigo_prioridade = prazos.normalizar_prioridade(dados.get('prioridade'))
+    manter_informada = str(
+        dados.get('manter_prioridade_informada') or ''
+    ).strip().lower() in ('1', 'true', 'sim', 'on')
     if UrgenciaRecorrente.vale_para(processo.numero_processo):
         codigo_prioridade = 'URGENTE'
-    else:
+    elif not manter_informada:
         detectada = prioridade_auto.detectar_codigo({
             'contratada': processo.contratada,
             'objeto': processo.objeto,
@@ -463,7 +467,8 @@ def aplicar_analise(processo, dados, usuario):
             campos_extra = list(dict.fromkeys(
                 campos_extra + ['numero_relatorio', 'data_analise']))
             alteracoes += 1
-        if not processo.data_analise:
+        # Data do relatório acompanha o número — não preenche só por assumir.
+        if processo.numero_relatorio and not processo.data_analise:
             processo.data_analise = timezone.localdate()
             campos_extra.append('data_analise')
             alteracoes += 1

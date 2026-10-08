@@ -153,7 +153,7 @@
                             <option value="URGENTE">Urgente</option>
                         {% endfor %}
                     </select>
-                    <span class="field__hint">Define o prazo e o destaque na fila. A Gestão ainda pode alterar depois.</span>
+                    <span class="field__hint" id="prioridadeHint">Define o prazo e o destaque na fila. A Gestão ainda pode alterar depois.</span>
                 </div>
                 <div class="field field--wide">
                     <label class="field__label" for="observacao_protocolo">Observação</label>
@@ -279,6 +279,7 @@
         atualizarEspecie();
         setCurrentDateTime();
         resetSubmitButton();
+        atualizarDicaPrioridade();
     }
 
     function resetSubmitButton() {
@@ -315,6 +316,7 @@
                 document.getElementById('objeto').value = d.objeto || '';
                 contratadaInput.value = d.contratada || '';
                 document.getElementById('recorrente').value = (d.recorrente === 'SIM') ? 'SIM' : 'NAO';
+                atualizarDicaPrioridade();
             } catch (erro) {
                 console.error('Falha ao buscar passagem anterior:', erro);
             }
@@ -322,6 +324,88 @@
     });
 
     especieSelect.addEventListener('change', atualizarEspecie);
+
+    const PRIORIDADE_ORDEM = ['URGENTE', 'PRIORITARIO', 'RECORRENTE', 'NORMAL'];
+    const HINT_PRIORIDADE_PADRAO = 'Define o prazo e o destaque na fila. A Gestão ainda pode alterar depois.';
+
+    function normalizarTexto(texto) {
+        return String(texto || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+    }
+
+    function termoBate(haystack, termo) {
+        if (!haystack || !termo) { return false; }
+        if (termo.length <= 3) {
+            const re = new RegExp('(^|[^a-z0-9])' + termo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^a-z0-9]|$)');
+            return re.test(haystack);
+        }
+        return haystack.indexOf(termo) !== -1;
+    }
+
+    function sugerirPrioridade(dados) {
+        const haystack = normalizarTexto([
+            dados.contratada, dados.objeto, dados.secretaria, dados.numero_processo
+        ].join(' '));
+        if (!haystack) { return null; }
+        const lista = DADOS.prioridades || [];
+        for (let i = 0; i < PRIORIDADE_ORDEM.length; i++) {
+            const codigo = PRIORIDADE_ORDEM[i];
+            const item = lista.find(function (p) { return p.codigo === codigo; });
+            if (!item || !item.palavras_chave || !item.palavras_chave.length) { continue; }
+            const termos = item.palavras_chave
+                .map(normalizarTexto)
+                .filter(Boolean)
+                .sort(function (a, b) { return b.length - a.length; });
+            for (let t = 0; t < termos.length; t++) {
+                if (!termoBate(haystack, termos[t])) { continue; }
+                let termoOriginal = termos[t];
+                for (let k = 0; k < item.palavras_chave.length; k++) {
+                    if (normalizarTexto(item.palavras_chave[k]) === termos[t]) {
+                        termoOriginal = item.palavras_chave[k];
+                        break;
+                    }
+                }
+                return {
+                    codigo: item.codigo,
+                    nome: item.nome,
+                    termo: termoOriginal,
+                    prazo_dias: item.prazo_dias
+                };
+            }
+        }
+        return null;
+    }
+
+    function atualizarDicaPrioridade() {
+        const hint = document.getElementById('prioridadeHint');
+        if (!hint) { return; }
+        const sugestao = sugerirPrioridade({
+            contratada: contratadaInput.value,
+            objeto: document.getElementById('objeto').value,
+            secretaria: secretariaSelect.value,
+            numero_processo: numeroProcessoInput.value
+        });
+        if (!sugestao) {
+            hint.textContent = HINT_PRIORIDADE_PADRAO;
+            return;
+        }
+        const prazo = sugestao.prazo_dias != null
+            ? (' (' + sugestao.prazo_dias + (sugestao.prazo_dias === 1 ? ' dia' : ' dias') + ')')
+            : '';
+        hint.textContent = 'Sugestão: "' + sugestao.termo + '" → ' + sugestao.nome + prazo +
+            '. Na hora de salvar o sistema pergunta se deseja aplicar.';
+    }
+
+    ['input', 'change'].forEach(function (evt) {
+        contratadaInput.addEventListener(evt, atualizarDicaPrioridade);
+        document.getElementById('objeto').addEventListener(evt, atualizarDicaPrioridade);
+        secretariaSelect.addEventListener(evt, atualizarDicaPrioridade);
+        numeroProcessoInput.addEventListener(evt, atualizarDicaPrioridade);
+    });
 
     form.addEventListener('submit', async function (evento) {
         evento.preventDefault();
@@ -337,6 +421,7 @@
             if (!el.value.trim()) { marcarInvalido(el, par[1]); valido = false; }
         });
 
+        const prioridadeSelect = document.getElementById('prioridade');
         const dados = {
             numero_processo: numeroProcessoInput.value.trim(),
             volume: document.getElementById('volume').value.trim(),
@@ -346,7 +431,7 @@
             objeto: document.getElementById('objeto').value.trim(),
             contratada: contratadaInput.value.trim() || null,
             recorrente: document.getElementById('recorrente').value,
-            prioridade: document.getElementById('prioridade').value || 'NORMAL',
+            prioridade: prioridadeSelect.value || 'NORMAL',
             observacao_protocolo: document.getElementById('observacao_protocolo').value.trim()
         };
 
@@ -366,6 +451,25 @@
         }
 
         if (!valido) { return; }
+
+        const sugestao = sugerirPrioridade(dados);
+        if (sugestao && sugestao.codigo !== dados.prioridade) {
+            const prazo = sugestao.prazo_dias != null
+                ? (' (' + sugestao.prazo_dias + (sugestao.prazo_dias === 1 ? ' dia' : ' dias') + ')')
+                : '';
+            const aceitar = window.confirm(
+                'Encontramos "' + sugestao.termo + '" neste processo.\n\n' +
+                'Deseja definir a prioridade como ' + sugestao.nome + prazo + '?\n\n' +
+                'OK = sim, aplicar ' + sugestao.nome + '\n' +
+                'Cancelar = manter "' + (prioridadeSelect.options[prioridadeSelect.selectedIndex].text || dados.prioridade) + '"'
+            );
+            if (aceitar) {
+                prioridadeSelect.value = sugestao.codigo;
+                dados.prioridade = sugestao.codigo;
+            } else {
+                dados.manter_prioridade_informada = true;
+            }
+        }
 
         botao.disabled = true;
         botao.classList.add('is-loading');

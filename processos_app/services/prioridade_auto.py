@@ -17,14 +17,15 @@ def _normalizar(texto):
 
 
 def _termos(bloco):
-    termos = []
+    """[(termo_normalizado, texto_original), ...] — longos primeiro."""
+    pares = []
     for linha in str(bloco or '').splitlines():
-        termo = _normalizar(linha)
+        original = linha.strip()
+        termo = _normalizar(original)
         if termo:
-            termos.append(termo)
-    # Termos mais longos primeiro evitam "inova" engolir "consorcio inovar".
-    termos.sort(key=len, reverse=True)
-    return termos
+            pares.append((termo, original))
+    pares.sort(key=lambda item: len(item[0]), reverse=True)
+    return pares
 
 
 def _contem(haystack, termo):
@@ -50,7 +51,7 @@ def texto_do_processo(dados):
 
 
 def _mapa_palavras():
-    """{codigo: [termos]} das prioridades ativas com palavras-chave."""
+    """{codigo: [(termo, original), ...]} das prioridades ativas."""
     try:
         from ..models import Prioridade
         linhas = Prioridade.objects.filter(ativo=True).values_list(
@@ -66,12 +67,37 @@ def _mapa_palavras():
 
 def detectar_codigo(dados):
     """Devolve o código da prioridade detectada, ou None."""
+    achado = sugerir(dados)
+    return achado['codigo'] if achado else None
+
+
+def sugerir(dados):
+    """Devolve {codigo, nome, termo, prazo_dias} ou None."""
     haystack = texto_do_processo(dados)
     if not haystack:
         return None
-    mapa = _mapa_palavras()
+    try:
+        from ..models import Prioridade
+        prioridades = {
+            p.codigo: p
+            for p in Prioridade.objects.filter(ativo=True)
+        }
+    except DatabaseError:
+        prioridades = {}
+    mapa = {
+        codigo: _termos(getattr(prio, 'palavras_chave', ''))
+        for codigo, prio in prioridades.items()
+        if (getattr(prio, 'palavras_chave', None) or '').strip()
+    }
     for codigo in PRECEDENCIA:
-        for termo in mapa.get(codigo, ()):
-            if _contem(haystack, termo):
-                return codigo
+        for termo, original in mapa.get(codigo, ()):
+            if not _contem(haystack, termo):
+                continue
+            prio = prioridades.get(codigo)
+            return {
+                'codigo': codigo,
+                'nome': prio.nome if prio else codigo,
+                'termo': original,
+                'prazo_dias': prio.prazo_dias if prio else None,
+            }
     return None

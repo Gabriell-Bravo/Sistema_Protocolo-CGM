@@ -238,7 +238,8 @@ class AuditoriaNumeracaoTest(BaseProcessoTestCase):
                 numero_relatorio=str(num_a), situacao_linha='ATIVA').count(), 1)
         self.assertIn('m1/26', getattr(resultado, '_numeros_desvinculados', []))
         liberado = LinhaControleRelatorio.objects.get(numero_relatorio='1202')
-        self.assertEqual(liberado.situacao_linha, 'CANCELADA')
+        # Nº gerado hoje e liberado na troca → verde (reuso no mesmo dia).
+        self.assertEqual(liberado.situacao_linha, 'RESERVADA')
         self.assertIsNone(liberado.processo_id)
 
     def test_14_contador_nao_volta_ao_cancelar_ultimo(self):
@@ -268,7 +269,7 @@ class AuditoriaNumeracaoTest(BaseProcessoTestCase):
         self.assertEqual(q.numero_relatorio, '1401')
 
     def test_17_trocar_numero_preserva_antigo_na_planilha(self):
-        """Trocar 9003→9004 não some com o 9003: fica vermelho com data."""
+        """Trocar nº no mesmo dia não some com o antigo: fica verde com data."""
         relatorios.definir_ultimo_numero(self.admin, 1600)
         p = self._salvar(self.novo_processo(self.especie_liq, numero_processo='t1/26'))
         self.assertEqual(p.numero_relatorio, '1601')
@@ -277,13 +278,13 @@ class AuditoriaNumeracaoTest(BaseProcessoTestCase):
         p.refresh_from_db()
         self.assertEqual(p.numero_relatorio, '1605')
         liberado = LinhaControleRelatorio.objects.get(numero_relatorio='1601')
-        self.assertEqual(liberado.situacao_linha, 'CANCELADA')
+        self.assertEqual(liberado.situacao_linha, 'RESERVADA')
         self.assertIsNone(liberado.processo_id)
         self.assertEqual(liberado.data_relatorio, data_antiga)
         ativo = LinhaControleRelatorio.objects.get(processo=p)
         self.assertEqual(ativo.numero_relatorio, '1605')
         self.assertEqual(str(ativo.data_relatorio), '2026-10-05')
-        # Reuso do número específico reativa a linha vermelha.
+        # Reuso do número específico (ou Gerar no mesmo dia) reativa a linha.
         outro = self.novo_processo(self.especie_liq, numero_processo='t2/26')
         tramitacao.assumir(outro.id, self.analista_liq)
         relatorios.alterar_numero(self.analista_liq, outro.id, 1601, '2026-10-06')

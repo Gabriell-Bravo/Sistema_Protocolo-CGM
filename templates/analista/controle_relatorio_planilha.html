@@ -1,0 +1,982 @@
+{% extends "base.html" %}
+
+{% block title %}Controle de relatório · Planilha{% endblock %}
+{% block page_title %}Controle de relatório{% endblock %}
+{% block page_subtitle %}Planilha editável — clique nas células, arraste colunas e linhas, use ⋮ nas ações.{% endblock %}
+
+{% block extra_css %}
+<style>
+  .sheet-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .sheet-bar__left,
+  .sheet-bar__right {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+  .sheet-hint {
+    font-size: 0.85rem;
+    color: var(--text-muted, #5b6472);
+  }
+  .sheet-toast {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 90;
+    min-width: 220px;
+    max-width: 420px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    background: #1e293b;
+    color: #fff;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.25);
+    opacity: 0;
+    transform: translateY(8px);
+    pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  .sheet-toast.is-on { opacity: 1; transform: translateY(0); }
+  .sheet-toast.is-err { background: #b91c1c; }
+  .sheet-toast.is-ok { background: #166534; }
+
+  .sheet-wrap {
+    border: 1px solid #94a3b8;
+    border-radius: 6px;
+    background: #fff;
+    color: #0f172a;
+    overflow: auto;
+    max-height: calc(100vh - 220px);
+    color-scheme: light;
+  }
+  .sheet {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: max-content;
+    min-width: 100%;
+    font-size: 13px;
+    table-layout: fixed;
+    color: #0f172a;
+  }
+  .sheet th,
+  .sheet td {
+    border-right: 1px solid #cbd5e1;
+    border-bottom: 1px solid #cbd5e1;
+    padding: 0;
+    vertical-align: middle;
+    background: #fff;
+    color: #0f172a;
+  }
+  .sheet thead th {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    background: #e2e8f0;
+    color: #0f172a;
+    font-weight: 700;
+    white-space: nowrap;
+    user-select: none;
+    min-width: 120px;
+  }
+  .sheet thead th.is-dragging { opacity: 0.45; }
+  .sheet thead th.is-drop { outline: 2px solid #2563eb; outline-offset: -2px; }
+  .sheet-th {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    cursor: grab;
+  }
+  .sheet-th__grip {
+    color: #94a3b8;
+    font-size: 16px;
+    line-height: 1;
+  }
+  .sheet-th__label { flex: 1; }
+  .sheet th.sheet-col--row,
+  .sheet td.sheet-cell--row {
+    position: sticky;
+    left: 0;
+    z-index: 4;
+    min-width: 36px;
+    width: 36px;
+    background: #f1f5f9;
+    box-shadow: 2px 0 0 #cbd5e1;
+    text-align: center;
+  }
+  .sheet th.sheet-col--row { z-index: 6; background: #e2e8f0; }
+  .sheet td.sheet-cell--sticky,
+  .sheet th.sheet-col--sticky {
+    position: sticky;
+    left: 36px;
+    z-index: 3;
+    box-shadow: 2px 0 0 #cbd5e1;
+  }
+  .sheet th.sheet-col--sticky { z-index: 5; }
+  .sheet th.sheet-col--menu,
+  .sheet td.sheet-cell--menu {
+    position: sticky;
+    right: 0;
+    z-index: 3;
+    min-width: 48px;
+    width: 48px;
+    background: #f8fafc;
+    box-shadow: -2px 0 0 #cbd5e1;
+    overflow: visible;
+  }
+  .sheet th.sheet-col--menu { z-index: 5; background: #e2e8f0; }
+  .sheet tr.is-row-dragging { opacity: 0.45; }
+  .sheet tr.is-row-drop td { box-shadow: inset 0 2px 0 #2563eb; }
+  .sheet-row-grip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 32px;
+    border: 0;
+    background: transparent;
+    color: #64748b;
+    cursor: grab;
+    padding: 0;
+  }
+  .sheet-row-grip:active { cursor: grabbing; }
+  .sheet-row-grip .material-symbols-rounded { font-size: 18px; color: #64748b; }
+
+  .sheet-input,
+  .sheet-ro {
+    display: block;
+    width: 100%;
+    min-width: 110px;
+    border: 0;
+    background: transparent;
+    padding: 7px 10px;
+    font: inherit;
+    font-weight: 500;
+    color: #0f172a !important;
+    -webkit-text-fill-color: #0f172a;
+    caret-color: #0f172a;
+    outline: none;
+    box-sizing: border-box;
+  }
+  .sheet-input::placeholder {
+    color: #64748b;
+    -webkit-text-fill-color: #64748b;
+    opacity: 1;
+  }
+  .sheet-input:focus {
+    background: #fff7ed;
+    box-shadow: inset 0 0 0 2px #ea580c;
+  }
+  .sheet-input.is-dirty { background: #fde68a; }
+  .sheet-input.is-saving { background: #bae6fd; }
+  .sheet-input.is-err { background: #fecaca; }
+  .sheet-ro {
+    color: #334155 !important;
+    -webkit-text-fill-color: #334155;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sheet-input--wide { min-width: 220px; }
+  .sheet-input--num { min-width: 90px; text-align: right; font-variant-numeric: tabular-nums; }
+  .sheet-input--date { min-width: 130px; }
+
+  /* Cores por data-* (evita falso positivo de testes em busca de class no CSS) */
+  .sheet tr[data-sem-relatorio="1"] td { background: #fef08a; }
+  .sheet tr[data-sem-relatorio="1"] td.sheet-cell--menu { background: #fde047; }
+  .sheet tr[data-situacao="CANCELADA"] td { background: #fecaca; }
+  .sheet tr[data-situacao="CANCELADA"] td.sheet-cell--menu { background: #fca5a5; }
+  .sheet tr[data-situacao="RESERVADA"] td { background: #c7d2fe; }
+  .sheet tr[data-situacao="RESERVADA"] td.sheet-cell--menu { background: #a5b4fc; }
+  .sheet tr[data-situacao="HISTORICA"]:not([data-sem-relatorio="1"]) td { background: #e2e8f0; }
+  .sheet tr[data-situacao="HISTORICA"]:not([data-sem-relatorio="1"]) td.sheet-cell--menu { background: #cbd5e1; }
+  .sheet tr.is-gone { opacity: 0.35; }
+
+  .sheet-menu {
+    position: relative;
+    display: flex;
+    justify-content: center;
+  }
+  .sheet-menu__btn {
+    border: 0;
+    background: transparent;
+    width: 36px;
+    height: 32px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #0f172a;
+  }
+  .sheet-menu__btn:hover { background: #cbd5e1; }
+  .sheet-menu__btn .material-symbols-rounded { color: #0f172a; }
+  .sheet-menu__list {
+    display: none;
+    position: absolute;
+    right: 4px;
+    top: 100%;
+    z-index: 20;
+    min-width: 220px;
+    padding: 6px;
+    margin: 0;
+    list-style: none;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+  }
+  .sheet-menu__list.is-floating {
+    display: block;
+    position: fixed;
+    z-index: 100000;
+    right: auto;
+    top: auto;
+  }
+  .sheet-menu__list button,
+  .sheet-menu__list a {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    padding: 8px 10px;
+    border-radius: 6px;
+    text-align: left;
+    font: inherit;
+    color: #0f172a;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .sheet-menu__list button:hover,
+  .sheet-menu__list a:hover { background: #f1f5f9; }
+  .sheet-menu__list .is-danger { color: #b91c1c; }
+  .sheet-menu__list .material-symbols-rounded { font-size: 18px; color: inherit; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="stack" id="sheetApp"
+     data-grupo="{{ aba }}"
+     data-csrf="{{ csrf_token }}"
+     data-url-editar="{% url 'controle_relatorio_editar_linha' 0 %}"
+     data-url-sem="{% url 'controle_relatorio_sem_relatorio' 0 %}"
+     data-url-cancelar="{% url 'controle_relatorio_cancelar_linha' 0 %}"
+     data-url-desfazer="{% url 'controle_relatorio_desfazer_linha' 0 %}"
+     data-url-apagar="{% url 'controle_relatorio_apagar_linha' 0 %}"
+     data-url-desvincular="{% url 'controle_relatorio_desvincular_linha' 0 %}"
+     data-url-vincular="{% url 'controle_relatorio_vincular_linha' 0 %}"
+     data-pode-editar="{% if pode_cancelar_linha_relatorio %}1{% else %}0{% endif %}"
+     data-pode-apagar="{% if pode_apagar_linha_relatorio %}1{% else %}0{% endif %}">
+
+  {% if pode_destinar_numeros or pode_definir_ultimo %}
+  <section class="filters">
+    <div class="filters__chips">
+      <a href="?aba={{ aba }}&secao=analises{% if termo %}&termo={{ termo|urlencode }}{% endif %}"
+         class="chip chip--ativo">
+        Análises
+        <span class="chip__label">{{ total }}</span>
+      </a>
+      {% if pode_destinar_numeros %}
+      <a href="?aba={{ aba }}&secao=destinados" class="chip">
+        Números destinados
+        <span class="chip__label">{{ total_reservas }}</span>
+      </a>
+      {% endif %}
+      {% if pode_definir_ultimo %}
+      <a href="?secao=numeracao" class="chip">
+        Numeração
+        <span class="chip__label">{{ estados_numeracao|length }}</span>
+      </a>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="filters">
+    <div class="filters__chips">
+      {% for item in abas %}
+      <a href="?aba={{ item.codigo }}&secao=analises{% if termo %}&termo={{ termo|urlencode }}{% endif %}"
+         class="chip {% if item.ativa %}chip--ativo{% endif %}">
+        {{ item.nome }}
+        <span class="chip__label">{{ item.total }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+
+  <div class="sheet-bar">
+    <div class="sheet-bar__left">
+      <strong>Planilha — {{ info_aba.nome }}</strong>
+      <span class="sheet-hint">próximo nº {{ sequencia.proximo }} · {{ total }} linha{{ total|pluralize:"s" }}</span>
+    </div>
+    <div class="sheet-bar__right">
+      <form method="get" class="search" style="margin:0;">
+        <input type="hidden" name="aba" value="{{ aba }}">
+        <input type="hidden" name="secao" value="analises">
+        <div class="search__field">
+          <span class="material-symbols-rounded search__icon">search</span>
+          <input type="text" name="termo" class="input"
+                 placeholder="Buscar…"
+                 value="{{ termo|default:'' }}">
+        </div>
+        <button type="submit" class="btn btn--primary">Buscar</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="sheet-wrap">
+    <table class="sheet" id="sheetTable">
+      <thead>
+        <tr>
+          <th class="sheet-col--row" data-campo="__row" draggable="false">
+            <div class="sheet-th" style="cursor:default; justify-content:center; padding:8px 0;">
+              <span class="material-symbols-rounded sheet-th__grip" style="margin:0;">drag_indicator</span>
+            </div>
+          </th>
+          {% for col in layout_planilha.colunas %}
+          <th class="{% if col.campo == 'numero_processo' %}sheet-col--sticky{% endif %}"
+              draggable="true"
+              data-campo="{{ col.campo }}"
+              data-label="{{ col.label }}">
+            <div class="sheet-th">
+              <span class="material-symbols-rounded sheet-th__grip">drag_indicator</span>
+              <span class="sheet-th__label">{{ col.label }}</span>
+            </div>
+          </th>
+          {% endfor %}
+          <th class="sheet-col--menu" data-campo="__menu" draggable="false">
+            <div class="sheet-th" style="cursor:default; justify-content:center;">⋮</div>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for linha in linhas %}
+        <tr class="{{ linha.linha_css_class }}"
+            data-linha-id="{{ linha.id }}"
+            data-situacao="{{ linha.situacao_linha }}"
+            data-sem-relatorio="{% if linha.sem_relatorio %}1{% else %}0{% endif %}"
+            data-processo-id="{{ linha.processo_id|default:'' }}"
+            data-numero="{{ linha.numero_relatorio|default:'' }}"
+            data-processo="{{ linha.numero_processo|default:'' }}">
+          <td class="sheet-cell--row" data-campo="__row">
+            <button type="button" class="sheet-row-grip" draggable="true"
+                    title="Arrastar linha" aria-label="Arrastar linha"
+                    data-row-drag>
+              <span class="material-symbols-rounded">drag_indicator</span>
+            </button>
+          </td>
+          {% for col in layout_planilha.colunas %}
+          <td class="{% if col.campo == 'numero_processo' %}sheet-cell--sticky{% endif %}"
+              data-campo="{{ col.campo }}">
+            {% if col.campo == 'status_analise' %}
+              <span class="sheet-ro">{{ linha.status_analise_display }}</span>
+            {% elif pode_cancelar_linha_relatorio and linha.numero_relatorio %}
+              {% if col.campo == 'data_relatorio' %}
+              <input class="sheet-input sheet-input--date" type="date"
+                     name="data_relatorio" data-campo="data_relatorio"
+                     value="{{ linha.data_relatorio|date:'Y-m-d' }}">
+              {% elif col.campo == 'objeto' or col.campo == 'observacao' %}
+              <input class="sheet-input sheet-input--wide" type="text"
+                     name="{{ col.campo }}" data-campo="{{ col.campo }}"
+                     value="{% if col.campo == 'objeto' %}{{ linha.objeto|default:'' }}{% else %}{{ linha.observacao|default:'' }}{% endif %}">
+              {% elif col.campo == 'valor' or col.campo == 'numero_relatorio' %}
+              <input class="sheet-input sheet-input--num" type="text"
+                     name="{{ col.campo }}" data-campo="{{ col.campo }}"
+                     value="{% if col.campo == 'valor' %}{{ linha.valor|default:'' }}{% else %}{{ linha.numero_relatorio|default:'' }}{% endif %}">
+              {% else %}
+              <input class="sheet-input" type="text"
+                     name="{{ col.campo }}" data-campo="{{ col.campo }}"
+                     value="{% if col.campo == 'numero_processo' %}{{ linha.numero_processo|default:'' }}{% elif col.campo == 'analista' %}{{ linha.analista|default:'' }}{% elif col.campo == 'secretaria' %}{{ linha.secretaria|default:'' }}{% elif col.campo == 'contratada' %}{{ linha.contratada|default:'' }}{% elif col.campo == 'periodo' %}{{ linha.periodo|default:'' }}{% elif col.campo == 'destino' %}{{ linha.destino|default:'' }}{% elif col.campo == 'volume' %}{{ linha.volume|default:'' }}{% else %}{% endif %}">
+              {% endif %}
+            {% else %}
+              <span class="sheet-ro">
+                {% if col.campo == 'numero_relatorio' %}<strong>{{ linha.numero_relatorio|default:"—" }}</strong>
+                {% elif col.campo == 'data_relatorio' %}{{ linha.data_relatorio|date:"d/m/Y"|default:"—" }}
+                {% elif col.campo == 'numero_processo' %}{{ linha.numero_processo|default:"—" }}
+                {% elif col.campo == 'analista' %}{{ linha.analista|default:"—" }}
+                {% elif col.campo == 'secretaria' %}{{ linha.secretaria|default:"—" }}
+                {% elif col.campo == 'contratada' %}{{ linha.contratada|default:"—" }}
+                {% elif col.campo == 'objeto' %}{{ linha.objeto|default:"—"|truncatechars:80 }}
+                {% elif col.campo == 'valor' %}{{ linha.valor|default:"—" }}
+                {% elif col.campo == 'periodo' %}{{ linha.periodo|default:"—" }}
+                {% elif col.campo == 'destino' %}{{ linha.destino|default:"—" }}
+                {% elif col.campo == 'observacao' %}{{ linha.observacao|default:"—"|truncatechars:80 }}
+                {% elif col.campo == 'volume' %}{{ linha.volume|default:"—" }}
+                {% else %}—{% endif %}
+              </span>
+            {% endif %}
+          </td>
+          {% endfor %}
+          <td class="sheet-cell--menu" data-campo="__menu">
+            <div class="sheet-menu">
+              <button type="button" class="sheet-menu__btn" aria-label="Ações da linha"
+                      data-menu-toggle>
+                <span class="material-symbols-rounded">more_vert</span>
+              </button>
+              <ul class="sheet-menu__list" role="menu">
+                {% if linha.processo_id %}
+                <li>
+                  <a href="{% url 'analista_processo' linha.processo_id %}?next={% url 'controle_relatorio' %}%3Faba%3D{{ aba }}%26secao%3Danalises"
+                     title="Editar análise">
+                    <span class="material-symbols-rounded">open_in_new</span>
+                    Abrir análise
+                  </a>
+                </li>
+                {% endif %}
+                {% if pode_cancelar_linha_relatorio and linha.numero_relatorio %}
+                  {% if not linha.processo_id %}
+                    {% if linha.situacao_linha == 'CANCELADA' or linha.situacao_linha == 'RESERVADA' or linha.situacao_linha == 'HISTORICA' %}
+                <li>
+                  <button type="button" data-acao="vincular"
+                          data-vincular-linha="{{ linha.id }}"
+                          data-vincular-numero="{{ linha.numero_relatorio }}"
+                          data-vincular-grupo="{{ aba }}">
+                    <span class="material-symbols-rounded">link</span>
+                    Vincular processo
+                  </button>
+                </li>
+                    {% endif %}
+                  {% endif %}
+                  {% if linha.situacao_linha == 'ATIVA' or linha.situacao_linha == 'HISTORICA' %}
+                <li>
+                  <button type="button" data-acao="sem-relatorio"
+                          title="{% if linha.sem_relatorio %}Tirar marca de sem relatório{% else %}Marcar como sem relatório (amarelo){% endif %}">
+                    <span class="material-symbols-rounded">sticky_note_2</span>
+                    {% if linha.sem_relatorio %}Tirar sem relatório{% else %}Marcar como sem relatório{% endif %}
+                  </button>
+                </li>
+                  {% endif %}
+                  {% if linha.processo_id or linha.numero_processo %}
+                <li>
+                  <button type="button" data-acao="desvincular"
+                          title="Desvincular processo deste número">
+                    <span class="material-symbols-rounded">link_off</span>
+                    Desvincular processo deste número
+                  </button>
+                </li>
+                  {% endif %}
+                  {% if linha.situacao_linha == 'ATIVA' or linha.situacao_linha == 'HISTORICA' %}
+                <li>
+                  <button type="button" data-acao="desfazer"
+                          data-desfazer-linha="{{ linha.id }}"
+                          data-desfazer-numero="{{ linha.numero_relatorio }}"
+                          title="Desfaz e deixa verde — próximo Gerar reusa se for o mesmo dia">
+                    <span class="material-symbols-rounded">undo</span>
+                    Desfazer relatório (reuso no dia)
+                  </button>
+                </li>
+                  {% endif %}
+                  {% if linha.situacao_linha != 'CANCELADA' %}
+                <li>
+                  <button type="button" class="is-danger" data-acao="cancelar"
+                          data-cancelar-linha="{{ linha.id }}"
+                          data-cancelar-numero="{{ linha.numero_relatorio }}"
+                          data-cancelar-grupo="{{ aba }}"
+                          title="Cancela em vermelho — reuso só com número específico">
+                    <span class="material-symbols-rounded">cancel</span>
+                    Cancelar relatório
+                  </button>
+                </li>
+                  {% endif %}
+                {% endif %}
+                {% if pode_apagar_linha_relatorio %}
+                <li>
+                  <button type="button" class="is-danger" data-acao="apagar"
+                          data-apagar-linha="{{ linha.id }}"
+                          data-apagar-numero="{{ linha.numero_relatorio }}"
+                          title="Apagar de verdade">
+                    <span class="material-symbols-rounded">delete</span>
+                    Apagar de verdade
+                  </button>
+                </li>
+                {% endif %}
+              </ul>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="{{ layout_planilha.colunas|length|add:2 }}" style="padding:24px; color:#64748b;">
+            Nenhuma linha neste grupo.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% include "includes/paginacao.html" with pagina=pagina %}
+</div>
+
+<div class="sheet-toast" id="sheetToast" role="status"></div>
+
+<script>
+(function () {
+  var app = document.getElementById('sheetApp');
+  if (!app) return;
+
+  var grupo = app.dataset.grupo;
+  var csrf = app.dataset.csrf;
+  var podeEditar = app.dataset.podeEditar === '1';
+  var storageKey = 'controle_planilha_cols_' + grupo;
+  var storageRowsKey = 'controle_planilha_rows_' + grupo;
+  var toastEl = document.getElementById('sheetToast');
+  var toastTimer = null;
+  var menuAberto = null;
+
+  function toast(msg, ok) {
+    if (!toastEl) return;
+    toastEl.textContent = msg || '';
+    toastEl.classList.toggle('is-ok', !!ok);
+    toastEl.classList.toggle('is-err', !ok);
+    toastEl.classList.add('is-on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () {
+      toastEl.classList.remove('is-on');
+    }, 2800);
+  }
+
+  function urlComId(tpl, id) {
+    return tpl.replace('/0/', '/' + id + '/');
+  }
+
+  function coletarLinha(tr) {
+    var dados = { grupo: grupo };
+    tr.querySelectorAll('.sheet-input[data-campo]').forEach(function (inp) {
+      dados[inp.dataset.campo] = inp.value;
+    });
+    if (tr.dataset.semRelatorio === '1') {
+      dados.sem_relatorio = '1';
+    }
+    return dados;
+  }
+
+  function postForm(url, dados) {
+    var body = new URLSearchParams();
+    Object.keys(dados).forEach(function (k) {
+      body.append(k, dados[k] == null ? '' : String(dados[k]));
+    });
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+        'X-CSRFToken': csrf,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json'
+      },
+      body: body.toString(),
+      credentials: 'same-origin'
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        return { ok: res.ok && data.ok !== false, data: data, status: res.status };
+      }).catch(function () {
+        return { ok: false, data: { mensagem: 'Resposta inválida do servidor.' }, status: res.status };
+      });
+    });
+  }
+
+  function aplicarCss(tr, data) {
+    if (!data) return;
+    Array.prototype.slice.call(tr.classList).forEach(function (c) {
+      if (c.indexOf('tr-sem-') === 0 || c.indexOf('tr-relatorio-') === 0) {
+        tr.classList.remove(c);
+      }
+    });
+    if (data.css_class) tr.classList.add(data.css_class);
+    if (typeof data.sem_relatorio === 'boolean') {
+      tr.dataset.semRelatorio = data.sem_relatorio ? '1' : '0';
+    }
+    if (data.situacao_linha) tr.dataset.situacao = data.situacao_linha;
+    if (data.numero_relatorio != null) tr.dataset.numero = data.numero_relatorio;
+  }
+
+  function salvarCelula(inp) {
+    if (!podeEditar) return;
+    var tr = inp.closest('tr');
+    if (!tr || !tr.dataset.linhaId) return;
+    if (inp.dataset.savedValue === inp.value) {
+      inp.classList.remove('is-dirty');
+      return;
+    }
+    inp.classList.add('is-saving');
+    inp.classList.remove('is-err');
+    var dados = coletarLinha(tr);
+    postForm(urlComId(app.dataset.urlEditar, tr.dataset.linhaId), dados)
+      .then(function (res) {
+        inp.classList.remove('is-saving');
+        if (res.ok) {
+          inp.dataset.savedValue = inp.value;
+          inp.classList.remove('is-dirty', 'is-err');
+          aplicarCss(tr, res.data);
+          toast(res.data.mensagem || 'Salvo.', true);
+        } else {
+          inp.classList.add('is-err');
+          toast((res.data && res.data.mensagem) || 'Não foi possível salvar.', false);
+        }
+      })
+      .catch(function () {
+        inp.classList.remove('is-saving');
+        inp.classList.add('is-err');
+        toast('Falha de rede ao salvar.', false);
+      });
+  }
+
+  app.querySelectorAll('.sheet-input').forEach(function (inp) {
+    inp.dataset.savedValue = inp.value;
+    inp.addEventListener('input', function () {
+      inp.classList.toggle('is-dirty', inp.value !== inp.dataset.savedValue);
+    });
+    inp.addEventListener('change', function () { salvarCelula(inp); });
+    inp.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        inp.blur();
+      }
+      if (ev.key === 'Escape') {
+        inp.value = inp.dataset.savedValue || '';
+        inp.classList.remove('is-dirty', 'is-err');
+        inp.blur();
+      }
+    });
+  });
+
+  /* ---- menu ⋮ (flutuante acima de tudo) ---- */
+  function posicionarMenu(list, btn) {
+    var rect = btn.getBoundingClientRect();
+    var largura = list.offsetWidth || 220;
+    var altura = list.offsetHeight || 160;
+    var left = rect.right - largura;
+    var top = rect.bottom + 4;
+    if (left < 8) left = 8;
+    if (left + largura > window.innerWidth - 8) {
+      left = Math.max(8, window.innerWidth - largura - 8);
+    }
+    if (top + altura > window.innerHeight - 8) {
+      top = Math.max(8, rect.top - altura - 4);
+    }
+    list.style.left = left + 'px';
+    list.style.top = top + 'px';
+  }
+
+  function fecharMenus() {
+    if (!menuAberto) return;
+    var menu = menuAberto.menu;
+    var list = menuAberto.list;
+    list.classList.remove('is-floating');
+    list.style.display = 'none';
+    list.style.left = '';
+    list.style.top = '';
+    if (menuAberto.placeholder && menuAberto.placeholder.parentNode) {
+      menuAberto.placeholder.parentNode.insertBefore(list, menuAberto.placeholder);
+      menuAberto.placeholder.remove();
+    } else if (menu) {
+      menu.appendChild(list);
+    }
+    menu.classList.remove('is-open');
+    menuAberto = null;
+  }
+
+  function abrirMenu(menu) {
+    var list = menu.querySelector('.sheet-menu__list');
+    var btn = menu.querySelector('[data-menu-toggle]');
+    var tr = menu.closest('tr');
+    if (!list || !btn || !tr) return;
+    fecharMenus();
+    var placeholder = document.createComment('sheet-menu-slot');
+    menu.insertBefore(placeholder, list);
+    document.body.appendChild(list);
+    list.classList.add('is-floating');
+    list.style.display = 'block';
+    list.dataset.linhaId = tr.dataset.linhaId || '';
+    menu.classList.add('is-open');
+    menuAberto = { menu: menu, list: list, placeholder: placeholder, tr: tr };
+    posicionarMenu(list, btn);
+  }
+
+  app.addEventListener('click', function (ev) {
+    var toggle = ev.target.closest('[data-menu-toggle]');
+    if (toggle) {
+      var menu = toggle.closest('.sheet-menu');
+      var jaAberto = menuAberto && menuAberto.menu === menu;
+      fecharMenus();
+      if (!jaAberto) abrirMenu(menu);
+      ev.stopPropagation();
+      return;
+    }
+  });
+
+  document.addEventListener('click', function (ev) {
+    if (ev.target.closest('[data-menu-toggle]')) return;
+    var acaoBtn = ev.target.closest('.sheet-menu__list [data-acao]');
+    if (acaoBtn && menuAberto) {
+      var tr = menuAberto.tr;
+      var acao = acaoBtn.getAttribute('data-acao');
+      fecharMenus();
+      if (tr) executarAcao(tr, acao);
+      ev.preventDefault();
+      return;
+    }
+    if (ev.target.closest('.sheet-menu__list.is-floating')) return;
+    fecharMenus();
+  });
+
+  window.addEventListener('scroll', function () { fecharMenus(); }, true);
+  window.addEventListener('resize', function () { fecharMenus(); });
+
+  function executarAcao(tr, acao) {
+    var id = tr.dataset.linhaId;
+    var numero = tr.dataset.numero || '';
+    var processo = tr.dataset.processo || '';
+    var url = null;
+    var dados = { grupo: grupo };
+    var confirmar = null;
+
+    if (acao === 'sem-relatorio') {
+      url = urlComId(app.dataset.urlSem, id);
+      confirmar = tr.dataset.semRelatorio === '1'
+        ? ('Remover a marca de sem relatório do nº ' + numero + '?')
+        : ('Marcar o nº ' + numero + ' como sem relatório? A linha fica amarela.');
+    } else if (acao === 'desfazer') {
+      url = urlComId(app.dataset.urlDesfazer, id);
+      confirmar = 'Desfazer o relatório nº ' + numero + '?\nA linha fica verde e o próximo Gerar pode reusar no mesmo dia.';
+    } else if (acao === 'cancelar') {
+      url = urlComId(app.dataset.urlCancelar, id);
+      dados.destino_numero = 'excluir';
+      confirmar = 'Cancelar o relatório nº ' + numero + '?\nA linha fica vermelha — reuso só com número específico na análise.';
+    } else if (acao === 'apagar') {
+      url = urlComId(app.dataset.urlApagar, id);
+      confirmar = 'Apagar de verdade a linha do nº ' + (numero || '—') + '?';
+    } else if (acao === 'desvincular') {
+      url = urlComId(app.dataset.urlDesvincular, id);
+      confirmar = 'Desvincular o processo ' + processo + ' do nº ' + numero + '?';
+    } else if (acao === 'vincular') {
+      url = urlComId(app.dataset.urlVincular, id);
+      var informado = window.prompt(
+        'Informe o nº do processo para vincular ao relatório ' + numero + ':',
+        processo || '');
+      if (informado == null) return;
+      informado = String(informado).trim();
+      if (!informado) {
+        toast('Informe o número do processo.', false);
+        return;
+      }
+      dados.numero_processo = informado;
+    } else {
+      return;
+    }
+
+    if (confirmar && !window.confirm(confirmar)) return;
+
+    postForm(url, dados).then(function (res) {
+      if (!res.ok) {
+        toast((res.data && res.data.mensagem) || 'Ação não concluída.', false);
+        return;
+      }
+      toast(res.data.mensagem || 'OK', true);
+      if (res.data.apagada) {
+        tr.classList.add('is-gone');
+        setTimeout(function () { tr.remove(); }, 400);
+        return;
+      }
+      aplicarCss(tr, res.data);
+      if (acao === 'sem-relatorio') {
+        var btn = tr.querySelector('[data-acao="sem-relatorio"]');
+        if (btn) {
+          btn.innerHTML = '<span class="material-symbols-rounded">sticky_note_2</span> ' +
+            (res.data.sem_relatorio ? 'Tirar sem relatório' : 'Marcar como sem relatório');
+        }
+      }
+      if (acao === 'cancelar' || acao === 'desfazer' || acao === 'desvincular' || acao === 'vincular') {
+        window.location.reload();
+      }
+    }).catch(function () {
+      toast('Falha de rede.', false);
+    });
+  }
+
+  /* ---- drag colunas ---- */
+  var table = document.getElementById('sheetTable');
+  var tbody = table.tBodies[0];
+  var dragCampo = null;
+  var dragLinhaId = null;
+
+  function ordemColunas() {
+    return Array.prototype.map.call(
+      table.querySelectorAll('thead th[data-campo]'),
+      function (th) { return th.dataset.campo; }
+    );
+  }
+
+  function salvarOrdem(ordem) {
+    try { localStorage.setItem(storageKey, JSON.stringify(ordem)); } catch (e) {}
+  }
+
+  function reordenar(ordem) {
+    if (!ordem || !ordem.length) return;
+    var theadRow = table.tHead.rows[0];
+    var thMap = {};
+    Array.prototype.forEach.call(theadRow.cells, function (th) {
+      thMap[th.dataset.campo] = th;
+    });
+    var rowTh = thMap['__row'];
+    var menuTh = thMap['__menu'];
+    if (rowTh) theadRow.appendChild(rowTh);
+    ordem.forEach(function (campo) {
+      if (campo === '__menu' || campo === '__row') return;
+      if (thMap[campo]) theadRow.appendChild(thMap[campo]);
+    });
+    if (menuTh) theadRow.appendChild(menuTh);
+
+    Array.prototype.forEach.call(tbody.rows, function (tr) {
+      var tdMap = {};
+      Array.prototype.forEach.call(tr.cells, function (td) {
+        tdMap[td.dataset.campo] = td;
+      });
+      var rowTd = tdMap['__row'];
+      var menuTd = tdMap['__menu'];
+      if (rowTd) tr.appendChild(rowTd);
+      ordem.forEach(function (campo) {
+        if (campo === '__menu' || campo === '__row') return;
+        if (tdMap[campo]) tr.appendChild(tdMap[campo]);
+      });
+      if (menuTd) tr.appendChild(menuTd);
+    });
+  }
+
+  try {
+    var salva = JSON.parse(localStorage.getItem(storageKey) || 'null');
+    if (Array.isArray(salva) && salva.length) reordenar(salva);
+  } catch (e) {}
+
+  table.querySelectorAll('thead th[draggable="true"]').forEach(function (th) {
+    th.addEventListener('dragstart', function (ev) {
+      dragCampo = th.dataset.campo;
+      th.classList.add('is-dragging');
+      ev.dataTransfer.effectAllowed = 'move';
+      try { ev.dataTransfer.setData('text/plain', 'col:' + dragCampo); } catch (e) {}
+    });
+    th.addEventListener('dragend', function () {
+      th.classList.remove('is-dragging');
+      table.querySelectorAll('thead th.is-drop').forEach(function (el) {
+        el.classList.remove('is-drop');
+      });
+      dragCampo = null;
+    });
+    th.addEventListener('dragover', function (ev) {
+      if (!dragCampo || dragCampo === th.dataset.campo) return;
+      ev.preventDefault();
+      th.classList.add('is-drop');
+    });
+    th.addEventListener('dragleave', function () {
+      th.classList.remove('is-drop');
+    });
+    th.addEventListener('drop', function (ev) {
+      ev.preventDefault();
+      th.classList.remove('is-drop');
+      var origem = dragCampo;
+      var destino = th.dataset.campo;
+      if (!origem || origem === destino || destino === '__menu' || destino === '__row') return;
+      var ordem = ordemColunas().filter(function (c) {
+        return c !== '__menu' && c !== '__row';
+      });
+      var iFrom = ordem.indexOf(origem);
+      var iTo = ordem.indexOf(destino);
+      if (iFrom < 0 || iTo < 0) return;
+      ordem.splice(iFrom, 1);
+      ordem.splice(iTo, 0, origem);
+      reordenar(ordem);
+      salvarOrdem(ordem);
+    });
+  });
+
+  /* ---- drag linhas ---- */
+  function ordemLinhas() {
+    return Array.prototype.map.call(tbody.querySelectorAll('tr[data-linha-id]'), function (tr) {
+      return tr.dataset.linhaId;
+    });
+  }
+
+  function salvarOrdemLinhas() {
+    try { localStorage.setItem(storageRowsKey, JSON.stringify(ordemLinhas())); } catch (e) {}
+  }
+
+  function aplicarOrdemLinhas(ordem) {
+    if (!Array.isArray(ordem) || !ordem.length) return;
+    var mapa = {};
+    Array.prototype.forEach.call(tbody.querySelectorAll('tr[data-linha-id]'), function (tr) {
+      mapa[tr.dataset.linhaId] = tr;
+    });
+    ordem.forEach(function (id) {
+      if (mapa[id]) tbody.appendChild(mapa[id]);
+    });
+    Object.keys(mapa).forEach(function (id) {
+      if (ordem.indexOf(id) < 0) tbody.appendChild(mapa[id]);
+    });
+  }
+
+  try {
+    var salvaLinhas = JSON.parse(localStorage.getItem(storageRowsKey) || 'null');
+    if (Array.isArray(salvaLinhas) && salvaLinhas.length) aplicarOrdemLinhas(salvaLinhas);
+  } catch (e) {}
+
+  function limparDropLinhas() {
+    tbody.querySelectorAll('tr.is-row-drop').forEach(function (tr) {
+      tr.classList.remove('is-row-drop');
+    });
+  }
+
+  tbody.addEventListener('dragstart', function (ev) {
+    var grip = ev.target.closest('[data-row-drag]');
+    if (!grip) return;
+    var tr = grip.closest('tr');
+    if (!tr || !tr.dataset.linhaId) return;
+    fecharMenus();
+    dragLinhaId = tr.dataset.linhaId;
+    tr.classList.add('is-row-dragging');
+    ev.dataTransfer.effectAllowed = 'move';
+    try { ev.dataTransfer.setData('text/plain', 'row:' + dragLinhaId); } catch (e) {}
+  });
+
+  tbody.addEventListener('dragend', function (ev) {
+    var tr = ev.target.closest('tr');
+    if (tr) tr.classList.remove('is-row-dragging');
+    limparDropLinhas();
+    dragLinhaId = null;
+  });
+
+  tbody.addEventListener('dragover', function (ev) {
+    if (!dragLinhaId) return;
+    var tr = ev.target.closest('tr[data-linha-id]');
+    if (!tr || tr.dataset.linhaId === dragLinhaId) return;
+    ev.preventDefault();
+    limparDropLinhas();
+    tr.classList.add('is-row-drop');
+  });
+
+  tbody.addEventListener('drop', function (ev) {
+    if (!dragLinhaId) return;
+    ev.preventDefault();
+    var destino = ev.target.closest('tr[data-linha-id]');
+    var origem = tbody.querySelector('tr[data-linha-id="' + dragLinhaId + '"]');
+    limparDropLinhas();
+    if (!destino || !origem || destino === origem) return;
+    var rect = destino.getBoundingClientRect();
+    var antes = (ev.clientY - rect.top) < rect.height / 2;
+    if (antes) {
+      tbody.insertBefore(origem, destino);
+    } else {
+      tbody.insertBefore(origem, destino.nextSibling);
+    }
+    origem.classList.remove('is-row-dragging');
+    salvarOrdemLinhas();
+    toast('Ordem das linhas atualizada neste navegador.', true);
+    dragLinhaId = null;
+  });
+})();
+</script>
+{% endblock %}

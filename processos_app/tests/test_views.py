@@ -196,20 +196,24 @@ class TelasPorPapelTest(BaseProcessoTestCase):
         tramitacao.registrar_saida([finalizado.id], self.protocolo)
         finalizado.refresh_from_db()
         data = finalizado.data_saida.isoformat()
-        sem_periodo = self._get(
-            self.protocolo, 'exportar_finalizados_excel', esperado=400)
-        self.assertEqual(sem_periodo['Content-Type'], 'application/json')
+
+        # Sem período explícito: modelo padrão "hoje" (pode estar vazio).
+        hoje = self._get(self.protocolo, 'exportar_finalizados_excel')
+        self.assertIn('spreadsheet', hoje['Content-Type'])
 
         resposta = self._get(
             self.protocolo, 'exportar_finalizados_excel',
-            query=f'?data_inicial={data}&data_final={data}')
+            query=f'?periodo=personalizado&data_inicial={data}&data_final={data}')
         self.assertIn('spreadsheet', resposta['Content-Type'])
 
+        todas = self._get(
+            self.protocolo, 'exportar_finalizados_excel', query='?periodo=todas')
+        self.assertIn('spreadsheet', todas['Content-Type'])
+
         pagina = self._get(self.protocolo, 'listar_finalizados')
-        self.assertContains(pagina, 'Exportar Excel')
-        self.assertContains(pagina, 'modalExportarExcel')
-        self.assertContains(pagina, 'Data de saída — de')
-        self.assertContains(pagina, 'Data de saída — até')
+        self.assertContains(pagina, 'Exportar saídas')
+        self.assertContains(pagina, reverse('exportar_saidas'))
+        self.assertNotContains(pagina, 'modalExportarExcel')
 
     def test_dashboard_mostra_graficos_para_gestao_e_administrador(self):
         from .base import criar_usuario

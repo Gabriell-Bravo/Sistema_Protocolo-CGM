@@ -84,6 +84,13 @@ class PrioridadeAutoTest(BaseProcessoTestCase):
             prioridade_auto.detectar_codigo({'contratada': 'Empresa Qualquer'}),
         )
 
+    def test_sugerir_retorna_termo_e_nome(self):
+        achado = prioridade_auto.sugerir({'contratada': 'JP Serviços'})
+        self.assertEqual(achado['codigo'], 'URGENTE')
+        self.assertEqual(achado['termo'], 'JP')
+        self.assertEqual(achado['nome'], 'Urgente')
+        self.assertEqual(achado['prazo_dias'], 1)
+
     def test_criacao_aplica_prioridade_e_prazo(self):
         obras = self.novo_processo(
             contratada='HYDRA Engenharia',
@@ -108,3 +115,12 @@ class PrioridadeAutoTest(BaseProcessoTestCase):
         self.assertEqual(urgente.prioridade, 'URGENTE')
         self.assertEqual(urgente.prazo_dias, 1)
         self.assertEqual(urgente.prioridade_linha_class, 'tr-prio-urgente')
+
+    def test_protocolo_pode_recusar_sugestao_automatica(self):
+        processo = self.novo_processo(
+            contratada='JP Serviços',
+            prioridade='NORMAL',
+            manter_prioridade_informada=True,
+            numero_processo='prio-recusa/2026',
+        )
+        self.assertEqual(processo.prioridade, 'NORMAL')

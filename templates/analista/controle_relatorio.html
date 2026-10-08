@@ -119,7 +119,13 @@
                                 {% elif col.campo == 'contratada' %}
                                     {{ linha.contratada|default:"—" }}
                                 {% elif col.campo == 'objeto' %}
-                                    {{ linha.objeto|truncatechars:80|default:"—" }}
+                                    {% if linha.objeto %}
+                                    <span class="cell-preview">{{ linha.objeto|truncatechars:70 }}</span>
+                                    {% if linha.objeto|length > 70 %}
+                                    <button type="button" class="link-more"
+                                            onclick="visualizarObservacao('{{ linha.objeto|escapejs }}', '{{ layout_planilha.rotulos.objeto|default:"Objeto"|escapejs }}')">Ver tudo</button>
+                                    {% endif %}
+                                    {% else %}—{% endif %}
                                 {% elif col.campo == 'valor' %}
                                     {{ linha.valor|default:"—" }}
                                 {% elif col.campo == 'periodo' %}
@@ -129,7 +135,13 @@
                                 {% elif col.campo == 'status_analise' %}
                                     {{ linha.status_analise_display }}
                                 {% elif col.campo == 'observacao' %}
-                                    {{ linha.observacao|truncatechars:60|default:"—" }}
+                                    {% if linha.observacao %}
+                                    <span class="cell-preview">{{ linha.observacao|truncatechars:70 }}</span>
+                                    {% if linha.observacao|length > 70 %}
+                                    <button type="button" class="link-more"
+                                            onclick="visualizarObservacao('{{ linha.observacao|escapejs }}', '{{ layout_planilha.rotulos.observacao|default:"Observação"|escapejs }}')">Ver tudo</button>
+                                    {% endif %}
+                                    {% else %}—{% endif %}
                                 {% else %}—{% endif %}
                             </td>
                             {% endfor %}
@@ -908,5 +920,19 @@
         </section>
 
     {% endif %}
+</div>
+
+<div class="modal" id="observacaoModal">
+    <div class="modal__dialog">
+        <div class="modal__header">
+            <span class="modal__title" data-modal-title>Conteúdo completo</span>
+            <button type="button" class="icon-btn" data-modal-close aria-label="Fechar">
+                <span class="material-symbols-rounded">close</span>
+            </button>
+        </div>
+        <div class="modal__body">
+            <p class="modal__content" data-modal-content></p>
+        </div>
+    </div>
 </div>
 {% endblock %}

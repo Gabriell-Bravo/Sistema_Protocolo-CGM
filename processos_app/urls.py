@@ -5,6 +5,7 @@ from django.urls import path
 from django.views.generic import TemplateView
 from . import views
 from . import views_anexos as anexos
+from . import views_exportacao as exp
 from . import views_gestao as gest
 from . import views_pendencias as pend
 from . import views_relatorios as rel
@@ -21,7 +22,9 @@ urlpatterns = [
          views.ver_historico_processo, name='ver_historico_processo'),
     path('atualizar/<int:id>', views.atualizar_processo, name='atualizar_processo'),
     path('finalizados', views.listar_finalizados, name='listar_finalizados'),
-    path('exportar_finalizados_excel', views.exportar_finalizados_excel,
+    path('finalizados/exportar/', exp.exportar_saidas,
+         name='exportar_saidas'),
+    path('exportar_finalizados_excel', exp.exportar_finalizados_excel,
          name='exportar_finalizados_excel'),
     path('get_process_by_number/<str:numero_processo>',
          views.get_process_by_number, name='get_process_by_number'),
@@ -153,6 +156,8 @@ urlpatterns = [
          rel.cancelar_destino, name='controle_relatorio_cancelar_destino'),
     path('controle-relatorio/linha/<int:linha_id>/cancelar/',
          rel.cancelar_linha, name='controle_relatorio_cancelar_linha'),
+    path('controle-relatorio/linha/<int:linha_id>/desfazer/',
+         rel.desfazer_linha, name='controle_relatorio_desfazer_linha'),
     path('controle-relatorio/linha/<int:linha_id>/editar/',
          rel.editar_linha, name='controle_relatorio_editar_linha'),
     path('controle-relatorio/linha/<int:linha_id>/sem-relatorio/',

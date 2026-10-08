@@ -221,6 +221,17 @@
         </div>
     {% endif %}
 
+    {% if aviso_numero_reaproveitavel %}
+        <div class="alert alert--warning" id="avisoNumeroReservado" role="status">
+            <span class="material-symbols-rounded">confirmation_number</span>
+            <span>
+                Este processo saiu sem relatório e tem o nº
+                <strong>{{ aviso_numero_reaproveitavel.numero }}</strong> reservado.
+                Clique em <strong>Usar nº {{ aviso_numero_reaproveitavel.numero }}</strong> para confirmar.
+            </span>
+        </div>
+    {% endif %}
+
     {% if pode_devolver_assinatura %}
         <section class="card">
             <div class="card__header">
@@ -370,6 +381,9 @@
                         {% if pode_editar %}
                             {% if processo.numero_relatorio %}
                             Use o lápis para trocar o número e a data. Salvar análise grava os demais campos sem alterar o número.
+                            {% elif aviso_numero_reaproveitavel %}
+                            Há nº <strong>{{ aviso_numero_reaproveitavel.numero }}</strong> reservado
+                            (saiu sem relatório). Confirme no botão abaixo.
                             {% else %}
                             <strong>Salvar análise</strong> grava os dados sem emitir número.
                             <strong>Gerar número</strong> emite o sequencial.
@@ -628,6 +642,36 @@
     {% endif %}
     </section>
 
+    {% if aviso_numero_reaproveitavel %}
+    <div class="modal" id="modalNumeroReservado" role="dialog" aria-labelledby="tituloNumeroReservado">
+        <div class="modal__dialog modal__dialog--sm">
+            <div class="modal__header">
+                <span class="modal__title" id="tituloNumeroReservado">Usar número reservado?</span>
+                <button type="button" class="icon-btn" data-modal-close="modalNumeroReservado" aria-label="Fechar">
+                    <span class="material-symbols-rounded">close</span>
+                </button>
+            </div>
+            <div class="modal__body">
+                <p style="margin:0 0 16px; line-height:1.45;">
+                    Este processo saiu sem relatório e tem o número de relatório
+                    <strong>{{ aviso_numero_reaproveitavel.numero }}</strong> reservado.
+                    Deseja utilizar esse número?
+                </p>
+                <div class="form-actions" style="margin:0;">
+                    <button type="button" class="btn btn--outline" data-modal-close="modalNumeroReservado">
+                        Cancelar
+                    </button>
+                    <button type="submit" form="formAnalise" name="acao" value="gerar_numero"
+                            class="btn btn--primary" id="btnConfirmarNumeroReservado">
+                        <span class="material-symbols-rounded">check</span>
+                        Usar nº {{ aviso_numero_reaproveitavel.numero }}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     {% if pode_liberar or pode_direcionar or pode_declinar %}
     <div class="modal" id="modalEncaminhar" role="dialog" aria-labelledby="tituloEncaminhar">
         <div class="modal__dialog modal__dialog--sm">
@@ -840,11 +884,22 @@
                     <span class="material-symbols-rounded">save</span>
                     Salvar análise
                 </button>
-                {% if eh_liquidacao and not processo.numero_relatorio and not processo.sem_relatorio %}
-                <button type="submit" form="formAnalise" name="acao" value="gerar_numero" class="btn btn--primary" id="btnGerarNumero">
+                {% if eh_liquidacao and not processo.numero_relatorio %}
+                    {% if not processo.sem_relatorio or aviso_numero_reaproveitavel %}
+                {% if aviso_numero_reaproveitavel %}
+                <button type="button" class="btn btn--primary" id="btnGerarNumero"
+                        data-modal-open="modalNumeroReservado">
+                    <span class="material-symbols-rounded">pin</span>
+                    Usar nº {{ aviso_numero_reaproveitavel.numero }}
+                </button>
+                {% else %}
+                <button type="submit" form="formAnalise" name="acao" value="gerar_numero"
+                        class="btn btn--primary" id="btnGerarNumero">
                     <span class="material-symbols-rounded">pin</span>
                     Gerar número
                 </button>
+                {% endif %}
+                    {% endif %}
                 {% endif %}
                 {% endif %}
                 {% if pode_liberar or pode_direcionar or pode_declinar %}
