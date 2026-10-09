@@ -1,0 +1,80 @@
+<tr data-id="{{ processo.id }}" class="{{ processo.prioridade_linha_class }}">
+    <td class="editable col-sticky" data-field="numero_processo">{{ processo.numero_processo }}</td>
+    <td class="editable" data-field="volume">{{ processo.volume|default:'' }}</td>
+    <td class="editable" data-field="secretaria">{{ processo.secretaria }}</td>
+    <td class="editable" data-field="data_entrada">{{ processo.data_entrada|date:"Y-m-d" }}</td>
+    <td class="editable" data-field="hora_entrada">{{ processo.hora_entrada|time:"H:i" }}</td>
+    <td class="editable" data-field="data_saida" id="data_saida_{{ processo.id }}">{{ processo.data_saida|default:''|date:"Y-m-d" }}</td>
+    <td class="editable" data-field="hora_saida" id="hora_saida_{{ processo.id }}">{{ processo.hora_saida|default:''|time:"H:i" }}</td>
+    <td><span class="badge badge--situacao {% if processo.situacao_tramite == 'EM_ANALISE' %}badge--mine{% elif processo.situacao_tramite == 'AGUARDANDO_ASSINATURA' %}badge--primary{% endif %}">{{ processo.situacao_exibicao }}</span></td>
+    <td>
+        <span class="badge badge--dot {% if processo.prazo_status == 'atrasado' %}badge--danger{% elif processo.prazo_status == 'hoje' or processo.prazo_status == 'atencao' %}badge--warning{% elif processo.prazo_status == 'ok' %}badge--success{% endif %}">
+            {{ processo.prazo_formatado }}
+        </span>
+    </td>
+    <td class="editable" data-field="destino">{{ processo.destino|default:'' }}</td>
+    <td class="editable" data-field="genero">{{ processo.genero }}</td>
+    <td class="editable" data-field="especie">{{ processo.especie }}</td>
+    <td class="editable cell-wrap" data-field="objeto" data-full-text="{{ processo.objeto|default:'' }}">
+        <span class="cell-preview">{{ processo.objeto|truncatechars:70 }}</span>
+        {% if processo.objeto and processo.objeto|length > 70 %}
+            <button type="button" class="link-more" onclick="visualizarObservacao('{{ processo.objeto|escapejs }}', 'Objeto')">Ver tudo</button>
+        {% endif %}
+    </td>
+    <td class="editable" data-field="contratada">{{ processo.contratada|default:'' }}</td>
+    <td class="editable" data-field="recorrente">{{ processo.recorrente|default:'NAO' }}</td>
+    <td class="editable" data-field="prioridade" data-prioridade-raw="{{ processo.prioridade }}">
+        {% include "includes/badge_prioridade.html" with processo=processo %}
+    </td>
+    <td class="" data-field="tecnico">{{ processo.nome_analista|default:'' }}</td>
+    <td class="editable" data-field="numero_despacho">{{ processo.numero_despacho|default:'' }}</td>
+    <td class="editable cell-wrap" data-field="observacao_protocolo" data-full-text="{{ processo.observacao_protocolo|default:'' }}">
+        <span class="cell-preview">{{ processo.observacao_protocolo|default:''|truncatechars:70 }}</span>
+        {% if processo.observacao_protocolo and processo.observacao_protocolo|length > 70 %}
+            <button type="button" class="link-more" onclick="visualizarObservacao('{{ processo.observacao_protocolo|escapejs }}', 'Observação')">Ver tudo</button>
+        {% endif %}
+    </td>
+    <td class="editable" data-field="valor">{{ processo.valor|default:'' }}</td>
+    <td class="editable" data-field="periodo">{{ processo.periodo|default:'' }}</td>
+    <td class="editable" data-field="status_analise" data-status-analise-raw="{{ processo.status_analise }}">
+        <span class="badge {% if processo.status_analise == 'PROSSEGUIMENTO_SEM_RESSALVA' %}badge--success{% elif processo.status_analise == 'PROSSEGUIMENTO_COM_RESSALVA' %}badge--warning{% elif processo.status_analise == 'NAO_PROSSEGUIMENTO' or processo.status_analise == 'DEVOLUCAO_PARA_SANEAMENTO' %}badge--danger{% endif %}">{{ processo.get_status_analise_display }}</span>
+    </td>
+    <td>
+        {% if processo.pendencias_abertas %}
+            <span class="badge badge--danger">{{ processo.pendencias_abertas }} aberta{{ processo.pendencias_abertas|pluralize:"s" }}</span>
+        {% else %}
+            <span class="badge">Não</span>
+        {% endif %}
+    </td>
+    <td class="col-actions">
+        <div class="actions">
+            {% if can_edit %}
+                <button type="button" class="icon-btn icon-btn--primary" title="Editar" onclick="editarProcesso(this)">
+                    <span class="material-symbols-rounded">edit</span>
+                </button>
+            {% endif %}
+            {% if processo.pode_registrar_saida %}
+                <button type="button" class="icon-btn icon-btn--warning"
+                        title="Registrar saída"
+                        onclick="marcarSaida('{{ processo.id }}')">
+                    <span class="material-symbols-rounded">logout</span>
+                </button>
+            {% endif %}
+            <a href="{% url 'ver_historico_processo' process_id=processo.id %}" class="icon-btn icon-btn--count" title="Histórico — {{ processo.total_passagens|default:1 }} passagem{{ processo.total_passagens|default:1|pluralize:'ns' }}">
+                <span class="material-symbols-rounded">history</span>
+                <span class="icon-btn__count">{{ processo.total_passagens|default:1 }}</span>
+            </a>
+            {% include "includes/botao_desfazer.html" %}
+            {% if can_delete %}
+                <button type="button" class="icon-btn icon-btn--danger" title="Cancelar processo (o registro é preservado)" onclick="deletarProcesso('{{ processo.id }}')">
+                    <span class="material-symbols-rounded">block</span>
+                </button>
+            {% endif %}
+            {% if can_apagar %}
+                <button type="button" class="icon-btn icon-btn--danger" title="Excluir processo" onclick="excluirProcesso('{{ processo.id }}', '{{ processo.numero_processo|escapejs }}')">
+                    <span class="material-symbols-rounded">delete</span>
+                </button>
+            {% endif %}
+        </div>
+    </td>
+</tr>

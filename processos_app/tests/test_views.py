@@ -625,6 +625,14 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         finalizado.save(update_fields=['numero_relatorio'])
 
         self.client.force_login(self.protocolo)
+        # Padrão Todos: reflexo da fila — analisado ou não, enquanto não sair.
+        todos = self.client.get(reverse('listar_processos'))
+        self.assertEqual(todos.context['fase'], 'todos')
+        self.assertContains(todos, pendente.numero_processo)
+        self.assertContains(todos, finalizado.numero_processo)
+        self.assertContains(todos, 'Licitações e Contratos')
+        self.assertContains(todos, 'Liquidação')
+
         pend = self.client.get(reverse('listar_processos') + '?fase=pendentes')
         self.assertContains(pend, 'Pendentes')
         self.assertContains(pend, pendente.numero_processo)
@@ -633,6 +641,27 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         fim = self.client.get(reverse('listar_processos') + '?fase=finalizados')
         self.assertContains(fim, finalizado.numero_processo)
         self.assertNotContains(fim, pendente.numero_processo)
+
+    def test_saida_remove_de_ativos_e_da_fila_analista(self):
+        processo = self.novo_processo(
+            self.especie_liq, numero_processo='saida-fila/2026')
+        self.client.force_login(self.protocolo)
+        ativos = self.client.get(reverse('listar_processos'))
+        self.assertContains(ativos, 'saida-fila/2026')
+
+        self.client.force_login(self.analista_liq)
+        fila = self.client.get(reverse('area_analista'))
+        self.assertContains(fila, 'saida-fila/2026')
+
+        tramitacao.registrar_saida_direta(processo.id, self.protocolo)
+
+        self.client.force_login(self.protocolo)
+        ativos2 = self.client.get(reverse('listar_processos'))
+        self.assertNotContains(ativos2, 'saida-fila/2026')
+
+        self.client.force_login(self.analista_liq)
+        fila2 = self.client.get(reverse('area_analista'))
+        self.assertNotContains(fila2, 'saida-fila/2026')
 
     def test_fila_padrao_mostra_quem_esta_analisando_e_esconde_o_controlador(self):
         disponivel = self.novo_processo(numero_processo='1001/2026')
@@ -705,6 +734,7 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         sem_protocolo = svc_relatorios.salvar_nova_analise(self.analista_liq, {
             'numero_processo': 'fila-nova/2026',
             'grupo': 'LIQUIDACOES',
+            'gerar_numero': '1',
             'data_relatorio': '2026-10-08',
             'objeto': 'Stub Nova análise',
             'analista': 'Caio Liq',

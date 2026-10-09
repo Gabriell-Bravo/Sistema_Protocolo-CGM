@@ -50,6 +50,10 @@ def _ordenar_fila(consulta):
 
 def consultar_ativos(usuario, filtros):
     """Mesmo universo da tela Processos Ativos / Processos CGM."""
+    from django.db.models import Exists, OuterRef
+
+    from processos_app.models import EventoProcesso
+
     from . import secretaria_cgm as svc_cgm
 
     if filtros.get('aba_cgm'):
@@ -57,7 +61,18 @@ def consultar_ativos(usuario, filtros):
             return Processo.objects.none()
         consulta = svc_cgm.apenas_processos_cgm(tramitacao.ativos())
     else:
-        consulta = perm.filtrar_por_grupo(usuario, tramitacao.ativos())
+        # Reflexo da fila: Licitações/Liquidações com entrada pelo Protocolo.
+        cadastro = EventoProcesso.objects.filter(
+            processo_id=OuterRef('pk'),
+            tipo='PROCESSO_CADASTRADO',
+        )
+        consulta = (
+            tramitacao.ativos()
+            .filter(genero__in=['LICITACOES_E_CONTRATOS', 'LIQUIDACOES'])
+            .filter(Exists(cadastro))
+            .exclude(observacao_protocolo__startswith='Entrada via Nova análise')
+        )
+        consulta = perm.filtrar_por_grupo(usuario, consulta)
 
     consulta = consulta.select_related(
         'analista_responsavel', 'prioridade_fk', 'secretaria_fk')

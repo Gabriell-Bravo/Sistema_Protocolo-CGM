@@ -1,0 +1,53 @@
+<section class="fila-grupo fila-grupo--{{ grupo_css|default:'ativos' }}">
+    <div class="fila-grupo__banner">
+        <span class="material-symbols-rounded">{{ icone|default:'folder_open' }}</span>
+        <span class="fila-grupo__title">{{ titulo }}</span>
+        <span class="fila-grupo__count">{{ processos|length }} processo{{ processos|length|pluralize:"s" }}</span>
+    </div>
+    <div class="table-scroll">
+        <table class="table" {% if tabela_id %}id="{{ tabela_id }}"{% endif %}>
+            <thead>
+                <tr>
+                    <th class="col-sticky" data-column-lock="1">N° Processo</th>
+                    <th>Volume</th>
+                    <th>Secretaria</th>
+                    <th>Data Entrada</th>
+                    <th>Hora Entrada</th>
+                    <th>Data Saída</th>
+                    <th>Hora Saída</th>
+                    <th>Situação</th>
+                    <th>Prazo</th>
+                    <th>Destino</th>
+                    <th>Gênero</th>
+                    <th>Espécie</th>
+                    <th>Objeto</th>
+                    <th>Contratada / Favorecido / Interessado</th>
+                    <th>Recorrente</th>
+                    <th>Prioridade</th>
+                    <th>Analista</th>
+                    <th>N° Despacho</th>
+                    <th>Observação</th>
+                    <th>Valor</th>
+                    <th>Período</th>
+                    <th>Status Análise</th>
+                    <th>Diligência</th>
+                    <th class="col-actions" data-column-lock="1">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for processo in processos %}
+                    {% include "includes/_linha_processo_ativo.html" %}
+                {% empty %}
+                <tr>
+                    <td colspan="24">
+                        <div class="empty empty--compact">
+                            <span class="material-symbols-rounded">inbox</span>
+                            <div class="empty__title">Nenhum processo neste grupo</div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
