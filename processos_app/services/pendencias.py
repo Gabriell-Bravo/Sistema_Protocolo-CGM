@@ -165,13 +165,10 @@ def cancelar(pendencia_id, usuario, motivo):
     """Pendência não é apagada. Cadastrada indevidamente, é cancelada."""
     pendencia = _travar(pendencia_id)
 
-    autorizado = (
-        perm.pode_resolver_pendencia(usuario, pendencia)
-        or perm.is_gestao(usuario)
-    )
     perm.assert_permissao(
-        autorizado,
-        'Só o responsável técnico ou a Gestão podem cancelar a diligência.')
+        perm.pode_cancelar_pendencia(usuario, pendencia),
+        'Só o responsável técnico, a Gestão ou o administrador podem '
+        'cancelar a diligência.')
 
     motivo = (motivo or '').strip()
     if not motivo:
@@ -188,6 +185,35 @@ def cancelar(pendencia_id, usuario, motivo):
                                   'motivo_cancelamento'])
 
     registrar_evento_pendencia(pendencia, 'CANCELADA', usuario, motivo)
+    return pendencia
+
+
+@transaction.atomic
+def editar_descricao(pendencia_id, usuario, nova_descricao):
+    """Corrige o texto de uma diligência ainda aberta."""
+    pendencia = _travar(pendencia_id)
+
+    perm.assert_permissao(
+        perm.pode_editar_pendencia(usuario, pendencia),
+        'Só o responsável técnico, a Gestão ou o administrador podem '
+        'editar a diligência.')
+
+    nova = (nova_descricao or '').strip()
+    if not nova:
+        raise TransicaoInvalida('Descreva a diligência antes de salvar.')
+    if pendencia.status in ('RESOLVIDA', 'CANCELADA'):
+        raise TransicaoInvalida(
+            f'Diligência em "{pendencia.get_status_display()}" não pode '
+            'ser editada.')
+
+    anterior = pendencia.descricao or ''
+    if anterior.strip() == nova:
+        return pendencia
+
+    pendencia.descricao = nova
+    pendencia.save(update_fields=['descricao'])
+    registrar_diff(
+        pendencia.processo, 'pendencia_editada', anterior, nova, usuario)
     return pendencia
 
 

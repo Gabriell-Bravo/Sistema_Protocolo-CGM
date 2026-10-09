@@ -140,3 +140,17 @@ def cancelar_pendencia(request, pendencia_id):
     except (PermissionDenied, ValidationError) as exc:
         _erro(request, exc)
     return redirect(destino) if destino else _voltar_para_processo(pendencia_id)
+
+
+@login_required
+@require_POST
+def editar_pendencia(request, pendencia_id):
+    """Corrige o texto de diligência aberta (responsável, Gestão ou admin)."""
+    destino = request.POST.get('next')
+    try:
+        svc.editar_descricao(
+            pendencia_id, request.user, request.POST.get('descricao'))
+        messages.success(request, 'Diligência atualizada.')
+    except (PermissionDenied, ValidationError) as exc:
+        _erro(request, exc)
+    return redirect(destino) if destino else _voltar_para_processo(pendencia_id)

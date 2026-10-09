@@ -376,8 +376,28 @@ def pode_resolver_pendencia(user, pendencia):
 
 
 def pode_criar_pendencia(user, processo):
-    """item 25: a pendência nasce da análise técnica."""
-    return pode_analisar_processo(user, processo)
+    """item 25: nasce da análise; o administrador também pode incluir."""
+    return pode_analisar_processo(user, processo) or eh_administrador(user)
+
+
+def pode_cancelar_pendencia(user, pendencia):
+    """item 32: responsável técnico, Gestão ou administrador."""
+    return (
+        pode_resolver_pendencia(user, pendencia)
+        or is_gestao(user)
+        or eh_administrador(user)
+    )
+
+
+def pode_editar_pendencia(user, pendencia):
+    """Corrigir texto de diligência aberta: responsável, Gestão ou admin."""
+    if not pendencia.esta_aberta:
+        return False
+    return (
+        pode_resolver_pendencia(user, pendencia)
+        or is_gestao(user)
+        or eh_administrador(user)
+    )
 
 
 def pode_ver_dashboard(user):

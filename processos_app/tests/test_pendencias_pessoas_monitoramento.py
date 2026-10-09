@@ -50,6 +50,40 @@ class PendenciasTest(BaseProcessoTestCase):
         pendencias.cancelar(p.id, self.gestao, 'Lançada por engano')
         self.assertEqual(Pendencia.objects.get(id=p.id).status, 'CANCELADA')
 
+    def test_admin_cancela_e_edita_diligencia_de_outro(self):
+        from processos_app.tests.base import criar_usuario
+
+        admin = criar_usuario('admin_dil', 'GESTAO', is_superuser=True)
+        processo = self.processo_em_analise()
+        p = pendencias.criar(processo.id, self.analista_lic, 'Texto original')
+
+        pendencias.editar_descricao(p.id, admin, 'Texto corrigido pelo admin')
+        p.refresh_from_db()
+        self.assertEqual(p.descricao, 'Texto corrigido pelo admin')
+
+        self.client.force_login(admin)
+        pagina = self.client.get(reverse('analista_processo', args=[processo.id]))
+        self.assertContains(pagina, 'Texto corrigido pelo admin')
+        self.assertContains(pagina, 'Salvar texto')
+        self.assertContains(pagina, '/pendencias/')
+        self.assertContains(pagina, '/editar/')
+
+        resp = self.client.post(
+            reverse('remover_pendencia', args=[p.id]),
+            {'motivo': 'Cadastrada indevidamente'},
+        )
+        self.assertEqual(resp.status_code, 302)
+        p.refresh_from_db()
+        self.assertEqual(p.status, 'CANCELADA')
+
+        resp_edit = self.client.post(
+            reverse('pend_editar', args=[p.id]),
+            {'descricao': 'Não pode editar cancelada'},
+        )
+        self.assertEqual(resp_edit.status_code, 302)
+        p.refresh_from_db()
+        self.assertEqual(p.descricao, 'Texto corrigido pelo admin')
+
     def test_adicionar_pendencia_grava_analise_ja_preenchida(self):
         processo = self.processo_em_analise(completo=False)
         self.client.force_login(self.analista_lic)

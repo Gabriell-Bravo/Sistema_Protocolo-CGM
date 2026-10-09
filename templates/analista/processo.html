@@ -772,7 +772,21 @@ A análise em andamento será limpa (incluindo número de relatório, se houver)
                 {% for pendencia in pendencias %}
                     <li class="pendencia-item">
                         <div>
+                            {% if pendencia.pode_editar_texto %}
+                            <form action="{% url 'pend_editar' pendencia.id %}" method="post" class="pendencia-edit">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.path }}">
+                                <textarea name="descricao" class="textarea" rows="2" required>{{ pendencia.descricao }}</textarea>
+                                <div class="pendencia-item__acoes" style="margin-top:8px;">
+                                    <button type="submit" class="btn btn--primary btn--sm">
+                                        <span class="material-symbols-rounded">save</span>
+                                        Salvar texto
+                                    </button>
+                                </div>
+                            </form>
+                            {% else %}
                             <div class="pendencia-item__text">{{ pendencia.descricao }}</div>
+                            {% endif %}
                             <div class="pendencia-item__meta">
                                 <span class="badge {% if pendencia.status == 'AGUARDANDO_ATENDIMENTO' %}badge--warning{% elif pendencia.status == 'ATENDIMENTO_INDICADO' %}badge--primary{% elif pendencia.status == 'RESOLVIDA' %}badge--success{% endif %}">{{ pendencia.get_status_display }}</span>
                                 · {{ pendencia.criada_em_formatted }}
@@ -811,7 +825,7 @@ A análise em andamento será limpa (incluindo número de relatório, se houver)
                         </div>
 
                         {# item 32: cancelar exige motivo; a pendência não é apagada #}
-                        {% if pode_editar and pendencia.esta_aberta %}
+                        {% if pendencia.pode_cancelar %}
                         <form action="{% url 'remover_pendencia' pendencia.id %}" method="post"
                               onsubmit="return pedirMotivoCancelamento(this);">
                             {% csrf_token %}

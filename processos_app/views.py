@@ -1671,11 +1671,16 @@ def analista_processo(request, process_id):
 
     prazos_service.anotar(processo)
 
+    pendencias = list(processo.pendencias.select_related(
+        'criada_por', 'responsavel_tecnico', 'atendimento_indicado_por',
+        'cancelada_por').all())
+    for item in pendencias:
+        item.pode_editar_texto = perm.pode_editar_pendencia(request.user, item)
+        item.pode_cancelar = perm.pode_cancelar_pendencia(request.user, item)
+
     return render(request, 'analista/processo.html', {
         'processo': processo,
-        'pendencias': processo.pendencias.select_related(
-            'criada_por', 'responsavel_tecnico', 'atendimento_indicado_por',
-            'cancelada_por').all(),
+        'pendencias': pendencias,
         'pendencias_anteriores': svc_pendencias.abertas_de_passagens_anteriores(
             processo),
         'somente_leitura': (
@@ -1769,8 +1774,15 @@ def texto_para_historico(campo, valor):
     return str(valor)
 
 
+def _pode_atuar_pendencia_http(user):
+    """Analista, administrador ou Gestão — regras finas ficam no service."""
+    return (perm.is_analista(user)
+            or perm.eh_administrador(user)
+            or perm.is_gestao(user))
+
+
 @login_required
-@user_passes_test(pode_usar_area_analista)
+@user_passes_test(_pode_atuar_pendencia_http)
 def adicionar_pendencia(request, process_id):
     processo = get_object_or_404(Processo, id=process_id)
 
@@ -1799,7 +1811,7 @@ def adicionar_pendencia(request, process_id):
 
 
 @login_required
-@user_passes_test(pode_usar_area_analista)
+@user_passes_test(_pode_atuar_pendencia_http)
 def remover_pendencia(request, pendencia_id):
     pendencia = get_object_or_404(Pendencia, id=pendencia_id)
     processo = pendencia.processo

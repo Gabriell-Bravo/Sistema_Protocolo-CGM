@@ -119,6 +119,8 @@ urlpatterns = [
          pend.atendimento_insuficiente, name='pend_atendimento_insuficiente'),
     path('pendencias/<int:pendencia_id>/cancelar/',
          pend.cancelar_pendencia, name='pend_cancelar'),
+    path('pendencias/<int:pendencia_id>/editar/',
+         pend.editar_pendencia, name='pend_editar'),
 
     # ------------------------------------------------------------------
     # Bloco C — cadastros parametrizáveis e Gestão de Pessoas CGM
