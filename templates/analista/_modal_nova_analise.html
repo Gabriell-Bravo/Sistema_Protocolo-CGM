@@ -1,10 +1,11 @@
-{# Modal Nova análise — mesmos blocos da tela analista/processo.html. #}
+{# Modal Nova análise — Liquidações (planilha) ou Licitações (arquivo/obs/pendências). #}
 {% if pode_nova_analise %}
-{% with L=layout_planilha|default_if_none:None %}
+{% with L=layout_planilha|default_if_none:None modo=nova_analise_modo|default:'liquidacao' %}
 <div class="modal" id="modalNovaAnalise" role="dialog" aria-labelledby="tituloNovaAnalise"
      data-url-buscar="{% url 'controle_relatorio_nova_analise_buscar' %}"
      data-url-salvar="{% url 'controle_relatorio_nova_analise_salvar' %}"
-     data-grupo-default="{{ nova_analise_grupo|default:'LIQUIDACOES' }}">
+     data-grupo-default="{{ nova_analise_grupo|default:'LIQUIDACOES' }}"
+     data-modo="{{ modo }}">
     <div class="modal__dialog modal__dialog--70">
         <div class="modal__header">
             <span class="modal__title" id="tituloNovaAnalise">Nova análise</span>
@@ -14,18 +15,29 @@
         </div>
         <div class="modal__body">
             <div id="novaAnalisePasso1">
+                {% if modo == 'licitacao' %}
+                <p class="field__hint" style="margin:0 0 14px;">
+                    Informe o número do processo. Em Licitações e Contratos o registro principal
+                    é o <strong>arquivo anexado</strong>; observação e diligências são opcionais.
+                    Depois use <strong>Encaminhar</strong> ao Controlador.
+                </p>
+                {% else %}
                 <p class="field__hint" style="margin:0 0 14px;">
                     Informe o número do processo físico. Não depende do Protocolo ter cadastrado antes.
                     Em seguida a tela é a mesma da análise: aponte diligências,
                     use <strong>Gerar número e salvar</strong> e depois
                     <strong>Encaminhar</strong> ao Controlador.
                 </p>
+                {% endif %}
                 <div class="form-grid">
                     <div class="field">
                         <label class="field__label" for="nova_numero_busca">Nº do processo</label>
                         <input type="text" id="nova_numero_busca" class="input" autocomplete="off"
                                placeholder="Ex.: 13673/2025">
                     </div>
+                    {% if modo == 'licitacao' %}
+                    <input type="hidden" id="nova_grupo_busca" value="{{ nova_analise_grupo|default:'LICITACOES_E_CONTRATOS' }}">
+                    {% else %}
                     <div class="field">
                         <label class="field__label" for="nova_grupo_busca">Grupo de numeração</label>
                         <select id="nova_grupo_busca" class="select">
@@ -39,6 +51,7 @@
                             {% endfor %}
                         </select>
                     </div>
+                    {% endif %}
                 </div>
                 <div class="form-actions" style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
                     <button type="button" class="btn btn--primary" id="btnNovaAnaliseBuscar">
@@ -59,40 +72,50 @@
 
                 <div class="form-section">
                     <div class="form-section__title">
-                        <span class="material-symbols-rounded">edit_note</span>
-                        <span id="novaTituloSecao">{% if L %}{{ L.titulo }}{% else %}Dados do relatório{% endif %}</span>
+                        <span class="material-symbols-rounded">{% if modo == 'licitacao' %}attach_file{% else %}edit_note{% endif %}</span>
+                        <span id="novaTituloSecao">{% if modo == 'licitacao' %}Análise — Licitações e Contratos{% elif L %}{{ L.titulo }}{% else %}Dados do relatório{% endif %}</span>
                     </div>
                     <p class="field__hint" style="margin:-6px 0 14px;" id="novaHintSecao">
+                        {% if modo == 'licitacao' %}
+                        Opcional além do arquivo: observação e diligências. Anexe o arquivo abaixo e encaminhe ao Controlador.
+                        {% else %}
                         Mesmos campos da tela de análise e da planilha do Controle de Relatórios.
                         Use <strong>Gerar número e salvar</strong> para gravar na planilha;
                         depois <strong>Encaminhar</strong> ao Controlador.
+                        {% endif %}
                     </p>
                     <div class="form-grid form-grid--full" id="novaCamposGrid">
                         {# Ordem igual a analista/processo.html: nº, data, grupo, depois campos da planilha. #}
-                        <div class="field" id="blocoNovaNumeroRelatorio" data-nova-campo="numero_relatorio">
+                        <div class="field" id="blocoNovaNumeroRelatorio" data-nova-campo="numero_relatorio" {% if modo == 'licitacao' %}hidden{% endif %}>
                             <label class="field__label" for="nova_numero_relatorio" id="lblNovaNumero">
                                 {% if L %}{{ L.rotulos.numero_relatorio }}{% else %}Nº relatório{% endif %}
                             </label>
                             <input type="text" id="nova_numero_relatorio" class="input" readonly
-                                   value="Ainda sem número — use Gerar número e salvar">
+                                   value="{% if modo == 'licitacao' %}—{% else %}Ainda sem número — use Gerar número e salvar{% endif %}">
                             <input type="hidden" id="nova_numero_relatorio_envio" name="numero_relatorio" value="">
                             <span class="field__hint" id="novaHintProximo">
+                                {% if modo == 'licitacao' %}
+                                Licitações não emite número de relatório.
+                                {% else %}
                                 <strong>Gerar número e salvar</strong> emite o sequencial e grava na planilha.
                                 Próximo sugerido (só referência): —
+                                {% endif %}
                             </span>
                         </div>
-                        <div class="field" data-nova-campo="data_relatorio">
+                        <div class="field" data-nova-campo="data_relatorio" {% if modo == 'licitacao' %}hidden{% endif %}>
                             <label class="field__label" for="nova_data" id="lblNovaData">
                                 {% if L %}{{ L.rotulos.data_relatorio }}{% else %}Data do relatório{% endif %}
                             </label>
-                            <input type="date" id="nova_data" name="data_relatorio" class="input" required>
+                            <input type="date" id="nova_data" name="data_relatorio" class="input" {% if modo != 'licitacao' %}required{% endif %}>
                             <span class="field__hint">Data que será gravada no Controle de relatório.</span>
                         </div>
+                        {% if modo != 'licitacao' %}
                         <div class="field" data-nova-campo="grupo">
                             <label class="field__label">Grupo de numeração</label>
                             <input type="text" class="input" id="nova_grupo_nome" value="" readonly>
                             <span class="field__hint">Escolhido no passo anterior.</span>
                         </div>
+                        {% endif %}
                         <div class="field" data-nova-campo="numero_processo">
                             <label class="field__label" for="nova_numero_processo" id="lblNovaProcesso">
                                 {% if L %}{{ L.rotulos.numero_processo }}{% else %}Nº processo{% endif %}
@@ -103,7 +126,7 @@
                             <label class="field__label" for="nova_volume">Volume / concessão</label>
                             <input type="text" id="nova_volume" name="volume" class="input">
                         </div>
-                        <div class="field" data-nova-campo="analista">
+                        <div class="field" data-nova-campo="analista" {% if modo == 'licitacao' %}hidden{% endif %}>
                             <label class="field__label" for="nova_analista" id="lblNovaAnalista">
                                 {% if L %}{{ L.rotulos.analista }}{% else %}Analista / relator{% endif %}
                             </label>
@@ -126,20 +149,20 @@
                             </label>
                             <textarea id="nova_objeto" name="objeto" class="textarea" rows="2"></textarea>
                         </div>
-                        <div class="field field--wide" data-nova-campo="contratada">
+                        <div class="field field--wide" data-nova-campo="contratada" {% if modo == 'licitacao' %}hidden{% endif %}>
                             <label class="field__label" for="nova_contratada" id="lblNovaContratada">
                                 {% if L %}{{ L.rotulos.contratada }}{% else %}Contratada / Favorecido{% endif %}
                             </label>
                             <input type="text" id="nova_contratada" name="contratada" class="input">
                         </div>
-                        <div class="field" data-nova-campo="valor">
+                        <div class="field" data-nova-campo="valor" {% if modo == 'licitacao' %}hidden{% endif %}>
                             <label class="field__label" for="nova_valor" id="lblNovaValor">
                                 {% if L %}{{ L.rotulos.valor }}{% else %}Valor{% endif %}
                             </label>
                             <input type="text" id="nova_valor" name="valor" class="input"
                                    inputmode="decimal" autocomplete="off" placeholder="R$ 0,00">
                         </div>
-                        <div class="field" data-nova-campo="destino">
+                        <div class="field" data-nova-campo="destino" {% if modo == 'licitacao' %}hidden{% endif %}>
                             <label class="field__label" for="nova_destino" id="lblNovaDestino">
                                 {% if L %}{{ L.rotulos.destino }}{% else %}Destino{% endif %}
                             </label>
@@ -150,13 +173,13 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="field" data-nova-campo="periodo">
+                        <div class="field" data-nova-campo="periodo" {% if modo == 'licitacao' %}hidden{% endif %}>
                             <label class="field__label" for="nova_periodo" id="lblNovaPeriodo">
                                 {% if L %}{{ L.rotulos.periodo }}{% else %}Período{% endif %}
                             </label>
                             <input type="text" id="nova_periodo" name="periodo" class="input">
                         </div>
-                        <div class="field" data-nova-campo="status_analise">
+                        <div class="field" data-nova-campo="status_analise" {% if modo == 'licitacao' %}hidden{% endif %}>
                             <label class="field__label" for="nova_status_analise" id="lblNovaStatus">
                                 {% if L %}{{ L.rotulos.status_analise }}{% else %}Status da análise{% endif %}
                             </label>
@@ -168,19 +191,51 @@
                         </div>
                         <div class="field field--wide" data-nova-campo="observacao">
                             <label class="field__label" for="nova_observacao" id="lblNovaObs">
-                                {% if L %}{{ L.rotulos.observacao }}{% else %}Observação{% endif %}
+                                {% if modo == 'licitacao' %}Observação{% elif L %}{{ L.rotulos.observacao }}{% else %}Observação{% endif %}
                             </label>
-                            <textarea id="nova_observacao" name="observacao" class="textarea" rows="3"></textarea>
+                            <textarea id="nova_observacao" name="observacao" class="textarea" rows="{% if modo == 'licitacao' %}4{% else %}3{% endif %}"></textarea>
+                            {% if modo == 'licitacao' %}
+                            <span class="field__hint">Opcional. O registro principal é o arquivo anexado.</span>
+                            {% endif %}
                         </div>
-                        <div class="field field--checkbox field--wide" data-nova-campo="sem_relatorio">
+                        <div class="field field--checkbox field--wide" data-nova-campo="sem_relatorio" {% if modo == 'licitacao' %}hidden{% endif %}>
                             <label class="check">
                                 <input type="checkbox" id="nova_sem" name="sem_relatorio" value="1">
                                 <span>Sem relatório</span>
                             </label>
-                            <span class="field__hint">Marque se não houve peça de relatório. Mesmo assim é obrigatório ter número e data antes de encaminhar (use Gerar número e salvar).</span>
+                            <span class="field__hint">{% if modo == 'licitacao' %}Não se aplica a Licitações.{% else %}Marque se não houve peça de relatório. Mesmo assim é obrigatório ter número e data antes de encaminhar (use Gerar número e salvar).{% endif %}</span>
                         </div>
                     </div>
                 </div>
+
+                {% if modo == 'licitacao' %}
+                <section class="card" style="margin-top:14px;" id="blocoNovaAnexos">
+                    <div class="card__header">
+                        <span class="card__title">Arquivos anexados</span>
+                        <span class="card__hint" id="novaAnexosHint">0 arquivos</span>
+                    </div>
+                    <div class="card__body">
+                        <ul class="pendencia-list" id="novaListaAnexos"></ul>
+                        <div class="empty empty--compact" id="novaAnexosVazio">
+                            <span class="material-symbols-rounded">attach_file</span>
+                            <div class="empty__title">Nenhum arquivo ainda</div>
+                            <div>Salve a análise uma vez para liberar o envio, ou anexe se o processo já existir.</div>
+                        </div>
+                        <div style="margin-top:12px;" id="novaAnexosUpload" hidden>
+                            <label class="field__label" for="novaArquivosInput">Anexar arquivo</label>
+                            <div class="pendencia-add__row">
+                                <input type="file" id="novaArquivosInput" class="input" multiple
+                                       accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.odt,.ods,.txt,application/pdf,image/*">
+                                <button type="button" class="btn btn--primary" id="btnNovaAnexar">
+                                    <span class="material-symbols-rounded">upload_file</span>
+                                    Enviar
+                                </button>
+                            </div>
+                            <p class="field__hint">PDF, Word, Excel ou imagem · até 15 MB. Obrigatório para encaminhar.</p>
+                        </div>
+                    </div>
+                </section>
+                {% endif %}
 
                 <section class="card" style="margin-top:14px;" id="blocoNovaDiligencias">
                     <div class="card__header">
@@ -213,10 +268,24 @@
                 <section class="card" style="margin-top:14px;" id="acoesNovaAnalise">
                     <div class="card__header">
                         <span class="card__title">Finalizar</span>
-                        <span class="card__hint" id="novaHintFinalizar">Gere o número para gravar na planilha</span>
+                        <span class="card__hint" id="novaHintFinalizar">{% if modo == 'licitacao' %}Salve, anexe o arquivo e encaminhe{% else %}Gere o número para gravar na planilha{% endif %}</span>
                     </div>
                     <div class="card__body">
                         <div class="form-actions" style="margin:0; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+                            {% if modo == 'licitacao' %}
+                            <button type="submit" class="btn btn--primary" id="btnNovaAnaliseGerar" data-acao="salvar">
+                                <span class="material-symbols-rounded">save</span>
+                                Salvar análise
+                            </button>
+                            <button type="submit" class="btn btn--primary" id="btnNovaAnaliseEncaminhar"
+                                    data-acao="encaminhar"
+                                    data-confirm="Encaminhar este processo para o Controlador? É necessário ter ao menos um arquivo anexado."
+                                    data-confirm-title="Encaminhar"
+                                    data-confirm-ok="Encaminhar">
+                                <span class="material-symbols-rounded">send</span>
+                                Encaminhar
+                            </button>
+                            {% else %}
                             <button type="submit" class="btn btn--primary" id="btnNovaAnaliseGerar" data-acao="gerar">
                                 <span class="material-symbols-rounded">pin</span>
                                 Gerar número e salvar
@@ -229,6 +298,7 @@
                                 <span class="material-symbols-rounded">send</span>
                                 Encaminhar
                             </button>
+                            {% endif %}
                             <button type="button" class="btn btn--outline" id="btnNovaAnaliseVoltar">
                                 Voltar
                             </button>
@@ -249,6 +319,8 @@
 (function () {
     var modal = document.getElementById('modalNovaAnalise');
     if (!modal) return;
+    var modo = modal.getAttribute('data-modo') || 'liquidacao';
+    var ehLicitacao = modo === 'licitacao';
     var passo1 = document.getElementById('novaAnalisePasso1');
     var form = document.getElementById('formNovaAnalise');
     var aviso = document.getElementById('novaAnaliseAviso');
@@ -260,9 +332,16 @@
     var vazioDil = document.getElementById('novaDiligenciasVazio');
     var hiddenBox = document.getElementById('novaDiligenciasHidden');
     var hintDil = document.getElementById('novaDiligenciasHint');
+    var listaAnexos = document.getElementById('novaListaAnexos');
+    var vazioAnexos = document.getElementById('novaAnexosVazio');
+    var hintAnexos = document.getElementById('novaAnexosHint');
+    var uploadAnexos = document.getElementById('novaAnexosUpload');
     var diligenciasNovas = [];
     var acaoSalvar = 'salvar';
     var proximoCache = null;
+    var processoIdAtual = null;
+    var urlAnexarAtual = '';
+    var qtdAnexos = 0;
     var recarregarAoFechar = false;
     var urlBuscar = modal.getAttribute('data-url-buscar');
     var csrf = (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
@@ -410,8 +489,23 @@
         var sel = document.getElementById('nova_grupo_busca');
         var nomeGrupo = document.getElementById('nova_grupo_nome');
         if (nomeGrupo && sel) {
-            var opt = sel.options[sel.selectedIndex];
-            nomeGrupo.value = opt ? opt.textContent.trim() : (meta.grupo || '');
+            if (sel.tagName === 'SELECT' && sel.options && sel.selectedIndex >= 0) {
+                var opt = sel.options[sel.selectedIndex];
+                nomeGrupo.value = opt ? opt.textContent.trim() : (meta.grupo || '');
+            } else {
+                nomeGrupo.value = 'Licitações e Contratos';
+            }
+        }
+        if (ehLicitacao) {
+            var licVis = {
+                numero_processo: true, volume: true, secretaria: true,
+                objeto: true, observacao: true
+            };
+            document.querySelectorAll('#novaCamposGrid [data-nova-campo]').forEach(function (el) {
+                var chave = el.getAttribute('data-nova-campo');
+                el.hidden = !licVis[chave];
+            });
+            return;
         }
         // Mesmos campos da tela de análise + dados do processo (sem meta à parte no modal).
         var fixos = {
@@ -429,6 +523,25 @@
         });
     }
 
+    function renderAnexos(lista) {
+        if (!listaAnexos) return;
+        lista = lista || [];
+        qtdAnexos = lista.length;
+        listaAnexos.innerHTML = '';
+        lista.forEach(function (a) {
+            var li = document.createElement('li');
+            li.className = 'pendencia-item';
+            li.innerHTML = '<div class="pendencia-item__text">' + (a.nome || 'Arquivo')
+                + '</div><div class="pendencia-item__meta">' + (a.tamanho || '') + '</div>';
+            listaAnexos.appendChild(li);
+        });
+        if (vazioAnexos) vazioAnexos.hidden = lista.length > 0;
+        if (hintAnexos) {
+            hintAnexos.textContent = lista.length + ' arquivo' + (lista.length === 1 ? '' : 's');
+        }
+        if (uploadAnexos) uploadAnexos.hidden = !(processoIdAtual && urlAnexarAtual);
+    }
+
     function resetPasso1() {
         passo1.hidden = false;
         form.hidden = true;
@@ -438,6 +551,9 @@
         diligenciasNovas = [];
         renderDiligenciasNovas();
         renderPendenciasExistentes([]);
+        processoIdAtual = null;
+        urlAnexarAtual = '';
+        renderAnexos([]);
         if (campoNumero) {
             campoNumero.readOnly = true;
             campoNumero.value = 'Ainda sem número — use Gerar número e salvar';
@@ -446,6 +562,15 @@
         if (hiddenNum) hiddenNum.value = '';
         var btnGerar = document.getElementById('btnNovaAnaliseGerar');
         var btnEnc = document.getElementById('btnNovaAnaliseEncaminhar');
+        if (ehLicitacao) {
+            if (btnGerar) btnGerar.hidden = false;
+            if (btnEnc) btnEnc.hidden = false;
+            var hintFinalLic = document.getElementById('novaHintFinalizar');
+            if (hintFinalLic) {
+                hintFinalLic.textContent = 'Salve, anexe o arquivo e encaminhe';
+            }
+            return;
+        }
         if (btnGerar) btnGerar.hidden = false;
         if (btnEnc) btnEnc.hidden = true;
         var hintFinal = document.getElementById('novaHintFinalizar');
@@ -455,6 +580,28 @@
     }
 
     function aplicarEstadoAposSalvar(res) {
+        if (ehLicitacao) {
+            processoIdAtual = res.processo_id || processoIdAtual;
+            urlAnexarAtual = res.url_anexar || urlAnexarAtual;
+            if (res.anexos) renderAnexos(res.anexos);
+            else if (typeof res.qtd_anexos === 'number') {
+                qtdAnexos = res.qtd_anexos;
+                if (uploadAnexos) uploadAnexos.hidden = !(processoIdAtual && urlAnexarAtual);
+                if (hintAnexos) {
+                    hintAnexos.textContent = qtdAnexos + ' arquivo' + (qtdAnexos === 1 ? '' : 's');
+                }
+                if (vazioAnexos) vazioAnexos.hidden = qtdAnexos > 0;
+            } else if (uploadAnexos) {
+                uploadAnexos.hidden = !(processoIdAtual && urlAnexarAtual);
+            }
+            var hintFinalLic = document.getElementById('novaHintFinalizar');
+            if (hintFinalLic) {
+                hintFinalLic.textContent = qtdAnexos > 0
+                    ? 'Pode encaminhar ao Controlador'
+                    : 'Anexe o arquivo antes de encaminhar';
+            }
+            return;
+        }
         var num = (res.numero_relatorio || '').trim();
         var hiddenNum = document.getElementById('nova_numero_relatorio_envio');
         var btnGerar = document.getElementById('btnNovaAnaliseGerar');
@@ -504,34 +651,51 @@
                 formatarMoeda(campoValor);
             }
         }
-        var jaTem = (dados.numero_relatorio || '').trim();
-        var hiddenNum = document.getElementById('nova_numero_relatorio_envio');
-        if (campoNumero) {
-            campoNumero.value = jaTem
-                ? ('Relatório ' + jaTem)
-                : 'Ainda sem número — use Gerar número e salvar';
-            campoNumero.readOnly = true;
-        }
-        if (hiddenNum) hiddenNum.value = jaTem;
-        var btnGerar = document.getElementById('btnNovaAnaliseGerar');
-        var btnEnc = document.getElementById('btnNovaAnaliseEncaminhar');
-        if (btnGerar) btnGerar.hidden = !!jaTem;
-        if (btnEnc) btnEnc.hidden = !jaTem;
-        var hintFinal = document.getElementById('novaHintFinalizar');
-        if (hintFinal) {
-            hintFinal.textContent = jaTem
-                ? 'Encaminhe ao Controlador quando estiver pronto'
-                : 'Gere o número para gravar na planilha';
-        }
-        document.getElementById('nova_grupo').value = meta.grupo || '';
-        document.getElementById('nova_sem').checked = !!dados.sem_relatorio;
+        document.getElementById('nova_grupo').value = meta.grupo || modal.getAttribute('data-grupo-default') || '';
+        var semEl = document.getElementById('nova_sem');
+        if (semEl) semEl.checked = !!dados.sem_relatorio;
         proximoCache = meta.proximo_numero;
-        var hint = document.getElementById('novaHintProximo');
-        if (hint) {
-            hint.innerHTML = jaTem
-                ? ('Número já emitido: <strong>' + jaTem + '</strong>.')
-                : ('<strong>Gerar número e salvar</strong> emite o sequencial e grava na planilha. '
-                    + 'Próximo sugerido (só referência): ' + (proximoCache || '—'));
+        processoIdAtual = meta.processo_id || null;
+        urlAnexarAtual = meta.url_anexar || '';
+        if (ehLicitacao) {
+            renderAnexos(meta.anexos || []);
+            var btnGerarLic = document.getElementById('btnNovaAnaliseGerar');
+            var btnEncLic = document.getElementById('btnNovaAnaliseEncaminhar');
+            if (btnGerarLic) btnGerarLic.hidden = false;
+            if (btnEncLic) btnEncLic.hidden = false;
+            var hintFinalLic = document.getElementById('novaHintFinalizar');
+            if (hintFinalLic) {
+                hintFinalLic.textContent = (meta.anexos && meta.anexos.length)
+                    ? 'Pode encaminhar ao Controlador'
+                    : 'Salve se precisar, anexe o arquivo e encaminhe';
+            }
+        } else {
+            var jaTem = (dados.numero_relatorio || '').trim();
+            var hiddenNum = document.getElementById('nova_numero_relatorio_envio');
+            if (campoNumero) {
+                campoNumero.value = jaTem
+                    ? ('Relatório ' + jaTem)
+                    : 'Ainda sem número — use Gerar número e salvar';
+                campoNumero.readOnly = true;
+            }
+            if (hiddenNum) hiddenNum.value = jaTem;
+            var btnGerar = document.getElementById('btnNovaAnaliseGerar');
+            var btnEnc = document.getElementById('btnNovaAnaliseEncaminhar');
+            if (btnGerar) btnGerar.hidden = !!jaTem;
+            if (btnEnc) btnEnc.hidden = !jaTem;
+            var hintFinal = document.getElementById('novaHintFinalizar');
+            if (hintFinal) {
+                hintFinal.textContent = jaTem
+                    ? 'Encaminhe ao Controlador quando estiver pronto'
+                    : 'Gere o número para gravar na planilha';
+            }
+            var hint = document.getElementById('novaHintProximo');
+            if (hint) {
+                hint.innerHTML = jaTem
+                    ? ('Número já emitido: <strong>' + jaTem + '</strong>.')
+                    : ('<strong>Gerar número e salvar</strong> emite o sequencial e grava na planilha. '
+                        + 'Próximo sugerido (só referência): ' + (proximoCache || '—'));
+            }
         }
         renderPendenciasExistentes(meta.pendencias || []);
         diligenciasNovas = [];
@@ -600,6 +764,66 @@
 
     document.getElementById('btnNovaAnaliseVoltar').addEventListener('click', resetPasso1);
 
+    var btnAnexar = document.getElementById('btnNovaAnexar');
+    if (btnAnexar) {
+        btnAnexar.addEventListener('click', function () {
+            var input = document.getElementById('novaArquivosInput');
+            if (!urlAnexarAtual || !processoIdAtual) {
+                window.appAlert('Salve a análise primeiro para liberar o envio de arquivos.', {
+                    titulo: 'Anexos', tipo: 'info'
+                });
+                return;
+            }
+            if (!input || !input.files || !input.files.length) {
+                window.appAlert('Escolha ao menos um arquivo.', {
+                    titulo: 'Anexos', tipo: 'info'
+                });
+                return;
+            }
+            var fd = new FormData();
+            for (var i = 0; i < input.files.length; i++) {
+                fd.append('arquivos', input.files[i]);
+            }
+            fd.append('csrfmiddlewaretoken', csrf);
+            btnAnexar.disabled = true;
+            fetch(urlAnexarAtual, {
+                method: 'POST',
+                body: fd,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                    'X-CSRFToken': csrf
+                }
+            })
+                .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+                .then(function (res) {
+                    btnAnexar.disabled = false;
+                    if (!res.j.ok) {
+                        window.appAlert(res.j.mensagem || 'Falha ao anexar.', {
+                            titulo: 'Anexos', tipo: 'info', icone: 'error'
+                        });
+                        return;
+                    }
+                    renderAnexos(res.j.anexos || []);
+                    input.value = '';
+                    recarregarAoFechar = true;
+                    if (typeof window.sheetToast === 'function') {
+                        window.sheetToast(res.j.mensagem || 'Arquivo anexado.', true);
+                    } else {
+                        window.appAlert(res.j.mensagem || 'Arquivo anexado.', {
+                            titulo: 'Anexos', tipo: 'success'
+                        });
+                    }
+                })
+                .catch(function () {
+                    btnAnexar.disabled = false;
+                    window.appAlert('Falha ao anexar. Tente de novo.', {
+                        titulo: 'Anexos', tipo: 'info', icone: 'error'
+                    });
+                });
+        });
+    }
+
     form.querySelectorAll('button[type="submit"][data-acao]').forEach(function (btn) {
         btn.addEventListener('click', function () {
             acaoSalvar = btn.getAttribute('data-acao') || 'salvar';
@@ -613,12 +837,27 @@
         syncDiligenciasHidden();
         var gerar = acaoSalvar === 'gerar';
         var encaminhar = acaoSalvar === 'encaminhar';
+        if (ehLicitacao) {
+            gerar = false;
+        }
         document.getElementById('nova_gerar_numero').value = gerar ? '1' : '';
         var body = new FormData(form);
         if (!gerar) {
             body.set('gerar_numero', '');
         }
         body.set('encaminhar', encaminhar ? '1' : '');
+        if (ehLicitacao) {
+            body.set('grupo', document.getElementById('nova_grupo').value
+                || modal.getAttribute('data-grupo-default')
+                || 'LICITACOES_E_CONTRATOS');
+            if (!body.get('data_relatorio')) {
+                var hoje = new Date();
+                var iso = hoje.getFullYear() + '-'
+                    + String(hoje.getMonth() + 1).padStart(2, '0') + '-'
+                    + String(hoje.getDate()).padStart(2, '0');
+                body.set('data_relatorio', iso);
+            }
+        }
         var btnGerar = document.getElementById('btnNovaAnaliseGerar');
         var btnEnc = document.getElementById('btnNovaAnaliseEncaminhar');
         if (btnGerar) btnGerar.disabled = true;

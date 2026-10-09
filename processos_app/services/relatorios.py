@@ -3214,7 +3214,19 @@ def _pendencias_resumo(processo):
     ]
 
 
+def eh_modo_licitacao(grupo):
+    """Nova análise de Licitações (sem planilha / sem nº de relatório)."""
+    return (grupo or '').strip() == perm.GRUPO_LICITACOES
+
+
 def _especie_para_sequencia(grupo):
+    if eh_modo_licitacao(grupo):
+        return (
+            EspecieProcesso.objects
+            .filter(grupo=perm.GRUPO_LICITACOES, ativo=True)
+            .order_by('id')
+            .first()
+        )
     info = info_sequencia(grupo) or {}
     for nome in info.get('especies') or ():
         esp = EspecieProcesso.objects.filter(nome=nome, ativo=True).first()
@@ -3234,7 +3246,10 @@ def _garantir_processo_nova_analise(usuario, numero_processo, grupo, campos):
     criado = False
     if processo is None:
         especie = _especie_para_sequencia(grupo)
-        genero = especie.grupo if especie else GRUPO_PADRAO
+        if eh_modo_licitacao(grupo):
+            genero = perm.GRUPO_LICITACOES
+        else:
+            genero = especie.grupo if especie else GRUPO_PADRAO
         agora = timezone.localtime()
         processo = Processo.objects.create(
             numero_processo=numero_processo[:255],
@@ -3331,22 +3346,20 @@ def buscar_para_nova_analise(usuario, numero_processo, grupo=GRUPO_PADRAO):
     numero = (numero_processo or '').strip()
     if not numero:
         raise RelatorioInvalido('Informe o número do processo.')
-    if not sequencia_valida(grupo):
+    licitacao = eh_modo_licitacao(grupo)
+    if not licitacao and not sequencia_valida(grupo):
         grupo = GRUPO_PADRAO
+    if licitacao:
+        grupo = perm.GRUPO_LICITACOES
 
     processo = _processo_por_numero(numero)
-    layout = layout_planilha(grupo)
-    estado = estado_sequencia(grupo)
     base = {
         'encontrado': processo is not None,
         'numero_processo': numero,
         'grupo': grupo,
-        'proximo_numero': estado['proximo'],
-        'layout': {
-            'titulo': layout.get('titulo'),
-            'rotulos': layout.get('rotulos'),
-            'formulario': layout.get('formulario'),
-        },
+        'modo': 'licitacao' if licitacao else 'liquidacao',
+        'proximo_numero': None if licitacao else estado_sequencia(grupo)['proximo'],
+        'layout': {},
         'dados': {
             'numero_processo': numero,
             'volume': '',
@@ -3363,10 +3376,32 @@ def buscar_para_nova_analise(usuario, numero_processo, grupo=GRUPO_PADRAO):
             'sem_relatorio': False,
             'status_analise': '',
         },
+        'pendencias': [],
+        'anexos': [],
+        'url_anexar': '',
     }
-    base['pendencias'] = []
+    if not licitacao:
+        layout = layout_planilha(grupo)
+        base['layout'] = {
+            'titulo': layout.get('titulo'),
+            'rotulos': layout.get('rotulos'),
+            'formulario': layout.get('formulario'),
+        }
+    else:
+        base['layout'] = {
+            'titulo': 'Análise — Licitações e Contratos',
+            'rotulos': {},
+            'formulario': ['observacao'],
+        }
+
     if processo is None:
-        # Última linha histórica com este nº (se houver).
+        if licitacao:
+            base['aviso'] = (
+                'Processo ainda não cadastrado pelo Protocolo. Preencha a '
+                'observação e as diligências, salve e anexe o arquivo. '
+                'O encaminhamento ao Controlador exige ao menos um anexo.'
+            )
+            return base
         anterior = (
             LinhaControleRelatorio.objects
             .filter(numero_processo__iexact=numero)
@@ -3398,10 +3433,13 @@ def buscar_para_nova_analise(usuario, numero_processo, grupo=GRUPO_PADRAO):
             )
         return base
 
-    dados_proc = _dados_da_linha(processo)
+    dados_proc = _dados_da_linha(processo) if not licitacao else {}
     base['dados'].update({
         'numero_processo': processo.numero_processo or numero,
-        'volume': dados_proc.get('volume') or processo.volume or '',
+        'volume': (
+            (dados_proc.get('volume') if dados_proc else None)
+            or processo.volume or ''
+        ),
         'secretaria': processo.secretaria or '',
         'contratada': processo.contratada or '',
         'objeto': processo.objeto or '',
@@ -3411,8 +3449,8 @@ def buscar_para_nova_analise(usuario, numero_processo, grupo=GRUPO_PADRAO):
         'analista': processo.nome_analista or _nome_usuario(usuario),
         'observacao': processo.observacao or '',
         'status_analise': processo.status_analise or '',
-        'numero_relatorio': processo.numero_relatorio or '',
-        'sem_relatorio': bool(processo.sem_relatorio),
+        'numero_relatorio': '' if licitacao else (processo.numero_relatorio or ''),
+        'sem_relatorio': False if licitacao else bool(processo.sem_relatorio),
         'data_relatorio': (
             (processo.data_analise or timezone.localdate()).isoformat()
         ),
@@ -3422,11 +3460,28 @@ def buscar_para_nova_analise(usuario, numero_processo, grupo=GRUPO_PADRAO):
     base['especie'] = processo.especie or ''
     base['situacao'] = processo.situacao_exibicao
     base['pendencias'] = _pendencias_resumo(processo)
-    base['aviso'] = (
-        'Processo encontrado. Dados preenchidos automaticamente. '
-        'Aponte diligências e use Gerar número e salvar '
-        '(grava na planilha e evita dois usuários pegarem o mesmo nº).'
-    )
+    if licitacao:
+        from django.urls import reverse
+        base['anexos'] = [
+            {
+                'id': a.id,
+                'nome': a.nome_original,
+                'tamanho': a.tamanho_legivel,
+            }
+            for a in processo.anexos.all().order_by('-id')[:20]
+        ]
+        base['url_anexar'] = reverse('anexar_arquivo', args=[processo.id])
+        base['aviso'] = (
+            'Processo encontrado. Em Licitações o registro principal é o '
+            'arquivo anexado; observação e diligências são opcionais. '
+            'Anexe o arquivo e use Encaminhar quando estiver pronto.'
+        )
+    else:
+        base['aviso'] = (
+            'Processo encontrado. Dados preenchidos automaticamente. '
+            'Aponte diligências e use Gerar número e salvar '
+            '(grava na planilha e evita dois usuários pegarem o mesmo nº).'
+        )
     return base
 
 
@@ -3443,7 +3498,10 @@ def salvar_nova_analise(usuario, dados):
         raise RelatorioInvalido('Informe o número do processo.')
 
     grupo = str(dados.get('grupo') or GRUPO_PADRAO).strip() or GRUPO_PADRAO
-    if not sequencia_valida(grupo):
+    licitacao = eh_modo_licitacao(grupo)
+    if licitacao:
+        grupo = perm.GRUPO_LICITACOES
+    elif not sequencia_valida(grupo):
         raise RelatorioInvalido('Grupo de numeração inválido.')
 
     gerar = str(dados.get('gerar_numero') or '') in (
@@ -3452,7 +3510,13 @@ def salvar_nova_analise(usuario, dados):
         '1', 'true', 'True', 'on', 'sim')
     sem_relatorio = str(dados.get('sem_relatorio') or '') in (
         '1', 'true', 'True', 'on', 'sim')
+    if licitacao:
+        # Licitações não usa planilha nem número de relatório.
+        gerar = False
+        sem_relatorio = False
     numero_manual = _numero_relatorio_celula(dados.get('numero_relatorio'))
+    if licitacao:
+        numero_manual = ''
     diligencias = _diligencias_do_payload(dados)
 
     try:
@@ -3504,10 +3568,45 @@ def salvar_nova_analise(usuario, dados):
     processo.sem_relatorio = sem_relatorio
     if grupo in ('BOLSA_ATLETA', 'AUXILIO_COMPETICAO'):
         processo.processo_prestacao = numero_processo[:255]
+    if licitacao and not processo.data_analise:
+        processo.data_analise = data
     processo.save()
 
     diligencias_criadas = _registrar_diligencias_nova_analise(
         processo, usuario, diligencias)
+
+    if licitacao:
+        from django.urls import reverse
+        from .tramitacao import liberar_assinatura
+        encaminhado = False
+        if encaminhar:
+            liberar_assinatura(processo.id, usuario)
+            encaminhado = True
+        partes = ['Análise de Licitações salva.']
+        if diligencias_criadas:
+            partes.append(
+                f'{len(diligencias_criadas)} diligência(s) apontada(s).')
+        if criado:
+            partes.append('Processo criado sem entrada prévia do Protocolo.')
+        if encaminhado:
+            partes.append('Encaminhado ao Controlador.')
+        elif not processo.anexos.exists():
+            partes.append('Anexe o arquivo antes de encaminhar.')
+        return {
+            'linha_id': None,
+            'processo_id': processo.id,
+            'so_linha': False,
+            'criado': criado,
+            'numero_relatorio': '',
+            'numero_processo': processo.numero_processo,
+            'diligencias': len(diligencias_criadas),
+            'gerou_numero': False,
+            'encaminhado': encaminhado,
+            'modo': 'licitacao',
+            'url_anexar': reverse('anexar_arquivo', args=[processo.id]),
+            'qtd_anexos': processo.anexos.count(),
+            'mensagem': ' '.join(partes),
+        }
 
     linha = None
     numero_relatorio = (processo.numero_relatorio or '').strip()

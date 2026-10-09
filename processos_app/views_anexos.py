@@ -5,7 +5,7 @@ import mimetypes
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.decorators.clickjacking import xframe_options_sameorigin
@@ -14,6 +14,14 @@ from django.views.decorators.http import require_POST
 from .models import AnexoProcesso, Processo
 from .services import anexos as svc
 from .services import permissions as perm
+
+
+def _quer_json(request):
+    accept = (request.headers.get('Accept') or '').lower()
+    return (
+        request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or 'application/json' in accept
+    )
 
 
 def _abrir_anexo(anexo, usuario, *, inline=False):
@@ -48,8 +56,26 @@ def anexar_arquivo(request, process_id):
         salvos, erros = svc.anexar(
             processo, request.user, request.FILES.getlist('arquivos'))
     except (PermissionDenied, ValidationError) as exc:
-        messages.error(request, '; '.join(getattr(exc, 'messages', [str(exc)])))
+        msg = '; '.join(getattr(exc, 'messages', [str(exc)]))
+        if _quer_json(request):
+            return JsonResponse({'ok': False, 'mensagem': msg}, status=400)
+        messages.error(request, msg)
         return _voltar_processo(processo.id)
+
+    if _quer_json(request):
+        return JsonResponse({
+            'ok': True,
+            'mensagem': (
+                '1 arquivo anexado.' if len(salvos) == 1
+                else f'{len(salvos)} arquivos anexados.'
+            ) if salvos else (erros[0] if erros else 'Nenhum arquivo.'),
+            'qtd_anexos': processo.anexos.count(),
+            'anexos': [
+                {'id': a.id, 'nome': a.nome_original, 'tamanho': a.tamanho_legivel}
+                for a in processo.anexos.all().order_by('-id')[:20]
+            ],
+            'erros': erros,
+        })
 
     if salvos:
         if len(salvos) == 1:

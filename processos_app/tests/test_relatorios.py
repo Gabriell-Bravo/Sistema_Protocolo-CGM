@@ -2261,23 +2261,28 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertEqual(pagina.status_code, 200)
         self.assertContains(pagina, 'Nova análise')
         self.assertContains(pagina, 'modalNovaAnalise')
+        self.assertContains(pagina, 'data-modo="licitacao"')
         self.assertContains(pagina, 'Lista de diligências')
-        self.assertContains(pagina, 'Finalizar')
-        self.assertContains(pagina, 'Dados do relatório')
-        self.assertContains(pagina, 'Gerar número e salvar')
+        self.assertContains(pagina, 'Arquivos anexados')
+        self.assertContains(pagina, 'Análise — Licitações e Contratos')
+        self.assertContains(pagina, 'Salvar análise')
         self.assertContains(pagina, 'Encaminhar')
-        self.assertNotContains(pagina, 'Salvar análise')
-        self.assertNotContains(pagina, 'Abrir para encaminhar')
+        self.assertContains(pagina, 'data-acao="salvar"')
+        self.assertContains(pagina, 'Processos para análise')
+        self.assertContains(pagina, 'sem planilha Excel')
+        self.assertNotContains(pagina, 'data-acao="gerar"')
+        self.assertNotContains(pagina, 'for="nova_grupo_busca"')
+        self.assertNotContains(pagina, 'Dados do relatório')
+        self.assertNotContains(pagina, 'Importar planilha')
+        self.assertNotContains(pagina, 'sheet-grid')
 
         resp = self.client.post(
             reverse('controle_relatorio_nova_analise_salvar'),
             {
                 'numero_processo': 'LIC-AVULSO/2026',
-                'grupo': 'LIQUIDACOES',
-                'gerar_numero': '1',
-                'data_relatorio': '2026-10-08',
+                'grupo': 'LICITACOES_E_CONTRATOS',
+                'observacao': 'Parecer preliminar',
                 'objeto': 'Análise avulsa Licitações',
-                'analista': 'Ana Lic',
                 'diligencias': 'Pedido de esclarecimento à unidade',
             },
             HTTP_X_REQUESTED_WITH='XMLHttpRequest',
@@ -2287,9 +2292,11 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         corpo = resp.json()
         self.assertTrue(corpo['ok'], corpo)
         processo = Processo.objects.get(numero_processo='LIC-AVULSO/2026')
+        self.assertEqual(processo.genero, 'LICITACOES_E_CONTRATOS')
         self.assertEqual(
             Pendencia.objects.filter(processo=processo).count(), 1)
-        self.assertTrue(processo.numero_relatorio)
+        self.assertFalse(processo.numero_relatorio)
+        self.assertEqual(processo.observacao, 'Parecer preliminar')
 
     def test_controle_relatorio_mostra_botao_nova_analise(self):
         self.client.force_login(self.analista_liq)

@@ -2,7 +2,7 @@
 
 {% block title %}Controle de análise{% endblock %}
 {% block page_title %}Controle de análise{% endblock %}
-{% block page_subtitle %}Processos de Licitações e Contratos que entram para análise deste grupo.{% endblock %}
+{% block page_subtitle %}Processos de Licitações e Contratos em tramitação neste grupo — sem planilha Excel. Use Nova análise para arquivo, observação e diligências.{% endblock %}
 
 {% block content %}
 <div class="stack">
@@ -152,5 +152,5 @@
         </div>
     </section>
 </div>
-{% include "analista/_modal_nova_analise.html" with nova_analise_grupo='LIQUIDACOES' sequencias_nova_analise=sequencias_nova_analise layout_planilha=layout_planilha %}
+{% include "analista/_modal_nova_analise.html" with nova_analise_grupo=nova_analise_grupo nova_analise_modo='licitacao' sequencias_nova_analise=sequencias_nova_analise layout_planilha=None %}
 {% endblock %}
