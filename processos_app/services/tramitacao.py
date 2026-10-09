@@ -936,15 +936,18 @@ def ativos():
 
 
 def subquery_tem_analise_controle():
-    """Exists usado na aba Pendentes/Finalizados de Processos Ativos."""
+    """Exists usado na aba Pendentes/Finalizados de Processos Ativos.
+
+    Só a passagem atual (FK processo). Análise de passagem anterior com o
+    mesmo número NÃO marca a reentrada como Finalizados.
+    """
     from django.db.models import Exists, OuterRef, Q
 
     from ..models import LinhaControleRelatorio
 
     return Exists(
         LinhaControleRelatorio.objects.filter(
-            Q(processo=OuterRef('pk')) | Q(
-                numero_processo__iexact=OuterRef('numero_processo')),
+            processo=OuterRef('pk'),
             situacao_linha__in=(
                 LinhaControleRelatorio.SITUACAO_ATIVA,
                 LinhaControleRelatorio.SITUACAO_HISTORICA,
@@ -971,12 +974,33 @@ def pendentes_como_ativos(queryset=None):
 
     É a fonte da verdade para o que aparece na fila de analistas/Gestão.
     """
-    from django.db.models import Q
     base = queryset if queryset is not None else ativos()
     return (
         base.annotate(tem_analise_controle=subquery_tem_analise_controle())
         .filter(~q_analise_feita_ativos())
     )
+
+
+def disponiveis_para_assumir(usuario):
+    """Pendentes de Ativos ainda DISPONÍVEIS do grupo do analista.
+
+    Já assumidos (EM_ANALISE) ou com o Controlador não entram — o próximo
+    analista não vê o que outro já pegou.
+    """
+    from . import permissions as perm
+
+    grupo = perm.grupo_do_analista(usuario)
+    if not grupo and not perm.eh_administrador(usuario):
+        return Processo.objects.none()
+
+    consulta = (
+        pendentes_como_ativos()
+        .filter(situacao_tramite='DISPONIVEL', analista_responsavel__isnull=True)
+        .select_related('prioridade_fk', 'especie_fk', 'analista_responsavel')
+    )
+    if grupo:
+        consulta = consulta.filter(genero=grupo)
+    return consulta.order_by('data_entrada', 'hora_entrada', 'numero_processo')
 
 
 def finalizados():

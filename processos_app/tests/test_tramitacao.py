@@ -20,6 +20,47 @@ class AssumirTest(BaseProcessoTestCase):
         self.assertEqual(processo.situacao_exibicao,
                          f'Em análise por {processo.nome_analista}')
 
+    def test_disponiveis_para_assumir_so_pendentes_livres(self):
+        livre = self.novo_processo(numero_processo='livre/2026')
+        comigo = self.processo_em_analise()
+        comigo.numero_processo = 'comigo/2026'
+        comigo.save(update_fields=['numero_processo'])
+        no_controlador = self.processo_em_analise()
+        no_controlador.numero_processo = 'controlador/2026'
+        no_controlador.save(update_fields=['numero_processo'])
+        tramitacao.liberar_assinatura(no_controlador.id, self.analista_lic)
+
+        ids = set(
+            tramitacao.disponiveis_para_assumir(self.analista_lic2)
+            .values_list('id', flat=True))
+        self.assertIn(livre.id, ids)
+        self.assertNotIn(comigo.id, ids)
+        self.assertNotIn(no_controlador.id, ids)
+
+    def test_encaminhar_vai_para_assinar_e_com_controlador_nos_ativos(self):
+        processo = self.processo_em_analise()
+        processo.numero_processo = 'para-assinar/2026'
+        processo.save(update_fields=['numero_processo'])
+        tramitacao.liberar_assinatura(processo.id, self.analista_lic)
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'AGUARDANDO_ASSINATURA')
+        self.assertEqual(processo.situacao_exibicao, 'Com o Controlador')
+        self.assertNotIn(
+            processo.id,
+            tramitacao.disponiveis_para_assumir(self.analista_lic2)
+            .values_list('id', flat=True))
+
+        self.client.force_login(self.analista_lic)
+        controle = self.client.get(
+            reverse('controle_analise') + '?filtro=assinatura')
+        self.assertContains(controle, 'para-assinar/2026')
+        self.assertContains(controle, 'Com o Controlador')
+
+        self.client.force_login(self.protocolo)
+        ativos = self.client.get(reverse('listar_processos') + '?fase=todos')
+        self.assertContains(ativos, 'para-assinar/2026')
+        self.assertContains(ativos, 'Com o Controlador')
+
     def test_segundo_analista_nao_assume(self):
         """Concorrência (item 39), em sequência — ver alerta no relatório."""
         processo = self.novo_processo()

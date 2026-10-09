@@ -2253,75 +2253,41 @@ class ControleRelatorioTest(BaseProcessoTestCase):
             403,
         )
 
-    def test_analista_licitacoes_pode_nova_analise_com_diligencia(self):
-        from processos_app.models import Pendencia, Processo
+    def test_analista_licitacoes_nova_analise_abre_modal_assumir(self):
+        disponivel = self.novo_processo(numero_processo='assumir-lic/2026')
+        em_analise = self.processo_em_analise()
+        em_analise.numero_processo = 'ja-comigo/2026'
+        em_analise.save(update_fields=['numero_processo'])
 
         self.client.force_login(self.analista_lic)
         pagina = self.client.get(reverse('controle_analise'))
         self.assertEqual(pagina.status_code, 200)
         self.assertContains(pagina, 'Nova análise')
-        self.assertContains(pagina, 'modalNovaAnalise')
-        self.assertContains(pagina, 'data-modo="licitacao"')
-        self.assertContains(pagina, 'Lista de diligências')
-        self.assertContains(pagina, 'Arquivos anexados')
-        self.assertContains(pagina, 'Análise — Licitações e Contratos')
-        self.assertContains(pagina, 'Salvar análise')
-        self.assertContains(pagina, 'Encaminhar')
-        self.assertContains(pagina, 'data-acao="salvar"')
-        self.assertContains(pagina, 'Processos para análise')
-        self.assertContains(pagina, 'sem planilha Excel')
-        self.assertNotContains(pagina, 'data-acao="gerar"')
-        self.assertNotContains(pagina, 'for="nova_grupo_busca"')
-        self.assertNotContains(pagina, 'Dados do relatório')
-        self.assertNotContains(pagina, 'Importar planilha')
-        self.assertNotContains(pagina, 'sheet-grid')
+        self.assertContains(pagina, 'modalAssumir')
+        self.assertContains(pagina, 'Assumir')
+        self.assertContains(pagina, 'assumir-lic/2026')
+        self.assertNotContains(pagina, 'modalNovaAnalise')
+        ids = [p.id for p in pagina.context['processos_para_assumir']]
+        self.assertIn(disponivel.id, ids)
+        self.assertNotIn(em_analise.id, ids)
+        # Em análise aparece na lista do Controle, mas não na janela Assumir.
+        html_modal = pagina.content.decode().split('id="modalAssumir"', 1)[1]
+        self.assertIn('assumir-lic/2026', html_modal)
+        self.assertNotIn('ja-comigo/2026', html_modal)
 
-        resp = self.client.post(
-            reverse('controle_relatorio_nova_analise_salvar'),
-            {
-                'numero_processo': 'LIC-AVULSO/2026',
-                'grupo': 'LICITACOES_E_CONTRATOS',
-                'observacao': 'Parecer preliminar',
-                'objeto': 'Análise avulsa Licitações',
-                'diligencias': 'Pedido de esclarecimento à unidade',
-            },
-            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
-            HTTP_ACCEPT='application/json',
-        )
-        self.assertEqual(resp.status_code, 200, resp.content)
-        corpo = resp.json()
-        self.assertTrue(corpo['ok'], corpo)
-        processo = Processo.objects.get(numero_processo='LIC-AVULSO/2026')
-        self.assertEqual(processo.genero, 'LICITACOES_E_CONTRATOS')
-        self.assertEqual(
-            Pendencia.objects.filter(processo=processo).count(), 1)
-        self.assertFalse(processo.numero_relatorio)
-        self.assertEqual(processo.observacao, 'Parecer preliminar')
-
-    def test_controle_relatorio_mostra_botao_nova_analise(self):
+    def test_controle_relatorio_mostra_botao_nova_analise_assumir(self):
+        disponivel = self.novo_processo(
+            self.especie_liq, numero_processo='assumir-liq/2026')
         self.client.force_login(self.analista_liq)
         pagina = self.client.get(
             reverse('controle_relatorio') + '?aba=LIQUIDACOES&secao=analises')
         self.assertEqual(pagina.status_code, 200)
         self.assertContains(pagina, 'Nova análise')
-        self.assertContains(pagina, 'modalNovaAnalise')
-        # Mesma estrutura da tela analista/processo.html.
-        self.assertContains(pagina, 'form-section')
-        self.assertContains(pagina, 'Dados do relatório — Liquidação')
-        self.assertContains(pagina, 'Lista de diligências')
-        self.assertContains(pagina, 'Finalizar')
-        self.assertContains(pagina, 'id="nova_secretaria"')
-        self.assertContains(pagina, '<select id="nova_secretaria"')
-        self.assertContains(pagina, 'id="nova_destino"')
-        self.assertContains(pagina, '<select id="nova_destino"')
-        self.assertContains(pagina, 'id="nova_valor"')
-        self.assertContains(pagina, 'placeholder="R$ 0,00"')
-        self.assertContains(pagina, 'formatarMoeda')
-        self.assertContains(pagina, 'id="nova_status_analise"')
-        self.assertContains(pagina, 'Ainda sem número — use Gerar número e salvar')
-        self.assertContains(pagina, 'Gerar número e salvar')
-        self.assertContains(pagina, 'id="btnNovaAnaliseEncaminhar"')
-        self.assertNotContains(pagina, 'Salvar análise')
+        self.assertContains(pagina, 'modalAssumir')
+        self.assertContains(pagina, 'assumir-liq/2026')
+        self.assertNotContains(pagina, 'modalNovaAnalise')
+        ids = [p.id for p in pagina.context['processos_para_assumir']]
+        self.assertIn(disponivel.id, ids)
         self.assertNotContains(pagina, 'Abrir para encaminhar')
 
     def test_nova_analise_busca_formata_valor(self):

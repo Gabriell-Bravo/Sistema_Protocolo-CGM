@@ -1417,6 +1417,8 @@ def controle_analise(request):
         'nova_analise_grupo': perm.GRUPO_LICITACOES,
         'nova_analise_modo': 'licitacao',
         'layout_planilha': None,
+        'processos_para_assumir': list(tramitacao.disponiveis_para_assumir(request.user)),
+        'pode_assumir_modal': perm.pode_nova_analise(request.user),
         'secretarias': [u.nome for u in svc_cadastros.unidades_ativas()],
         'all_status_analise': Processo.STATUS_ANALISE_CHOICES,
         **perm.contexto_de_permissoes(request.user),
@@ -1483,12 +1485,20 @@ def gestao_alterar_prioridade(request, process_id):
 @login_required
 @user_passes_test(pode_usar_area_analista)
 def assumir_processo(request, process_id):
-    """Desativado na Fila: consulta apenas. Análise pelo Controle."""
-    messages.error(
-        request,
-        'A Fila de análise é só consulta. Use Nova análise no Controle '
-        'de relatório ou Controle de análise.')
-    return redirect('area_analista')
+    """Assumir da lista Nova análise / Assumir e abrir a tela de análise."""
+    if request.method != 'POST':
+        return redirect('area_analista')
+    try:
+        processo = tramitacao.assumir(process_id, request.user)
+    except (PermissionDenied, ValidationError) as exc:
+        messages.error(
+            request, '; '.join(getattr(exc, 'messages', [str(exc)])))
+        destino = request.POST.get('next') or reverse('area_analista')
+        if str(destino).startswith('/'):
+            return redirect(destino)
+        return redirect('area_analista')
+    messages.success(request, 'Processo assumido. Continue a análise.')
+    return redirect('analista_processo', process_id=processo.id)
 
 
 @login_required

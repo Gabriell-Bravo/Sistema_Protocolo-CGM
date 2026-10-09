@@ -640,6 +640,40 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         self.assertContains(fim, finalizado.numero_processo)
         self.assertNotContains(fim, pendente.numero_processo)
 
+    def test_reentrada_nao_herda_finalizados_da_passagem_anterior(self):
+        """Análise antiga do mesmo número não manda a reentrada para Finalizados."""
+        from processos_app.models import LinhaControleRelatorio
+        from processos_app.services import relatorios as svc_relatorios
+
+        antiga = self.novo_processo(
+            self.especie_liq, numero_processo='15371/2021')
+        LinhaControleRelatorio.objects.create(
+            processo=antiga,
+            numero_relatorio='88001',
+            numero_processo=antiga.numero_processo,
+            data_relatorio=timezone.localdate(),
+            situacao_linha='ATIVA',
+            sequencia='LIQUIDACOES',
+            grupo='LIQUIDACOES',
+        )
+        antiga.numero_relatorio = '88001'
+        antiga.save(update_fields=['numero_relatorio'])
+        tramitacao.registrar_saida_direta(antiga.id, self.protocolo)
+
+        reentrada = self.novo_processo(
+            self.especie_liq, numero_processo='15371/2021', volume='4')
+
+        self.client.force_login(self.protocolo)
+        pend = self.client.get(reverse('listar_processos') + '?fase=pendentes')
+        self.assertContains(pend, '15371/2021')
+        fim = self.client.get(reverse('listar_processos') + '?fase=finalizados')
+        self.assertNotContains(fim, '15371/2021')
+        self.assertFalse(
+            svc_relatorios.processo_tem_analise_registrada(reentrada))
+        self.assertIn(
+            reentrada.id,
+            tramitacao.pendentes_como_ativos().values_list('id', flat=True))
+
     def test_saida_remove_de_ativos_e_da_fila_analista(self):
         processo = self.novo_processo(
             self.especie_liq, numero_processo='saida-fila/2026')
@@ -765,13 +799,14 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
             r'edit_note[\s\S]{0,80}Analisar')
         self.assertContains(pagina, 'Ver')
 
-        # POST direto também é bloqueado.
-        bloqueado = self.client.post(
+        # Assumir continua pela janela "Assumir" (Nova análise), não pela fila.
+        assumiu = self.client.post(
             reverse('assumir_processo', args=[disponivel.id]))
-        self.assertEqual(bloqueado.status_code, 302)
+        self.assertRedirects(
+            assumiu, reverse('analista_processo', args=[disponivel.id]))
         disponivel.refresh_from_db()
-        self.assertNotEqual(disponivel.situacao_tramite, 'EM_ANALISE')
-        self.assertIsNone(disponivel.analista_responsavel_id)
+        self.assertEqual(disponivel.situacao_tramite, 'EM_ANALISE')
+        self.assertEqual(disponivel.analista_responsavel_id, self.analista_lic.id)
 
     def test_fila_analista_so_mostra_entrada_do_protocolo(self):
         """Fila de análise: só processos cadastrados pelo Protocolo."""

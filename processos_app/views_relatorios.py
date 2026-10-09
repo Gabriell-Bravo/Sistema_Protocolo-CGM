@@ -14,6 +14,7 @@ from .models import Processo
 from .services import cadastros as svc_cadastros
 from .services import permissions as perm
 from .services import relatorios as svc
+from .services import tramitacao
 
 
 SECOES = ('analises', 'destinados', 'numeracao')
@@ -169,6 +170,9 @@ def controle_relatorio(request):
         'all_status_analise': Processo.STATUS_ANALISE_CHOICES,
         'sequencias_nova_analise': svc.sequencias_disponiveis(),
         'nova_analise_grupo': grupo,
+        'processos_para_assumir': list(
+            tramitacao.disponiveis_para_assumir(request.user)),
+        'pode_assumir_modal': perm.pode_nova_analise(request.user),
         **perm.contexto_de_permissoes(request.user),
     })
 

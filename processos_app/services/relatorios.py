@@ -3311,7 +3311,11 @@ def _registrar_diligencias_nova_analise(processo, usuario, textos):
 
 
 def processo_tem_analise_registrada(processo):
-    """Usado em Processos Ativos: Pendentes × Finalizados."""
+    """Usado em Processos Ativos: Pendentes × Finalizados.
+
+    Só conta análise desta passagem (campos do Processo + linha do Controle
+    ligada por FK). Linha antiga do mesmo número não fecha a reentrada.
+    """
     if processo is None:
         return False
     if processo.situacao_tramite in (
@@ -3320,21 +3324,13 @@ def processo_tem_analise_registrada(processo):
         return True
     if (processo.numero_relatorio or '').strip() or processo.sem_relatorio:
         return True
-    if LinhaControleRelatorio.objects.filter(
-            processo=processo,
-            situacao_linha=LinhaControleRelatorio.SITUACAO_ATIVA,
-    ).exists():
-        return True
-    numero = (processo.numero_processo or '').strip()
-    if not numero:
-        return False
     return LinhaControleRelatorio.objects.filter(
-        numero_processo__iexact=numero,
+        processo=processo,
         situacao_linha__in=(
             LinhaControleRelatorio.SITUACAO_ATIVA,
             LinhaControleRelatorio.SITUACAO_HISTORICA,
         ),
-    ).exclude(numero_relatorio='', sem_relatorio=False).exists()
+    ).filter(Q(sem_relatorio=True) | ~Q(numero_relatorio='')).exists()
 
 
 def buscar_para_nova_analise(usuario, numero_processo, grupo=GRUPO_PADRAO):

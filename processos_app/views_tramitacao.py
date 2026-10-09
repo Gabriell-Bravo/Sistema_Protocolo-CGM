@@ -52,12 +52,17 @@ def _executar(request, funcao, destino, *args, sucesso='', **kwargs):
 @login_required
 @require_POST
 def assumir(request, process_id):
-    """Desativado na UI: Fila é só consulta; análise pelo Controle."""
-    messages.error(
-        request,
-        'A Fila de análise é só consulta. Use Nova análise no Controle '
-        'de relatório ou Controle de análise.')
-    return redirect('area_analista')
+    """Assumir processo disponível e abrir a tela de análise."""
+    destino_lista = request.POST.get('next') or reverse('area_analista')
+    if not str(destino_lista).startswith('/'):
+        destino_lista = reverse('area_analista')
+    erro, processo = _executar(
+        request, tramitacao.assumir, destino_lista,
+        process_id, request.user,
+        sucesso='Processo assumido. Continue a análise.')
+    if erro:
+        return erro
+    return redirect('analista_processo', process_id=processo.id)
 
 
 @login_required

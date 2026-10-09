@@ -2,7 +2,7 @@
 
 {% block title %}Controle de análise{% endblock %}
 {% block page_title %}Controle de análise{% endblock %}
-{% block page_subtitle %}Processos de Licitações e Contratos em tramitação neste grupo — sem planilha Excel. Use Nova análise para arquivo, observação e diligências.{% endblock %}
+{% block page_subtitle %}Processos de Licitações e Contratos. Nova análise abre Assumir (Pendentes de Processos Ativos). Encaminhar ao Controlador → Para assinar.{% endblock %}
 
 {% block content %}
 <div class="stack">
@@ -65,8 +65,8 @@
                 <button type="submit" class="btn btn--primary">Buscar</button>
             </form>
             {% if pode_nova_analise %}
-            <button type="button" class="btn btn--primary" data-modal-open="modalNovaAnalise">
-                <span class="material-symbols-rounded">add_notes</span>
+            <button type="button" class="btn btn--primary" data-modal-open="modalAssumir">
+                <span class="material-symbols-rounded">handshake</span>
                 Nova análise
             </button>
             {% endif %}
@@ -152,5 +152,5 @@
         </div>
     </section>
 </div>
-{% include "analista/_modal_nova_analise.html" with nova_analise_grupo=nova_analise_grupo nova_analise_modo='licitacao' sequencias_nova_analise=sequencias_nova_analise layout_planilha=None %}
+{% include "analista/_modal_assumir.html" %}
 {% endblock %}

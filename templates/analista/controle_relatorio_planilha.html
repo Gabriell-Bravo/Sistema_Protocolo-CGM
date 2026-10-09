@@ -316,8 +316,8 @@
     </div>
     <div class="sheet-bar__right">
       {% if pode_nova_analise %}
-      <button type="button" class="btn btn--primary" data-modal-open="modalNovaAnalise">
-        <span class="material-symbols-rounded">add_notes</span>
+      <button type="button" class="btn btn--primary" data-modal-open="modalAssumir">
+        <span class="material-symbols-rounded">handshake</span>
         Nova análise
       </button>
       {% endif %}
@@ -1021,6 +1021,6 @@
   });
 })();
 </script>
-{% include "analista/_modal_nova_analise.html" with nova_analise_grupo=aba nova_analise_modo='liquidacao' sequencias_nova_analise=grupos_destino layout_planilha=layout_planilha %}
+{% include "analista/_modal_assumir.html" %}
 {# nova_analise_grupo recebe a aba atual (ex.: LIQUIDACOES) #}
 {% endblock %}

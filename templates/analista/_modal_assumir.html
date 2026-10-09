@@ -1,0 +1,76 @@
+{# Janela Assumir — processos Pendentes de Processos Ativos ainda disponíveis. #}
+{% if pode_nova_analise or pode_assumir_modal %}
+<div class="modal" id="modalAssumir" role="dialog" aria-labelledby="tituloAssumir">
+    <div class="modal__dialog modal__dialog--70">
+        <div class="modal__header">
+            <span class="modal__title" id="tituloAssumir">Assumir</span>
+            <button type="button" class="icon-btn" data-modal-close="modalAssumir" aria-label="Fechar">
+                <span class="material-symbols-rounded">close</span>
+            </button>
+        </div>
+        <div class="modal__body">
+            <p class="field__hint" style="margin:0 0 14px;">
+                Processos da aba <strong>Pendentes</strong> de Processos Ativos, ainda disponíveis.
+                Ao clicar em <strong>Assumir</strong>, o processo fica com você e abre a análise.
+                Quem já está em análise ou com o Controlador não aparece aqui.
+            </p>
+            <div class="table-scroll">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th class="col-sticky">Processo</th>
+                            <th>Volume</th>
+                            <th>Espécie</th>
+                            <th>Secretaria</th>
+                            <th>Entrada</th>
+                            <th>Situação</th>
+                            <th class="col-actions">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for processo in processos_para_assumir %}
+                        <tr class="{{ processo.prioridade_linha_class }}">
+                            <td class="col-sticky"><strong>{{ processo.numero_processo }}</strong></td>
+                            <td>{{ processo.volume|default:'—' }}</td>
+                            <td>{{ processo.especie|default:'—' }}</td>
+                            <td>{{ processo.secretaria|default:'—' }}</td>
+                            <td>
+                                {% if processo.data_entrada %}
+                                    {{ processo.data_entrada|date:"d/m/Y" }}
+                                    {% if processo.hora_entrada %} {{ processo.hora_entrada|time:"H:i" }}{% endif %}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge badge--available">{{ processo.situacao_exibicao }}</span>
+                            </td>
+                            <td class="col-actions">
+                                <form method="post" action="{% url 'assumir_processo' processo.id %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                    <button type="submit" class="btn btn--primary btn--sm">
+                                        <span class="material-symbols-rounded">handshake</span>
+                                        Assumir
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7">
+                                <div class="empty empty--compact">
+                                    <span class="material-symbols-rounded">inbox</span>
+                                    <div class="empty__title">Nenhum processo disponível para assumir</div>
+                                    <div>Quando o Protocolo cadastrar um processo do seu grupo em Pendentes, ele aparece aqui.</div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
