@@ -625,13 +625,11 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         finalizado.save(update_fields=['numero_relatorio'])
 
         self.client.force_login(self.protocolo)
-        # Padrão Todos: reflexo da fila — analisado ou não, enquanto não sair.
-        todos = self.client.get(reverse('listar_processos'))
-        self.assertEqual(todos.context['fase'], 'todos')
-        self.assertContains(todos, pendente.numero_processo)
-        self.assertContains(todos, finalizado.numero_processo)
-        self.assertContains(todos, 'Licitações e Contratos')
-        self.assertContains(todos, 'Liquidação')
+        # Padrão Pendentes: o que ainda aguarda análise (não é saída física).
+        padrao = self.client.get(reverse('listar_processos'))
+        self.assertEqual(padrao.context['fase'], 'pendentes')
+        self.assertContains(padrao, pendente.numero_processo)
+        self.assertNotContains(padrao, finalizado.numero_processo)
 
         pend = self.client.get(reverse('listar_processos') + '?fase=pendentes')
         self.assertContains(pend, 'Pendentes')
@@ -662,6 +660,36 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         self.client.force_login(self.analista_liq)
         fila2 = self.client.get(reverse('area_analista'))
         self.assertNotContains(fila2, 'saida-fila/2026')
+
+    def test_fila_nao_mostra_disponivel_ja_analisado(self):
+        """DISPONÍVEL com análise no Controle some da fila (como de Pendentes)."""
+        from processos_app.models import LinhaControleRelatorio
+
+        fantasma = self.novo_processo(
+            self.especie_liq, numero_processo='fantasma/2026')
+        LinhaControleRelatorio.objects.create(
+            processo=fantasma,
+            numero_relatorio='99001',
+            numero_processo=fantasma.numero_processo,
+            data_relatorio=timezone.localdate(),
+            situacao_linha='ATIVA',
+            sequencia='LIQUIDACOES',
+            grupo='LIQUIDACOES',
+        )
+        fantasma.numero_relatorio = '99001'
+        fantasma.save(update_fields=['numero_relatorio'])
+
+        self.client.force_login(self.protocolo)
+        pend = self.client.get(reverse('listar_processos') + '?fase=pendentes')
+        self.assertNotContains(pend, 'fantasma/2026')
+
+        self.client.force_login(self.analista_liq)
+        fila = self.client.get(reverse('area_analista'))
+        self.assertNotContains(fila, 'fantasma/2026')
+
+        self.client.force_login(self.gestao)
+        gestao = self.client.get(reverse('gestao_processos'))
+        self.assertNotContains(gestao, 'fantasma/2026')
 
     def test_fila_padrao_mostra_quem_esta_analisando_e_esconde_o_controlador(self):
         disponivel = self.novo_processo(numero_processo='1001/2026')

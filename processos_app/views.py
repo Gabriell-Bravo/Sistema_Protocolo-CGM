@@ -361,11 +361,10 @@ def salvar_processo(request):
 
 @login_required
 def listar_processos(request):
-    """Processos ativos — mesmo universo da fila dos analistas.
+    """Processos ativos — consulta do que está na CGM (Protocolo/Gestão).
 
-    Tudo ainda na CGM (sem saída). Padrão: Todos (reflexo da fila),
-    agrupado em Licitações e Liquidações. Pendentes/Finalizados são
-    filtros opcionais por análise no Controle. Com ?aba=cgm, só CGM.
+    Fase: pendentes (sem análise no Controle) ou finalizados (análise
+    já registrada). Com ?aba=cgm, só CGM/Contabilidade.
     """
     from .models import LinhaControleRelatorio
     from .services import secretaria_cgm as svc_cgm
@@ -383,31 +382,18 @@ def listar_processos(request):
     genero_filtro = request.GET.get('genero', 'todas')
     especie_filtro = request.GET.get('especie', 'todas')
     situacao_filtro = request.GET.get('situacao', 'todas')
-    # Padrão Todos: espelha a fila (análise feita ou não; some só com saída).
-    fase = (request.GET.get('fase') or 'todos').strip()
+    fase = (request.GET.get('fase') or 'pendentes').strip()
     if fase not in ('pendentes', 'finalizados', 'todos'):
-        fase = 'todos'
+        fase = 'pendentes'
 
     if aba_cgm:
         processos_query = (svc_cgm.apenas_processos_cgm(tramitacao.ativos())
                            .select_related('analista_responsavel', 'prioridade_fk',
-                                           'secretaria_fk', 'especie_fk'))
+                                           'secretaria_fk'))
     else:
-        # Mesma base da fila: Licitações/Liquidações com entrada pelo Protocolo.
-        cadastro = EventoProcesso.objects.filter(
-            processo_id=OuterRef('pk'),
-            tipo='PROCESSO_CADASTRADO',
-        )
-        processos_query = (
-            tramitacao.ativos()
-            .filter(genero__in=['LICITACOES_E_CONTRATOS', 'LIQUIDACOES'])
-            .filter(Exists(cadastro))
-            .exclude(observacao_protocolo__startswith='Entrada via Nova análise')
-            .select_related(
-                'analista_responsavel', 'prioridade_fk', 'especie_fk')
-        )
         processos_query = filter_processes_by_user_level(
-            request.user, processos_query)
+            request.user, tramitacao.ativos()).select_related(
+                'analista_responsavel', 'prioridade_fk')
 
     if termo_pesquisa:
         processos_query = processos_query.filter(
@@ -482,20 +468,8 @@ def listar_processos(request):
             total_prioritarios += 1
     total_processos = processos_query.count()
 
-    # Sem paginação na lista principal: grupos iguais à fila dos analistas.
-    # Aba CGM mantém páginas (lista administrativa aparte).
-    if aba_cgm:
-        pagina = Paginator(processos_query, 50).get_page(request.GET.get('page'))
-        processos = list(pagina)
-        licitacoes = []
-        grupos_liquidacoes = []
-    else:
-        pagina = None
-        processos = list(processos_query)
-        licitacoes = [p for p in processos if p.genero == 'LICITACOES_E_CONTRATOS']
-        grupos_liquidacoes = montar_grupos_liquidacoes(
-            [p for p in processos if p.genero == 'LIQUIDACOES'])
-
+    pagina = Paginator(processos_query, 50).get_page(request.GET.get('page'))
+    processos = list(pagina)
     anotar_total_passagens(processos)
     pode_saida = perm.pode_registrar_saida(request.user)
     for processo in processos:
@@ -515,8 +489,6 @@ def listar_processos(request):
     return render(request, 'lista_processos.html', {
         'processos': processos,
         'pagina': pagina,
-        'licitacoes': licitacoes,
-        'grupos_liquidacoes': grupos_liquidacoes,
         'querystring': querystring_sem_page(request),
         'total_processos': total_processos,
         'total_atrasados': total_atrasados,
@@ -1305,10 +1277,14 @@ def consultar_fila_grupos(request, opcoes_filtro=FILTROS_ANALISTA,
 
     so_entrada_protocolo: só processos cadastrados pelo Protocolo
     (exclui stubs criados pela Nova análise).
+
+    Espelha Processos Ativos: só o que ainda está na CGM (sem saída).
+    Não lista DISPONÍVEL que já tem análise no Controle — isso já saiu
+    da aba Pendentes dos Ativos e não deve voltar como fila nova.
     """
     from django.db.models import Exists, OuterRef
 
-    from .models import EventoProcesso
+    from .models import EventoProcesso, LinhaControleRelatorio
 
     termo_pesquisa = request.GET.get('pesquisa', '').strip()
     padrao = opcoes_filtro[0][0]
@@ -1319,13 +1295,36 @@ def consultar_fila_grupos(request, opcoes_filtro=FILTROS_ANALISTA,
     if filtro not in conhecidos:
         filtro = padrao
 
-    base_query = tramitacao.ativos().filter(
-        genero__in=['LICITACOES_E_CONTRATOS', 'LIQUIDACOES'],
-    ).exclude(
-        situacao_tramite='DISPONIVEL_RETIRADA'
-    ).select_related(
-        'analista_responsavel', 'assinatura_direcionada_para',
-        'prioridade_fk', 'especie_fk',
+    linha_analise = LinhaControleRelatorio.objects.filter(
+        Q(processo=OuterRef('pk')) | Q(
+            numero_processo__iexact=OuterRef('numero_processo')),
+        situacao_linha__in=(
+            LinhaControleRelatorio.SITUACAO_ATIVA,
+            LinhaControleRelatorio.SITUACAO_HISTORICA,
+        ),
+    ).filter(Q(sem_relatorio=True) | ~Q(numero_relatorio=''))
+
+    base_query = (
+        tramitacao.ativos()
+        .filter(genero__in=['LICITACOES_E_CONTRATOS', 'LIQUIDACOES'])
+        .exclude(situacao_tramite='DISPONIVEL_RETIRADA')
+        .annotate(tem_analise_controle=Exists(linha_analise))
+        .exclude(
+            # Já analisado e de novo disponível: não é Pendente em Ativos.
+            Q(situacao_tramite='DISPONIVEL')
+            & (
+                Q(tem_analise_controle=True)
+                | Q(sem_relatorio=True)
+                | (
+                    ~Q(numero_relatorio='')
+                    & Q(numero_relatorio__isnull=False)
+                )
+            )
+        )
+        .select_related(
+            'analista_responsavel', 'assinatura_direcionada_para',
+            'prioridade_fk', 'especie_fk',
+        )
     )
     if so_entrada_protocolo:
         cadastro = EventoProcesso.objects.filter(
