@@ -628,21 +628,30 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         with self.assertRaises(PermissionDenied):
             relatorios.definir_ultimo_numero(self.analista_liq, 10)
 
-    def test_salvar_analise_nao_gera_numero_sozinho(self):
+    def test_salvar_analise_exige_gerar_numero_antes(self):
+        """Salvar sem nº é bloqueado — senão a análise some da planilha."""
         processo = self.novo_processo(self.especie_liq, numero_processo='10/2026')
         tramitacao.assumir(processo.id, self.analista_liq)
         processo.refresh_from_db()
         self.assertFalse(processo.numero_relatorio)
-        svc_processos.aplicar_analise(processo, {
-            'destino': 'Unidade de Teste',
-            'valor': '1000',
-            'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
-        }, self.analista_liq)
+        with self.assertRaises(svc_processos.DadosInvalidos) as ctx:
+            svc_processos.aplicar_analise(processo, {
+                'acao': 'salvar',
+                'destino': 'Unidade de Teste',
+                'valor': '1000',
+                'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+            }, self.analista_liq)
+        self.assertIn('Gere o número', str(ctx.exception))
         processo.refresh_from_db()
         self.assertFalse(processo.numero_relatorio)
         self.assertFalse(
             LinhaControleRelatorio.objects.filter(processo=processo).exists())
-        self.assertEqual(processo.destino, 'Unidade de Teste')
+        self.assertNotEqual(processo.destino, 'Unidade de Teste')
+
+        self.client.force_login(self.analista_liq)
+        pagina = self.client.get(reverse('analista_processo', args=[processo.id]))
+        self.assertContains(pagina, 'value="gerar_numero"')
+        self.assertNotContains(pagina, 'value="salvar"')
 
     def test_gerar_numero_emite_sequencial_e_planilha(self):
         processo = self.novo_processo(self.especie_liq, numero_processo='10b/2026')
@@ -676,7 +685,8 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         tela = self.client.get(reverse('analista_processo', args=[sem_num.id]))
         self.assertContains(tela, 'value="gerar_numero"')
         self.assertContains(tela, 'Gerar número')
-        self.assertContains(tela, 'Salvar análise')
+        # Sem número ainda: só Gerar (Salvar aparece depois).
+        self.assertNotContains(tela, 'value="salvar"')
 
     def test_declinar_devolve_o_numero_ao_proximo_analista(self):
         admin = criar_usuario('admin_gasto', 'GESTAO', is_superuser=True)
@@ -1679,11 +1689,15 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         ])
         # Número pré-preenchido sem dados (como na planilha da CGM) — ignorar.
         ws.append([None, 9999, None, None, None, None, None, None, None, None])
-        # Amarelo sem processo = reservado / saiu sem análise — importar.
+        # Amarelo sem processo e nº ≤ 1900 = saiu sem análise.
         from openpyxl.styles import PatternFill
-        ws.append([None, 88, datetime.date(2026, 3, 1), None, None, None, None, None, None, None])
         amarelo = PatternFill(
             start_color='FFFFFF00', end_color='FFFFFF00', fill_type='solid')
+        ws.append([None, 88, datetime.date(2026, 3, 1), None, None, None, None, None, None, None])
+        for celula in ws[ws.max_row]:
+            celula.fill = amarelo
+        # Amarelo acima de 1900 = só destaque; não marca sem relatório.
+        ws.append([None, 1901, datetime.date(2026, 3, 2), None, None, None, None, None, None, None])
         for celula in ws[ws.max_row]:
             celula.fill = amarelo
         buffer = BytesIO()
@@ -1721,6 +1735,9 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertEqual(reservado.situacao_linha, 'HISTORICA')
         self.assertTrue(reservado.sem_relatorio)
         self.assertIn('sem análise', reservado.observacao)
+        amarelo_alto = LinhaControleRelatorio.objects.get(numero_relatorio='1901')
+        self.assertFalse(amarelo_alto.sem_relatorio)
+        self.assertNotIn('sem análise', (amarelo_alto.observacao or '').casefold())
 
         vivo.refresh_from_db()
         self.assertEqual(vivo.numero_relatorio, '11')
@@ -1734,8 +1751,8 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertEqual(vivo.objeto, 'Objeto corrigido pelo Excel')
         self.assertIn('11.905.867,35', vivo.valor or '')
 
-        # Maior inteiro importado é 88 (amarelo); o 11 ativo já existia.
-        self.assertEqual(relatorios.estado_sequencia()['proximo'], 89)
+        # Maior inteiro importado é 1901; o 11 ativo já existia.
+        self.assertEqual(relatorios.estado_sequencia()['proximo'], 1902)
         self.assertIn(5, relatorios.numeros_usados('LIQUIDACOES'))
         self.assertIn(88, relatorios.numeros_usados('LIQUIDACOES'))
 
@@ -1816,9 +1833,16 @@ class ControleRelatorioTest(BaseProcessoTestCase):
             start_color='FFFFFF00', end_color='FFFFFF00', fill_type='solid')
         for celula in ws[ws.max_row]:
             celula.fill = amarelo
-        # Amarelo sem processo continua sendo sem relatório.
+        # Amarelo sem processo e nº ≤ 1900 = sem relatório.
         ws.append([
             'Bruno', 78, datetime.date(2026, 3, 2), None, None,
+            None, None, None, None, None,
+        ])
+        for celula in ws[ws.max_row]:
+            celula.fill = amarelo
+        # Amarelo sem processo acima de 1900 não marca sem relatório.
+        ws.append([
+            'Carla', 2500, datetime.date(2026, 3, 3), None, None,
             None, None, None, None, None,
         ])
         for celula in ws[ws.max_row]:
@@ -1849,6 +1873,10 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         reservado = LinhaControleRelatorio.objects.get(numero_relatorio='78')
         self.assertTrue(reservado.sem_relatorio)
         self.assertIn('sem análise', reservado.observacao)
+
+        alto = LinhaControleRelatorio.objects.get(numero_relatorio='2500')
+        self.assertFalse(alto.sem_relatorio)
+        self.assertNotIn('sem análise', (alto.observacao or '').casefold())
 
     def test_reimporta_substitui_historico_misturado(self):
         """Histórico errado (ex.: Liquidação no Adiantamento) some na reimportação."""

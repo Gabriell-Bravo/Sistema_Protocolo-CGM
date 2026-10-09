@@ -886,11 +886,13 @@ O número permanece na planilha; o processo deixa de ter esse relatório."
                     arquivo único de 2026 com várias abas). Use
                     <strong>Todas as abas do arquivo</strong> para Adiantamento,
                     Cota, Subvenção, Bolsa Atleta, Diárias, Blocos etc.
-                    A importação <strong>substitui o histórico antigo</strong>
-                    daquele grupo (não mistura com planilha errada).
-                    Análises ativas no sistema não são apagadas.
-                    Só em <strong>Liquidação</strong> linhas amarelas da
-                    planilha entram como “saiu sem análise”.
+                    A importação <strong>substitui todas as linhas</strong>
+                    daquele grupo pela planilha (não mistura com arquivo errado).
+                    Análises ativas no sistema são religadas se o número
+                    ainda estiver no Excel.
+                    Só em <strong>Liquidação</strong> linhas amarelas
+                    <strong>sem processo</strong> e com nº
+                    <strong>≤ 1900</strong> entram como “saiu sem análise”.
                 </p>
                 <form method="post" action="{% url 'controle_relatorio_importar' %}"
                       enctype="multipart/form-data" class="stack" style="gap:12px;">
@@ -919,9 +921,9 @@ O número permanece na planilha; o processo deixa de ter esse relatório."
                     </div>
                     <div class="form-actions">
                         <button type="submit" class="btn btn--primary"
-                                data-confirm="Importar e substituir o histórico antigo do(s) grupo(s) selecionado(s)?
+                                data-confirm="Importar e substituir todas as linhas do(s) grupo(s) selecionado(s) pela planilha?
 
-Análises ativas (com processo) não são apagadas."
+Análises ativas (com processo) são religadas se o número ainda estiver no Excel."
                                 data-confirm-title="Importar planilha"
                                 data-confirm-ok="Importar"
                                 data-confirm-danger>

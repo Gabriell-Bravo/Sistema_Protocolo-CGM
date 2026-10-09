@@ -2660,12 +2660,17 @@ def _numero_relatorio_celula(valor):
     return texto
 
 
+# Na planilha CGM, amarelo “saiu sem análise” só vale até este nº.
+# Acima disso o amarelo é só destaque visual e não marca sem_relatorio.
+NUMERO_MAX_AMARELO_SEM_RELATORIO = 1900
+
+
 def _celula_amarela(celula):
     """Amarelo puro da planilha CGM (candidato a “saiu sem análise”).
 
-    Na importação só vira ``sem_relatorio`` se a linha também estiver
-    sem processo — ver ``_importar_linhas_aba``. Não confundir com
-    laranja (FFC000), usado em faixas vazias da planilha.
+    Na importação só vira ``sem_relatorio`` se a linha estiver sem
+    processo e com nº ≤ ``NUMERO_MAX_AMARELO_SEM_RELATORIO`` — ver
+    ``_importar_linhas_aba``. Não confundir com laranja (FFC000).
     """
     if celula is None:
         return False
@@ -2758,14 +2763,17 @@ def _importar_linhas_aba(
                 if pagamento and origem and pagamento != origem
                 else ''
             )
-        # Amarelo = “saiu sem análise” só em Liquidação, e só quando a
-        # linha está pintada E sem processo (pagamento/origem vazios).
-        # Amarelo com processo = destaque visual na planilha deles, não reserva.
+        # Amarelo = “saiu sem análise” só em Liquidação, sem processo
+        # (pagamento/origem vazios) e com nº ≤ 1900. Acima disso o
+        # amarelo é só destaque visual na planilha deles.
+        numero_int_linha = _inteiro(numero_txt)
         amarela = (
             grupo == GRUPO_PADRAO
             and _linha_amarela(row)
             and not pagamento
             and not origem
+            and numero_int_linha is not None
+            and numero_int_linha <= NUMERO_MAX_AMARELO_SEM_RELATORIO
         )
         data_bruta = cel('data_relatorio')
         data = _data_celula(data_bruta)
@@ -2853,34 +2861,20 @@ def _importar_linhas_aba(
             'status_analise': '',
         }
 
-        numero_int = _inteiro(numero_txt)
+        numero_int = numero_int_linha
         if numero_int:
             maior_inteiro = max(maior_inteiro, numero_int)
 
         atual = existentes.get(numero_txt)
         if atual is not None:
-            # Excel é a fonte da verdade: sobrescreve inclusive ATIVA ligada
-            # a processo (corrige valor/secretaria/objeto digitados errados).
-            # Mantém o vínculo e a situação ATIVA.
-            manter_ativa = (
-                atual.pk
-                and atual.situacao_linha == LinhaControleRelatorio.SITUACAO_ATIVA
-                and atual.processo_id
-            )
+            # Excel é a fonte da verdade (reimportação / duplicata no arquivo).
             for campo, valor_campo in dados.items():
-                if manter_ativa and campo == 'situacao_linha':
-                    continue
-                if manter_ativa and campo == 'sem_relatorio':
-                    continue
                 setattr(atual, campo, valor_campo)
-            if manter_ativa:
-                _sincronizar_processo_pela_importacao(atual.processo, dados)
             if atual.pk:
                 if atual.pk not in atualizar_ids:
                     atualizar_lote.append(atual)
                     atualizar_ids.add(atual.pk)
                     atualizadas += 1
-            # Duplicata no mesmo arquivo: só atualiza o objeto pendente.
             continue
 
         linha = LinhaControleRelatorio(processo=None, **dados)
@@ -2922,18 +2916,71 @@ def _atualizar_proximo_numero_grupo(grupo, maior_inteiro):
         seq.save(update_fields=['proximo_numero'])
 
 
-def _limpar_historico_substituivel(grupo):
-    """Remove histórico antigo do grupo antes de reimportar a planilha.
+def _capturar_vinculos_ativos(grupo):
+    """Mapa nº → processo_id das análises ATIVAS do grupo (antes do wipe)."""
+    return {
+        (linha.numero_relatorio or '').strip(): linha.processo_id
+        for linha in (
+            LinhaControleRelatorio.objects
+            .filter(
+                filtro_sequencia(grupo),
+                situacao_linha=LinhaControleRelatorio.SITUACAO_ATIVA,
+                processo__isnull=False,
+            )
+            .exclude(numero_relatorio='')
+        )
+    }
 
-    Mantém linhas ATIVAS ainda ligadas a processo (análise viva) — esses
-    campos serão sobrescritos pelo Excel na importação, sem desvincular.
-    Qualquer linha sem processo (histórico, órfã, reservada…) é substituída.
+
+def _limpar_historico_substituivel(grupo):
+    """Remove todas as linhas do grupo antes de reimportar a planilha.
+
+    A planilha Excel substitui o controle inteiro daquele grupo. Análises
+    ATIVAS são religadas depois via ``_religar_vinculos_ativos``.
     """
     return (
         LinhaControleRelatorio.objects
-        .filter(filtro_sequencia(grupo), processo__isnull=True)
+        .filter(filtro_sequencia(grupo))
         .delete()
     )
+
+
+def _religar_vinculos_ativos(grupo, vinculos):
+    """Recoloca processos ATIVOS após a importação substituir o grupo.
+
+    Se o nº ainda veio no Excel, a linha importada vira ATIVA de novo.
+    Se o nº sumiu da planilha, a linha é recriada a partir do processo.
+    """
+    if not vinculos:
+        return
+    from processos_app.models import Processo
+
+    for numero, processo_id in vinculos.items():
+        processo = Processo.objects.filter(pk=processo_id).first()
+        if processo is None:
+            continue
+        linha = (
+            LinhaControleRelatorio.objects
+            .filter(filtro_sequencia(grupo), numero_relatorio=numero)
+            .first()
+        )
+        if linha is None:
+            registrar(processo)
+            continue
+        linha.processo = processo
+        linha.situacao_linha = LinhaControleRelatorio.SITUACAO_ATIVA
+        linha.save(update_fields=['processo', 'situacao_linha'])
+        _sincronizar_processo_pela_importacao(processo, {
+            'secretaria': linha.secretaria,
+            'contratada': linha.contratada,
+            'objeto': linha.objeto,
+            'valor': linha.valor,
+            'periodo': linha.periodo,
+            'destino': linha.destino,
+            'volume': linha.volume,
+            'observacao': linha.observacao,
+            'data_relatorio': linha.data_relatorio,
+        })
 
 
 _CAMPOS_OBRIGATORIOS_IMPORT = {
@@ -2978,12 +3025,14 @@ def _existentes_por_grupo(grupo):
 def _importar_aba_excel(planilha, grupo, planilha_valores=None):
     linha_cabecalho, colunas = _localizar_cabecalho(planilha, grupo=grupo)
     _validar_cabecalho_grupo(grupo, colunas)
-    # Substitui o histórico antigo desse grupo (não mistura com outra planilha).
+    # Substitui todas as linhas do grupo pela planilha (Excel = fonte da verdade).
+    vinculos = _capturar_vinculos_ativos(grupo)
     apagadas, _ = _limpar_historico_substituivel(grupo)
     existentes = _existentes_por_grupo(grupo)
     criadas, atualizadas, ignoradas, maior_inteiro = _importar_linhas_aba(
         planilha, linha_cabecalho, colunas, grupo, existentes,
         planilha_valores=planilha_valores)
+    _religar_vinculos_ativos(grupo, vinculos)
     _atualizar_proximo_numero_grupo(grupo, maior_inteiro)
     return {
         'grupo': grupo,
@@ -3000,11 +3049,10 @@ def _importar_aba_excel(planilha, grupo, planilha_valores=None):
 def importar_planilha_excel(usuario, arquivo, grupo=GRUPO_PADRAO):
     """Importa números antigos de um .xlsx para o Controle de relatório.
 
-    Antes de importar cada grupo, apaga o histórico antigo desse grupo
-    (HISTORICA/CANCELADA/RESERVADA sem processo) e recalcula o próximo nº.
-    Análises ATIVAS ligadas a processo **permanecem vinculadas**, mas os
-    campos da planilha (valor, objeto, secretaria…) são sobrescritos —
-    a planilha Excel é a fonte da verdade.
+    Antes de importar cada grupo, apaga **todas** as linhas desse grupo e
+    recria a partir do Excel (fonte da verdade). Análises ATIVAS são
+    religadas se o nº ainda estiver na planilha; senão, a linha volta a
+    partir do processo. Recalcula o próximo nº ao final.
 
     Com ``grupo=GRUPO_IMPORTACAO_COMPLETA`` importa todas as abas
     reconhecidas (arquivo unificado Controle Relatórios 2026).

@@ -277,7 +277,7 @@
     {% elif user.is_superuser and pode_editar and not processo.eh_meu %}
         <div class="alert alert--info">
             <span class="material-symbols-rounded">edit</span>
-            <span>Edição do administrador. Altere os dados do processo e a análise; use <strong>Salvar análise</strong> para gravar os campos e <strong>Gerar número</strong> para emitir o relatório. Marque <strong>Sem relatório</strong> se não houve peça — o número e a data continuam obrigatórios para encaminhar.</span>
+            <span>Edição do administrador. Em Liquidações, use <strong>Gerar número</strong> primeiro (grava na planilha); depois <strong>Salvar análise</strong> para alterações. Marque <strong>Sem relatório</strong> se não houve peça — o número e a data continuam obrigatórios para encaminhar.</span>
         </div>
     {% endif %}
 
@@ -378,9 +378,9 @@
                             Há nº <strong>{{ aviso_numero_reaproveitavel.numero }}</strong> reservado
                             (saiu sem relatório). Confirme no botão abaixo.
                             {% else %}
-                            <strong>Salvar análise</strong> grava os dados sem emitir número.
-                            <strong>Gerar número</strong> emite o sequencial.
-                            Com o lápis, informe um número específico. Ou vincule um número cancelado no Controle de relatório.
+                            <strong>Gerar número</strong> emite o sequencial e grava a análise na planilha.
+                            Com o lápis, informe um número específico e use Gerar número.
+                            Ou vincule um número cancelado no Controle de relatório.
                             {% endif %}
                         {% else %}
                             Use o lápis para informar o número e a data.
@@ -878,17 +878,18 @@ A análise em andamento será limpa (incluindo número de relatório, se houver)
     <section class="card" id="acoesAnalise" style="margin-top:14px;">
         <div class="card__header">
             <span class="card__title">Finalizar</span>
-            <span class="card__hint">{% if eh_licitacao %}Salve a observação (opcional) e encaminhe{% else %}Salve, gere o número e encaminhe{% endif %}</span>
+            <span class="card__hint">{% if eh_licitacao %}Salve a observação (opcional) e encaminhe{% elif processo.numero_relatorio %}Salve alterações e encaminhe{% else %}Gere o número para gravar na planilha; depois pode salvar e encaminhar{% endif %}</span>
         </div>
         <div class="card__body">
             <div class="form-actions" style="margin:0; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
                 {% if pode_editar %}
+                {% if not eh_liquidacao or processo.numero_relatorio %}
                 <button type="submit" form="formAnalise" name="acao" value="salvar" class="btn btn--outline">
                     <span class="material-symbols-rounded">save</span>
                     Salvar análise
                 </button>
+                {% endif %}
                 {% if eh_liquidacao and not processo.numero_relatorio %}
-                    {% if not processo.sem_relatorio or aviso_numero_reaproveitavel %}
                 {% if aviso_numero_reaproveitavel %}
                 <button type="button" class="btn btn--primary" id="btnGerarNumero"
                         data-modal-open="modalNumeroReservado">
@@ -902,7 +903,6 @@ A análise em andamento será limpa (incluindo número de relatório, se houver)
                     Gerar número
                 </button>
                 {% endif %}
-                    {% endif %}
                 {% endif %}
                 {% endif %}
                 {% if pode_liberar or pode_direcionar or pode_declinar %}
@@ -1039,7 +1039,7 @@ A análise em andamento será limpa (incluindo número de relatório, se houver)
             campoDataExibicao.value = dataRelatorioPadrao;
         }
         if (exibicaoNumeroValor && !exibicaoNumeroValor.value) {
-            exibicaoNumeroValor.value = 'Sequencial ao salvar';
+            exibicaoNumeroValor.value = 'Sequencial ao gerar número';
         }
     }
 

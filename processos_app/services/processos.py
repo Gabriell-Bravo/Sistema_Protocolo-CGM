@@ -388,7 +388,9 @@ def aplicar_analise(processo, dados, usuario):
 
     Só o analista responsável (em análise), o administrador ou o
     analista do grupo corrigindo um relatório já gerado. Se vier número
-    manual no POST, ele é gravado no mesmo Salvar análise. Dados de
+    manual no POST, ele é gravado no mesmo envio. Em espécies que geram
+    relatório, ``acao=salvar`` sem número é recusado — use Gerar número
+    (ou nº específico) para a análise entrar na planilha. Dados de
     cadastro (espécie, volume, objeto…) passam por aplicar_edicao.
     """
     dados_cadastro = {
@@ -495,6 +497,24 @@ def aplicar_analise(processo, dados, usuario):
             registrar_relatorio(processo)
     elif processo.numero_relatorio or processo.sem_relatorio:
         registrar_relatorio(processo)
+
+    # Com espécie que gera relatório, Salvar/Gerar sem nº deixa a análise
+    # fora da planilha do Controle. Exige Gerar número (ou nº específico)
+    # antes. POST sem acao (ex.: diligência) ainda grava rascunho dos campos.
+    acao = str((dados or {}).get('acao') or '').strip().lower()
+    if (
+        especie_gera_relatorio(processo)
+        and not (processo.numero_relatorio or '').strip()
+        and (acao in ('salvar', 'gerar_numero') or pedir_numero)
+    ):
+        if acao == 'gerar_numero' or pedir_numero:
+            raise DadosInvalidos(
+                'Não foi possível gerar o número do relatório. '
+                'Tente de novo ou informe um número específico.')
+        raise DadosInvalidos(
+            'Gere o número do relatório antes de salvar a análise '
+            '(botão Gerar número). Assim ela fica na planilha do Controle.')
+
     return alteracoes
 
 
