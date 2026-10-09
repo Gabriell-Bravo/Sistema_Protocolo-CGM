@@ -777,7 +777,7 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         resposta = self.client.get(reverse('area_analista') + '?filtro=liberados')
         self.assertNotContains(resposta, '1004/2026')
 
-    def test_fila_analista_somente_consulta_sem_assumir_nem_analisar(self):
+    def test_fila_analista_consulta_e_abre_analise_dos_seus(self):
         disponivel = self.novo_processo(numero_processo='fila-disp/2026')
         comigo = self.processo_em_analise()
         comigo.numero_processo = 'fila-meu/2026'
@@ -792,12 +792,20 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         self.assertContains(pagina, 'fila-meu/2026')
         self.assertNotContains(pagina, 'Assumir processo')
         self.assertNotContains(pagina, 'Encaminhar ao Controlador')
-        self.assertNotContains(pagina, 'Devolver à fila')
-        # Só "Ver" nas ações — não o botão "Analisar" da fila.
-        self.assertNotRegex(
-            pagina.content.decode(),
-            r'edit_note[\s\S]{0,80}Analisar')
-        self.assertContains(pagina, 'Ver')
+        # Disponíveis: só Ver. Os seus: Analisar + Devolver.
+        html = pagina.content.decode()
+        trecho_disp = html.split('fila-disp/2026', 1)[1].split('</tr>', 1)[0]
+        trecho_meu = html.split('fila-meu/2026', 1)[1].split('</tr>', 1)[0]
+        self.assertIn('Ver', trecho_disp)
+        self.assertNotIn('Analisar', trecho_disp)
+        self.assertIn('Analisar', trecho_meu)
+        self.assertIn('Devolver à fila', trecho_meu)
+
+        comigo_pagina = self.client.get(
+            reverse('area_analista') + '?filtro=comigo')
+        self.assertContains(comigo_pagina, 'fila-meu/2026')
+        self.assertNotContains(comigo_pagina, 'fila-disp/2026')
+        self.assertContains(comigo_pagina, 'Analisar')
 
         # Assumir continua pela janela "Assumir" (Nova análise), não pela fila.
         assumiu = self.client.post(

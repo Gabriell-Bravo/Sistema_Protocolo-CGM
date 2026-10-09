@@ -62,7 +62,28 @@
                     </td>
                     <td class="col-actions">
                         <div class="actions">
-                            {% if fila_somente_leitura %}
+                            {% if fila_somente_leitura and processo.eh_meu %}
+                                <a href="{% url 'analista_processo' processo.id %}" class="btn btn--primary btn--sm">
+                                    <span class="material-symbols-rounded">edit_note</span>
+                                    Analisar
+                                </a>
+                                {% if not modo_gestao %}
+                                <form method="post" action="{% url 'tram_declinar_analise' processo.id %}"
+                                      data-confirm="Devolver este processo à fila?
+
+A análise em andamento será limpa (incluindo número de relatório, se houver) e o processo ficará disponível de novo."
+                                      data-confirm-title="Devolver à fila"
+                                      data-confirm-ok="Devolver"
+                                      data-confirm-danger>
+                                    {% csrf_token %}
+                                    <input type="hidden" name="motivo" value="Devolvido à fila">
+                                    <button type="submit" class="btn btn--outline btn--sm" title="Devolver à fila">
+                                        <span class="material-symbols-rounded">undo</span>
+                                        Devolver à fila
+                                    </button>
+                                </form>
+                                {% endif %}
+                            {% elif fila_somente_leitura %}
                                 <a href="{% url 'analista_processo' processo.id %}" class="btn btn--outline btn--sm">
                                     <span class="material-symbols-rounded">visibility</span>
                                     Ver

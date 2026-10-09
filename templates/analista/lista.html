@@ -2,7 +2,7 @@
 
 {% block title %}Análise de Processos{% endblock %}
 {% block page_title %}Fila de análise{% endblock %}
-{% block page_subtitle %}Mesmo conjunto da aba Pendentes de Processos Ativos (ainda na CGM, sem saída). Análise no Controle (Nova análise).{% endblock %}
+{% block page_subtitle %}Mesmo conjunto da aba Pendentes de Processos Ativos. Em análise por você: abra e edite. Nova análise no Controle (Assumir).{% endblock %}
 
 {% block content %}
 <div class="stack">
@@ -14,7 +14,8 @@
                 <div class="stat__label">Disponíveis</div>
             </div>
         </a>
-        <a class="stat stat--violet stat--link" href="?filtro=comigo{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}">
+        <a class="stat stat--violet stat--link {% if filtro_atual == 'comigo' %}is-active{% endif %}"
+           href="?filtro=comigo{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}">
             <span class="stat__icon"><span class="material-symbols-rounded">person</span></span>
             <div>
                 <div class="stat__value">{{ total_comigo }}</div>
