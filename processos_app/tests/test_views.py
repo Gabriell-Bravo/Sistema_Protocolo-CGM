@@ -691,6 +691,26 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         gestao = self.client.get(reverse('gestao_processos'))
         self.assertNotContains(gestao, 'fantasma/2026')
 
+    def test_processo_com_saida_inconsistente_nao_aparece_na_fila(self):
+        """Saída gravada em qualquer campo tira de Ativos e da fila."""
+        inconsistente = self.novo_processo(
+            self.especie_liq, numero_processo='saiu-sujo/2026')
+        # Situação ainda "ativa", mas já tem marca de saída.
+        inconsistente.saida_concluida_em = timezone.now()
+        inconsistente.data_saida = timezone.localdate()
+        inconsistente.save(update_fields=['saida_concluida_em', 'data_saida'])
+
+        self.assertFalse(
+            tramitacao.ativos().filter(id=inconsistente.id).exists())
+
+        self.client.force_login(self.protocolo)
+        ativos = self.client.get(reverse('listar_processos') + '?fase=todos')
+        self.assertNotContains(ativos, 'saiu-sujo/2026')
+
+        self.client.force_login(self.analista_liq)
+        fila = self.client.get(reverse('area_analista'))
+        self.assertNotContains(fila, 'saiu-sujo/2026')
+
     def test_fila_padrao_mostra_quem_esta_analisando_e_esconde_o_controlador(self):
         disponivel = self.novo_processo(numero_processo='1001/2026')
         comigo = self.processo_em_analise()
@@ -706,8 +726,9 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
 
         self.client.force_login(self.analista_lic)
         resposta = self.client.get(reverse('area_analista'))
-        self.assertEqual(resposta.context['total_com_controlador'], 1)
-        self.assertContains(resposta, 'Com o Controlador')
+        # Com o Controlador = Finalizados em Ativos — fora da fila (Pendentes).
+        self.assertEqual(resposta.context['total_com_controlador'], 0)
+        self.assertNotContains(resposta, '1004/2026')
         self.assertContains(resposta, '1001/2026')
         self.assertContains(resposta, '1002/2026')
         self.assertContains(resposta, '1003/2026')
@@ -718,9 +739,9 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         self.assertNotIn('Assumir processo', trecho_outro)
         self.assertNotContains(resposta, '1004/2026')
 
+        # Liberados também fora de Pendentes — some da fila.
         resposta = self.client.get(reverse('area_analista') + '?filtro=liberados')
-        self.assertContains(resposta, '1004/2026')
-        self.assertContains(resposta, 'A assinatura do Controlador é fora do sistema')
+        self.assertNotContains(resposta, '1004/2026')
 
     def test_fila_analista_somente_consulta_sem_assumir_nem_analisar(self):
         disponivel = self.novo_processo(numero_processo='fila-disp/2026')
@@ -732,7 +753,7 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         pagina = self.client.get(reverse('area_analista'))
         self.assertTrue(pagina.context['fila_somente_leitura'])
         self.assertFalse(pagina.context['pode_assumir'])
-        self.assertContains(pagina, 'Somente processos com entrada pelo Protocolo')
+        self.assertContains(pagina, 'Pendentes de Processos Ativos')
         self.assertContains(pagina, 'fila-disp/2026')
         self.assertContains(pagina, 'fila-meu/2026')
         self.assertNotContains(pagina, 'Assumir processo')

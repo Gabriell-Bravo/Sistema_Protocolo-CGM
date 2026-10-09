@@ -912,16 +912,71 @@ def liberados_para_assinatura():
 
 
 def ativos():
-    """item 58: ativo é o que não saiu e não foi cancelado.
+    """item 58: ativo = ainda na CGM (sem saída física e sem cancelamento).
 
-    `data_saida__isnull` entra por compatibilidade: registros anteriores à
-    nova tramitação têm a saída gravada só em data_saida. Depois de rodar
-    `python manage.py sanear_dados --aplicar`, os dois critérios coincidem.
+    Qualquer sinal de saída tira o processo: situação, data_saida legada
+    ou saida_concluida_em. Assim Processos Ativos e a fila dos analistas
+    usam o mesmo critério e processo que já saiu não reaparece.
     """
-    return Processo.objects.filter(
-        situacao_tramite__in=Processo.SITUACOES_ATIVAS,
-        data_saida__isnull=True,
-        cancelado_em__isnull=True)
+    from django.db.models import Q
+    return (
+        Processo.objects
+        .filter(
+            situacao_tramite__in=Processo.SITUACOES_ATIVAS,
+            data_saida__isnull=True,
+            saida_concluida_em__isnull=True,
+            cancelado_em__isnull=True,
+        )
+        .exclude(
+            Q(situacao_tramite='SAIDA_CONCLUIDA')
+            | Q(data_saida__isnull=False)
+            | Q(saida_concluida_em__isnull=False)
+        )
+    )
+
+
+def subquery_tem_analise_controle():
+    """Exists usado na aba Pendentes/Finalizados de Processos Ativos."""
+    from django.db.models import Exists, OuterRef, Q
+
+    from ..models import LinhaControleRelatorio
+
+    return Exists(
+        LinhaControleRelatorio.objects.filter(
+            Q(processo=OuterRef('pk')) | Q(
+                numero_processo__iexact=OuterRef('numero_processo')),
+            situacao_linha__in=(
+                LinhaControleRelatorio.SITUACAO_ATIVA,
+                LinhaControleRelatorio.SITUACAO_HISTORICA,
+            ),
+        ).filter(Q(sem_relatorio=True) | ~Q(numero_relatorio=''))
+    )
+
+
+def q_analise_feita_ativos():
+    """Mesmo critério da aba Finalizados em Processos Ativos."""
+    from django.db.models import Q
+    return (
+        Q(tem_analise_controle=True)
+        | Q(situacao_tramite__in=(
+            'AGUARDANDO_ASSINATURA', 'ASSINATURA_DIRECIONADA',
+            'DISPONIVEL_RETIRADA'))
+        | Q(sem_relatorio=True)
+        | (~Q(numero_relatorio='') & Q(numero_relatorio__isnull=False))
+    )
+
+
+def pendentes_como_ativos(queryset=None):
+    """Mesmo recorte da aba Pendentes de Processos Ativos (padrão da tela).
+
+    É a fonte da verdade para o que aparece na fila de analistas/Gestão.
+    """
+    from django.db.models import Q
+    base = queryset if queryset is not None else ativos()
+    return (
+        base.annotate(tem_analise_controle=subquery_tem_analise_controle())
+        .filter(~q_analise_feita_ativos())
+    )
 
 
 def finalizados():

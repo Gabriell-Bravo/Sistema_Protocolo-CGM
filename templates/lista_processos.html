@@ -2,7 +2,7 @@
 
 {% block title %}{% if aba_cgm %}Processos CGM{% else %}Processos Ativos{% endif %}{% endblock %}
 {% block page_title %}{% if aba_cgm %}Processos CGM{% else %}Processos Ativos{% endif %}{% endblock %}
-{% block page_subtitle %}{% if aba_cgm %}Processos da {{ secretaria_cgm }} e da espécie Contabilidade — só Protocolo e Gestão{% else %}Ainda na CGM (sem saída física). Pendentes = aguardam análise; Finalizados = já têm análise no Controle — não é saída. Saída tira daqui e das filas.{% endif %}{% endblock %}
+{% block page_subtitle %}{% if aba_cgm %}Processos da {{ secretaria_cgm }} e da espécie Contabilidade — só Protocolo e Gestão{% else %}Fonte da verdade do que ainda está na CGM. Pendentes = o que a fila dos analistas e a Gestão veem. Saída física remove daqui e das filas.{% endif %}{% endblock %}
 
 {% block topbar_actions %}
     {% if can_export_ativos %}

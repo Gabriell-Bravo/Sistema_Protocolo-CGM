@@ -366,7 +366,6 @@ def listar_processos(request):
     Fase: pendentes (sem análise no Controle) ou finalizados (análise
     já registrada). Com ?aba=cgm, só CGM/Contabilidade.
     """
-    from .models import LinhaControleRelatorio
     from .services import secretaria_cgm as svc_cgm
 
     aba_cgm = request.GET.get('aba') == 'cgm'
@@ -417,29 +416,14 @@ def listar_processos(request):
     if situacao_filtro in dict(Processo.SITUACAO_TRAMITE_CHOICES):
         processos_query = processos_query.filter(situacao_tramite=situacao_filtro)
 
-    # Pendência calculada dos registros reais (item 31), numa consulta só.
-    linha_analise = LinhaControleRelatorio.objects.filter(
-        Q(processo=OuterRef('pk')) | Q(
-            numero_processo__iexact=OuterRef('numero_processo')),
-        situacao_linha__in=(
-            LinhaControleRelatorio.SITUACAO_ATIVA,
-            LinhaControleRelatorio.SITUACAO_HISTORICA,
-        ),
-    ).filter(Q(sem_relatorio=True) | ~Q(numero_relatorio=''))
+    # Pendência + fase: mesmo critério compartilhado com a fila (tramitacao).
+    filtro_analise_feita = tramitacao.q_analise_feita_ativos()
     processos_query = processos_query.annotate(
         pendencias_abertas=Count('pendencias', filter=Q(
             pendencias__status__in=Pendencia.STATUS_ABERTOS), distinct=True),
         tem_evento_cadastro=Exists(EventoProcesso.objects.filter(
             processo=OuterRef('pk'), tipo='PROCESSO_CADASTRADO')),
-        tem_analise_controle=Exists(linha_analise),
-    )
-    filtro_analise_feita = (
-        Q(tem_analise_controle=True)
-        | Q(situacao_tramite__in=(
-            'AGUARDANDO_ASSINATURA', 'ASSINATURA_DIRECIONADA',
-            'DISPONIVEL_RETIRADA'))
-        | Q(sem_relatorio=True)
-        | (~Q(numero_relatorio='') & Q(numero_relatorio__isnull=False))
+        tem_analise_controle=tramitacao.subquery_tem_analise_controle(),
     )
     total_pendentes = processos_query.filter(~filtro_analise_feita).count()
     total_finalizados = processos_query.filter(filtro_analise_feita).count()
@@ -1271,20 +1255,16 @@ def consultar_fila_grupos(request, opcoes_filtro=FILTROS_ANALISTA,
                           so_entrada_protocolo=False):
     """Fila dos dois grupos de análise, com busca e filtro (item 37).
 
-    Devolve (todos, licitacoes, grupos_liquidacoes, termo, filtro, contagens).
-    `todos` é o conjunto sem filtro — base dos totais do topo da tela.
-    Liquidações vêm separadas por sequência (blocos empilhados).
+    Fonte da verdade = aba Pendentes de Processos Ativos: ainda na CGM
+    (sem saída) e sem análise concluída no Controle. Processo que já saiu
+    ou que já não aparece em Pendentes não entra para analistas/Gestão.
 
     so_entrada_protocolo: só processos cadastrados pelo Protocolo
     (exclui stubs criados pela Nova análise).
-
-    Espelha Processos Ativos: só o que ainda está na CGM (sem saída).
-    Não lista DISPONÍVEL que já tem análise no Controle — isso já saiu
-    da aba Pendentes dos Ativos e não deve voltar como fila nova.
     """
     from django.db.models import Exists, OuterRef
 
-    from .models import EventoProcesso, LinhaControleRelatorio
+    from .models import EventoProcesso
 
     termo_pesquisa = request.GET.get('pesquisa', '').strip()
     padrao = opcoes_filtro[0][0]
@@ -1295,36 +1275,14 @@ def consultar_fila_grupos(request, opcoes_filtro=FILTROS_ANALISTA,
     if filtro not in conhecidos:
         filtro = padrao
 
-    linha_analise = LinhaControleRelatorio.objects.filter(
-        Q(processo=OuterRef('pk')) | Q(
-            numero_processo__iexact=OuterRef('numero_processo')),
-        situacao_linha__in=(
-            LinhaControleRelatorio.SITUACAO_ATIVA,
-            LinhaControleRelatorio.SITUACAO_HISTORICA,
-        ),
-    ).filter(Q(sem_relatorio=True) | ~Q(numero_relatorio=''))
-
-    base_query = (
-        tramitacao.ativos()
-        .filter(genero__in=['LICITACOES_E_CONTRATOS', 'LIQUIDACOES'])
-        .exclude(situacao_tramite='DISPONIVEL_RETIRADA')
-        .annotate(tem_analise_controle=Exists(linha_analise))
-        .exclude(
-            # Já analisado e de novo disponível: não é Pendente em Ativos.
-            Q(situacao_tramite='DISPONIVEL')
-            & (
-                Q(tem_analise_controle=True)
-                | Q(sem_relatorio=True)
-                | (
-                    ~Q(numero_relatorio='')
-                    & Q(numero_relatorio__isnull=False)
-                )
-            )
+    # Mesmo universo da tela Processos Ativos → Pendentes.
+    base_query = tramitacao.pendentes_como_ativos(
+        tramitacao.ativos().filter(
+            genero__in=['LICITACOES_E_CONTRATOS', 'LIQUIDACOES'],
         )
-        .select_related(
-            'analista_responsavel', 'assinatura_direcionada_para',
-            'prioridade_fk', 'especie_fk',
-        )
+    ).select_related(
+        'analista_responsavel', 'assinatura_direcionada_para',
+        'prioridade_fk', 'especie_fk',
     )
     if so_entrada_protocolo:
         cadastro = EventoProcesso.objects.filter(
