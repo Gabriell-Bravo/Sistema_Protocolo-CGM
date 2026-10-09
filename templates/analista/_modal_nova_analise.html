@@ -16,8 +16,9 @@
             <div id="novaAnalisePasso1">
                 <p class="field__hint" style="margin:0 0 14px;">
                     Informe o número do processo físico. Não depende do Protocolo ter cadastrado antes.
-                    Em seguida a tela é a mesma da análise: salve, aponte diligências e use
-                    <strong>Gerar número</strong> por último.
+                    Em seguida a tela é a mesma da análise: aponte diligências,
+                    use <strong>Gerar número e salvar</strong> e depois
+                    <strong>Encaminhar</strong> ao Controlador.
                 </p>
                 <div class="form-grid">
                     <div class="field">
@@ -63,8 +64,8 @@
                     </div>
                     <p class="field__hint" style="margin:-6px 0 14px;" id="novaHintSecao">
                         Mesmos campos da tela de análise e da planilha do Controle de Relatórios.
-                        <strong>Salvar análise</strong> grava os dados;
-                        <strong>Gerar número</strong> emite o sequencial na planilha.
+                        Use <strong>Gerar número e salvar</strong> para gravar na planilha;
+                        depois <strong>Encaminhar</strong> ao Controlador.
                     </p>
                     <div class="form-grid form-grid--full" id="novaCamposGrid">
                         {# Ordem igual a analista/processo.html: nº, data, grupo, depois campos da planilha. #}
@@ -73,11 +74,10 @@
                                 {% if L %}{{ L.rotulos.numero_relatorio }}{% else %}Nº relatório{% endif %}
                             </label>
                             <input type="text" id="nova_numero_relatorio" class="input" readonly
-                                   value="Ainda sem número — use Gerar número">
+                                   value="Ainda sem número — use Gerar número e salvar">
                             <input type="hidden" id="nova_numero_relatorio_envio" name="numero_relatorio" value="">
                             <span class="field__hint" id="novaHintProximo">
-                                <strong>Salvar análise</strong> grava os dados sem emitir número.
-                                <strong>Gerar número</strong> emite o sequencial.
+                                <strong>Gerar número e salvar</strong> emite o sequencial e grava na planilha.
                                 Próximo sugerido (só referência): —
                             </span>
                         </div>
@@ -177,7 +177,7 @@
                                 <input type="checkbox" id="nova_sem" name="sem_relatorio" value="1">
                                 <span>Sem relatório</span>
                             </label>
-                            <span class="field__hint">Marque se não houve peça de relatório. Mesmo assim é obrigatório ter número e data antes de encaminhar (use Gerar número).</span>
+                            <span class="field__hint">Marque se não houve peça de relatório. Mesmo assim é obrigatório ter número e data antes de encaminhar (use Gerar número e salvar).</span>
                         </div>
                     </div>
                 </div>
@@ -213,23 +213,27 @@
                 <section class="card" style="margin-top:14px;" id="acoesNovaAnalise">
                     <div class="card__header">
                         <span class="card__title">Finalizar</span>
-                        <span class="card__hint">Salve, gere o número e encaminhe</span>
+                        <span class="card__hint" id="novaHintFinalizar">Gere o número para gravar na planilha</span>
                     </div>
                     <div class="card__body">
                         <div class="form-actions" style="margin:0; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
-                            <button type="submit" class="btn btn--outline" id="btnNovaAnaliseSalvar" data-acao="salvar">
-                                <span class="material-symbols-rounded">save</span>
-                                Salvar análise
-                            </button>
                             <button type="submit" class="btn btn--primary" id="btnNovaAnaliseGerar" data-acao="gerar">
                                 <span class="material-symbols-rounded">pin</span>
-                                Gerar número
+                                Gerar número e salvar
+                            </button>
+                            <button type="submit" class="btn btn--primary" id="btnNovaAnaliseEncaminhar"
+                                    data-acao="encaminhar" hidden
+                                    data-confirm="Encaminhar este processo para o Controlador?"
+                                    data-confirm-title="Encaminhar"
+                                    data-confirm-ok="Encaminhar">
+                                <span class="material-symbols-rounded">send</span>
+                                Encaminhar
                             </button>
                             <button type="button" class="btn btn--outline" id="btnNovaAnaliseVoltar">
                                 Voltar
                             </button>
                             <button type="button" class="btn btn--ghost" data-modal-close="modalNovaAnalise">
-                                Cancelar
+                                Fechar
                             </button>
                         </div>
                         <p id="novaAnaliseErro" class="field__hint" style="color:var(--danger, #b91c1c); margin-top:10px;" hidden></p>
@@ -259,8 +263,17 @@
     var diligenciasNovas = [];
     var acaoSalvar = 'salvar';
     var proximoCache = null;
+    var recarregarAoFechar = false;
     var urlBuscar = modal.getAttribute('data-url-buscar');
     var csrf = (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
+
+    function fecharModalNovaAnalise() {
+        resetPasso1();
+        if (recarregarAoFechar) {
+            recarregarAoFechar = false;
+            window.location.reload();
+        }
+    }
 
     function formatarMoeda(input) {
         var digitos = (input.value || '').replace(/\D/g, '');
@@ -427,12 +440,43 @@
         renderPendenciasExistentes([]);
         if (campoNumero) {
             campoNumero.readOnly = true;
-            campoNumero.value = 'Ainda sem número — use Gerar número';
+            campoNumero.value = 'Ainda sem número — use Gerar número e salvar';
         }
         var hiddenNum = document.getElementById('nova_numero_relatorio_envio');
         if (hiddenNum) hiddenNum.value = '';
         var btnGerar = document.getElementById('btnNovaAnaliseGerar');
+        var btnEnc = document.getElementById('btnNovaAnaliseEncaminhar');
         if (btnGerar) btnGerar.hidden = false;
+        if (btnEnc) btnEnc.hidden = true;
+        var hintFinal = document.getElementById('novaHintFinalizar');
+        if (hintFinal) {
+            hintFinal.textContent = 'Gere o número para gravar na planilha';
+        }
+    }
+
+    function aplicarEstadoAposSalvar(res) {
+        var num = (res.numero_relatorio || '').trim();
+        var hiddenNum = document.getElementById('nova_numero_relatorio_envio');
+        var btnGerar = document.getElementById('btnNovaAnaliseGerar');
+        var btnEnc = document.getElementById('btnNovaAnaliseEncaminhar');
+        if (campoNumero) {
+            campoNumero.value = num
+                ? ('Relatório ' + num)
+                : 'Ainda sem número — use Gerar número e salvar';
+        }
+        if (hiddenNum) hiddenNum.value = num;
+        if (btnGerar) btnGerar.hidden = !!num;
+        if (btnEnc) btnEnc.hidden = !num;
+        var hintFinal = document.getElementById('novaHintFinalizar');
+        if (hintFinal) {
+            hintFinal.textContent = num
+                ? 'Encaminhe ao Controlador quando estiver pronto'
+                : 'Gere o número para gravar na planilha';
+        }
+        var hint = document.getElementById('novaHintProximo');
+        if (hint && num) {
+            hint.innerHTML = 'Número já emitido: <strong>' + num + '</strong>.';
+        }
     }
 
     function preencher(dados, meta) {
@@ -465,12 +509,20 @@
         if (campoNumero) {
             campoNumero.value = jaTem
                 ? ('Relatório ' + jaTem)
-                : 'Ainda sem número — use Gerar número';
+                : 'Ainda sem número — use Gerar número e salvar';
             campoNumero.readOnly = true;
         }
         if (hiddenNum) hiddenNum.value = jaTem;
         var btnGerar = document.getElementById('btnNovaAnaliseGerar');
+        var btnEnc = document.getElementById('btnNovaAnaliseEncaminhar');
         if (btnGerar) btnGerar.hidden = !!jaTem;
+        if (btnEnc) btnEnc.hidden = !jaTem;
+        var hintFinal = document.getElementById('novaHintFinalizar');
+        if (hintFinal) {
+            hintFinal.textContent = jaTem
+                ? 'Encaminhe ao Controlador quando estiver pronto'
+                : 'Gere o número para gravar na planilha';
+        }
         document.getElementById('nova_grupo').value = meta.grupo || '';
         document.getElementById('nova_sem').checked = !!dados.sem_relatorio;
         proximoCache = meta.proximo_numero;
@@ -478,8 +530,7 @@
         if (hint) {
             hint.innerHTML = jaTem
                 ? ('Número já emitido: <strong>' + jaTem + '</strong>.')
-                : ('<strong>Salvar análise</strong> grava os dados sem emitir número. '
-                    + '<strong>Gerar número</strong> emite o sequencial (já na planilha). '
+                : ('<strong>Gerar número e salvar</strong> emite o sequencial e grava na planilha. '
                     + 'Próximo sugerido (só referência): ' + (proximoCache || '—'));
         }
         renderPendenciasExistentes(meta.pendencias || []);
@@ -561,15 +612,17 @@
         if (campoValor) formatarMoeda(campoValor);
         syncDiligenciasHidden();
         var gerar = acaoSalvar === 'gerar';
+        var encaminhar = acaoSalvar === 'encaminhar';
         document.getElementById('nova_gerar_numero').value = gerar ? '1' : '';
         var body = new FormData(form);
         if (!gerar) {
             body.set('gerar_numero', '');
         }
-        var btnSalvar = document.getElementById('btnNovaAnaliseSalvar');
+        body.set('encaminhar', encaminhar ? '1' : '');
         var btnGerar = document.getElementById('btnNovaAnaliseGerar');
-        if (btnSalvar) btnSalvar.disabled = true;
+        var btnEnc = document.getElementById('btnNovaAnaliseEncaminhar');
         if (btnGerar) btnGerar.disabled = true;
+        if (btnEnc) btnEnc.disabled = true;
         fetch(form.action, {
             method: 'POST',
             body: body,
@@ -585,27 +638,37 @@
                     mostrarErro(res.j.mensagem || 'Não foi possível salvar.');
                     return;
                 }
+                if (res.j.encaminhado) {
+                    recarregarAoFechar = true;
+                    if (typeof window.sheetToast === 'function') {
+                        window.sheetToast(res.j.mensagem || 'Encaminhado ao Controlador.', true);
+                    }
+                    fecharModalNovaAnalise();
+                    return;
+                }
+                // Após gerar: mantém aberto para Encaminhar.
+                aplicarEstadoAposSalvar(res.j);
+                recarregarAoFechar = true;
                 if (typeof window.sheetToast === 'function') {
                     window.sheetToast(res.j.mensagem || 'Análise salva.', true);
-                    window.location.reload();
                 } else {
                     window.appAlert(res.j.mensagem || 'Análise salva.', {
                         titulo: 'Análise', tipo: 'success', icone: 'check_circle'
-                    }).then(function () { window.location.reload(); });
+                    });
                 }
             })
             .catch(function () { mostrarErro('Falha ao salvar. Tente de novo.'); })
             .finally(function () {
-                if (btnSalvar) btnSalvar.disabled = false;
                 if (btnGerar) btnGerar.disabled = false;
+                if (btnEnc) btnEnc.disabled = false;
             });
     });
 
     modal.addEventListener('click', function (ev) {
-        if (ev.target === modal) resetPasso1();
+        if (ev.target === modal) fecharModalNovaAnalise();
     });
     document.querySelectorAll('[data-modal-close="modalNovaAnalise"]').forEach(function (btn) {
-        btn.addEventListener('click', resetPasso1);
+        btn.addEventListener('click', fecharModalNovaAnalise);
     });
     document.querySelectorAll('[data-modal-open="modalNovaAnalise"]').forEach(function (btnOpen) {
         btnOpen.addEventListener('click', function () {
@@ -613,6 +676,7 @@
             var sel = document.getElementById('nova_grupo_busca');
             if (sel && def) sel.value = def;
             document.getElementById('nova_numero_busca').value = '';
+            recarregarAoFechar = false;
             resetPasso1();
             setTimeout(function () {
                 document.getElementById('nova_numero_busca').focus();

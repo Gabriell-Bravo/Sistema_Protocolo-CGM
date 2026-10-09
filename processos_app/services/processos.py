@@ -513,7 +513,7 @@ def aplicar_analise(processo, dados, usuario):
                 'Tente de novo ou informe um número específico.')
         raise DadosInvalidos(
             'Gere o número do relatório antes de salvar a análise '
-            '(botão Gerar número). Assim ela fica na planilha do Controle.')
+            '(botão Gerar número e salvar). Assim ela fica na planilha do Controle.')
 
     return alteracoes
 

@@ -2117,8 +2117,7 @@ class ControleRelatorioTest(BaseProcessoTestCase):
     def test_nova_analise_sem_protocolo_salva_e_gera_numero_na_planilha(self):
         from processos_app.models import Pendencia, Processo
 
-        admin = criar_usuario('admin_nova_avulsa', 'GESTAO', is_superuser=True)
-        self.client.force_login(admin)
+        self.client.force_login(self.analista_liq)
         busca = self.client.get(reverse('controle_relatorio_nova_analise_buscar'), {
             'numero_processo': '99999/2026',
             'grupo': 'LIQUIDACOES',
@@ -2128,7 +2127,7 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertTrue(payload['ok'])
         self.assertFalse(payload['encontrado'])
 
-        # Salvar análise NÃO emite número nem grava planilha.
+        # Salvar sem número é bloqueado (análise sumiria da planilha).
         salva = self.client.post(
             reverse('controle_relatorio_nova_analise_salvar'),
             {
@@ -2147,19 +2146,14 @@ class ControleRelatorioTest(BaseProcessoTestCase):
             HTTP_X_REQUESTED_WITH='XMLHttpRequest',
             HTTP_ACCEPT='application/json',
         )
-        self.assertEqual(salva.status_code, 200, salva.content)
+        self.assertEqual(salva.status_code, 400, salva.content)
         corpo_salva = salva.json()
-        self.assertTrue(corpo_salva['ok'], corpo_salva)
-        self.assertFalse(corpo_salva.get('gerou_numero'))
-        self.assertIsNotNone(corpo_salva['processo_id'])
-        processo = Processo.objects.get(id=corpo_salva['processo_id'])
-        self.assertFalse(processo.numero_relatorio)
-        self.assertEqual(
-            Pendencia.objects.filter(processo=processo).count(), 2)
+        self.assertFalse(corpo_salva.get('ok'), corpo_salva)
+        self.assertIn('Gere o número', corpo_salva.get('mensagem') or '')
         self.assertFalse(
-            LinhaControleRelatorio.objects.filter(processo=processo).exists())
+            Processo.objects.filter(numero_processo='99999/2026').exists())
 
-        # Gerar número por último: trava + planilha.
+        # Gerar número: trava + planilha + diligências no mesmo envio.
         gera = self.client.post(
             reverse('controle_relatorio_nova_analise_salvar'),
             {
@@ -2170,7 +2164,13 @@ class ControleRelatorioTest(BaseProcessoTestCase):
                 'secretaria': 'Unidade de Teste',
                 'objeto': 'Teste nova análise avulsa',
                 'valor': '1500,50',
+                'destino': 'Unidade de Teste',
+                'analista': 'Ana Teste',
                 'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+                'diligencias': [
+                    'Falta nota fiscal',
+                    'Complementar empênio',
+                ],
             },
             HTTP_X_REQUESTED_WITH='XMLHttpRequest',
             HTTP_ACCEPT='application/json',
@@ -2179,12 +2179,38 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         corpo = gera.json()
         self.assertTrue(corpo['ok'], corpo)
         self.assertTrue(corpo.get('gerou_numero'))
-        processo.refresh_from_db()
+        processo = Processo.objects.get(id=corpo['processo_id'])
         self.assertTrue(processo.numero_relatorio)
+        self.assertEqual(
+            Pendencia.objects.filter(processo=processo).count(), 2)
         linha = LinhaControleRelatorio.objects.get(processo=processo)
         self.assertEqual(linha.situacao_linha, 'ATIVA')
         self.assertEqual(linha.numero_relatorio, processo.numero_relatorio)
         self.assertIn('1.500,50', linha.valor)
+
+        # Encaminhar direto ao Controlador (sem abrir a tela do processo).
+        enc = self.client.post(
+            reverse('controle_relatorio_nova_analise_salvar'),
+            {
+                'numero_processo': '99999/2026',
+                'grupo': 'LIQUIDACOES',
+                'encaminhar': '1',
+                'data_relatorio': '2026-10-08',
+                'secretaria': 'Unidade de Teste',
+                'objeto': 'Teste nova análise avulsa',
+                'valor': '1500,50',
+                'destino': 'Unidade de Teste',
+                'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
+        self.assertEqual(enc.status_code, 200, enc.content)
+        corpo_enc = enc.json()
+        self.assertTrue(corpo_enc['ok'], corpo_enc)
+        self.assertTrue(corpo_enc.get('encaminhado'))
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'AGUARDANDO_ASSINATURA')
 
     def test_nova_analise_com_processo_liquidacao_vincula(self):
         processo = self.novo_processo(
@@ -2238,14 +2264,17 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertContains(pagina, 'Lista de diligências')
         self.assertContains(pagina, 'Finalizar')
         self.assertContains(pagina, 'Dados do relatório')
-        self.assertContains(pagina, 'Gerar número')
-        self.assertContains(pagina, 'Salvar análise')
+        self.assertContains(pagina, 'Gerar número e salvar')
+        self.assertContains(pagina, 'Encaminhar')
+        self.assertNotContains(pagina, 'Salvar análise')
+        self.assertNotContains(pagina, 'Abrir para encaminhar')
 
         resp = self.client.post(
             reverse('controle_relatorio_nova_analise_salvar'),
             {
                 'numero_processo': 'LIC-AVULSO/2026',
                 'grupo': 'LIQUIDACOES',
+                'gerar_numero': '1',
                 'data_relatorio': '2026-10-08',
                 'objeto': 'Análise avulsa Licitações',
                 'analista': 'Ana Lic',
@@ -2260,7 +2289,7 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         processo = Processo.objects.get(numero_processo='LIC-AVULSO/2026')
         self.assertEqual(
             Pendencia.objects.filter(processo=processo).count(), 1)
-        self.assertFalse(processo.numero_relatorio)
+        self.assertTrue(processo.numero_relatorio)
 
     def test_controle_relatorio_mostra_botao_nova_analise(self):
         self.client.force_login(self.analista_liq)
@@ -2282,9 +2311,11 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertContains(pagina, 'placeholder="R$ 0,00"')
         self.assertContains(pagina, 'formatarMoeda')
         self.assertContains(pagina, 'id="nova_status_analise"')
-        self.assertContains(pagina, 'Ainda sem número — use Gerar número')
-        self.assertContains(pagina, 'Gerar número')
-        self.assertContains(pagina, 'Salvar análise')
+        self.assertContains(pagina, 'Ainda sem número — use Gerar número e salvar')
+        self.assertContains(pagina, 'Gerar número e salvar')
+        self.assertContains(pagina, 'id="btnNovaAnaliseEncaminhar"')
+        self.assertNotContains(pagina, 'Salvar análise')
+        self.assertNotContains(pagina, 'Abrir para encaminhar')
 
     def test_nova_analise_busca_formata_valor(self):
         processo = self.novo_processo(

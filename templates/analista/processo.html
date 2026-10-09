@@ -277,7 +277,7 @@
     {% elif user.is_superuser and pode_editar and not processo.eh_meu %}
         <div class="alert alert--info">
             <span class="material-symbols-rounded">edit</span>
-            <span>Edição do administrador. Em Liquidações, use <strong>Gerar número</strong> primeiro (grava na planilha); depois <strong>Salvar análise</strong> para alterações. Marque <strong>Sem relatório</strong> se não houve peça — o número e a data continuam obrigatórios para encaminhar.</span>
+            <span>Edição do administrador. Em Liquidações, use <strong>Gerar número e salvar</strong> primeiro (grava na planilha); depois <strong>Salvar análise</strong> para alterações. Marque <strong>Sem relatório</strong> se não houve peça — o número e a data continuam obrigatórios para encaminhar.</span>
         </div>
     {% endif %}
 
@@ -332,7 +332,7 @@
                     <label class="field__label" for="numero_relatorio_exibicao">{% if layout_planilha %}{{ layout_planilha.rotulos.numero_relatorio }}{% else %}Número do relatório{% endif %}</label>
                     {% if pode_editar_numero_relatorio %}
                     <div class="pendencia-add__row" id="numeroRelatorioExibicao">
-                        <input type="text" id="numero_relatorio_exibicao" class="input" value="{% if processo.numero_relatorio %}Relatório {{ processo.numero_relatorio }}{% else %}Ainda sem número — use Gerar número, o lápis, ou vincule no Controle{% endif %}" readonly>
+                        <input type="text" id="numero_relatorio_exibicao" class="input" value="{% if processo.numero_relatorio %}Relatório {{ processo.numero_relatorio }}{% else %}Ainda sem número — use Gerar número e salvar, o lápis, ou vincule no Controle{% endif %}" readonly>
                         <button type="button" class="icon-btn icon-btn--primary" id="btnEditarNumero" title="Informar número específico">
                             <span class="material-symbols-rounded">edit</span>
                         </button>
@@ -378,8 +378,8 @@
                             Há nº <strong>{{ aviso_numero_reaproveitavel.numero }}</strong> reservado
                             (saiu sem relatório). Confirme no botão abaixo.
                             {% else %}
-                            <strong>Gerar número</strong> emite o sequencial e grava a análise na planilha.
-                            Com o lápis, informe um número específico e use Gerar número.
+                            <strong>Gerar número e salvar</strong> emite o sequencial e grava a análise na planilha.
+                            Com o lápis, informe um número específico e use o mesmo botão.
                             Ou vincule um número cancelado no Controle de relatório.
                             {% endif %}
                         {% else %}
@@ -388,7 +388,7 @@
                     </span>
                     {% else %}
                     <input type="text" id="numero_relatorio" class="input" value="{% if processo.numero_relatorio %}Relatório {{ processo.numero_relatorio }}{% endif %}" readonly>
-                    <span class="field__hint">{% if processo.numero_relatorio %}Número do relatório.{% else %}Use Gerar número ou vincule no Controle.{% endif %}</span>
+                    <span class="field__hint">{% if processo.numero_relatorio %}Número do relatório.{% else %}Use Gerar número e salvar ou vincule no Controle.{% endif %}</span>
                     {% endif %}
                 </div>
                 <div class="field" id="dataRelatorioExibicaoCampo">
@@ -556,7 +556,7 @@
                                {% if not pode_editar %}disabled{% endif %}>
                         <span>Sem relatório</span>
                     </label>
-                    <span class="field__hint">Marque se não houve peça de relatório. Mesmo assim é obrigatório ter número e data antes de encaminhar ao Controlador (use Gerar número, o lápis ou vincule no Controle).</span>
+                    <span class="field__hint">Marque se não houve peça de relatório. Mesmo assim é obrigatório ter número e data antes de encaminhar ao Controlador (use Gerar número e salvar, o lápis ou vincule no Controle).</span>
                 </div>
                 {% endif %}
             </div>
@@ -878,7 +878,7 @@ A análise em andamento será limpa (incluindo número de relatório, se houver)
     <section class="card" id="acoesAnalise" style="margin-top:14px;">
         <div class="card__header">
             <span class="card__title">Finalizar</span>
-            <span class="card__hint">{% if eh_licitacao %}Salve a observação (opcional) e encaminhe{% elif processo.numero_relatorio %}Salve alterações e encaminhe{% else %}Gere o número para gravar na planilha; depois pode salvar e encaminhar{% endif %}</span>
+            <span class="card__hint">{% if eh_licitacao %}Salve a observação (opcional) e encaminhe{% elif processo.numero_relatorio %}Salve alterações e encaminhe{% else %}Gere o número e salve para gravar na planilha; depois pode encaminhar{% endif %}</span>
         </div>
         <div class="card__body">
             <div class="form-actions" style="margin:0; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
@@ -900,7 +900,7 @@ A análise em andamento será limpa (incluindo número de relatório, se houver)
                 <button type="submit" form="formAnalise" name="acao" value="gerar_numero"
                         class="btn btn--primary" id="btnGerarNumero">
                     <span class="material-symbols-rounded">pin</span>
-                    Gerar número
+                    Gerar número e salvar
                 </button>
                 {% endif %}
                 {% endif %}
@@ -1039,7 +1039,7 @@ A análise em andamento será limpa (incluindo número de relatório, se houver)
             campoDataExibicao.value = dataRelatorioPadrao;
         }
         if (exibicaoNumeroValor && !exibicaoNumeroValor.value) {
-            exibicaoNumeroValor.value = 'Sequencial ao gerar número';
+            exibicaoNumeroValor.value = 'Sequencial ao gerar número e salvar';
         }
     }
 

@@ -3387,14 +3387,14 @@ def buscar_para_nova_analise(usuario, numero_processo, grupo=GRUPO_PADRAO):
             })
             base['aviso'] = (
                 'Processo ainda não está no sistema. Campos vieram de linha '
-                'anterior do Controle. Salve a análise, aponte diligências e '
-                'só no fim use Gerar número (grava na planilha com trava).'
+                'anterior do Controle. Preencha a análise, aponte diligências e '
+                'use Gerar número e salvar (grava na planilha).'
             )
         else:
             base['aviso'] = (
                 'Processo ainda não cadastrado pelo Protocolo. Você pode '
                 'preencher a análise e as diligências aqui. O número do '
-                'relatório só é gerado ao clicar em Gerar número — já na planilha.'
+                'relatório só é gerado em Gerar número e salvar — já na planilha.'
             )
         return base
 
@@ -3424,7 +3424,7 @@ def buscar_para_nova_analise(usuario, numero_processo, grupo=GRUPO_PADRAO):
     base['pendencias'] = _pendencias_resumo(processo)
     base['aviso'] = (
         'Processo encontrado. Dados preenchidos automaticamente. '
-        'Salve a análise, aponte diligências e use Gerar número por último '
+        'Aponte diligências e use Gerar número e salvar '
         '(grava na planilha e evita dois usuários pegarem o mesmo nº).'
     )
     return base
@@ -3432,7 +3432,7 @@ def buscar_para_nova_analise(usuario, numero_processo, grupo=GRUPO_PADRAO):
 
 @transaction.atomic
 def salvar_nova_analise(usuario, dados):
-    """Salva análise/diligências; número só sob Gerar número (trava + planilha)."""
+    """Salva análise/diligências; número só sob Gerar número e salvar."""
     perm.assert_permissao(
         perm.pode_nova_analise(usuario),
         'Somente analista (Licitações ou Liquidações) e o administrador '
@@ -3447,6 +3447,8 @@ def salvar_nova_analise(usuario, dados):
         raise RelatorioInvalido('Grupo de numeração inválido.')
 
     gerar = str(dados.get('gerar_numero') or '') in (
+        '1', 'true', 'True', 'on', 'sim')
+    encaminhar = str(dados.get('encaminhar') or '') in (
         '1', 'true', 'True', 'on', 'sim')
     sem_relatorio = str(dados.get('sem_relatorio') or '') in (
         '1', 'true', 'True', 'on', 'sim')
@@ -3568,24 +3570,59 @@ def salvar_nova_analise(usuario, dados):
         processo.save(update_fields=['data_analise', 'sem_relatorio'])
         linha = registrar(processo)
     else:
-        # Salvar análise: grava campos e diligências, sem emitir número.
+        # Sem emitir nº: só com nº já existente (regrava planilha) ou
+        # espécie que não exige relatório. Encaminhar exige nº em Liquidações.
+        if especie_gera_relatorio(processo) and not numero_relatorio:
+            if encaminhar:
+                raise RelatorioInvalido(
+                    'Gere o número do relatório antes de encaminhar '
+                    '(botão Gerar número e salvar).')
+            raise RelatorioInvalido(
+                'Gere o número do relatório antes '
+                '(botão Gerar número e salvar). Assim a análise fica na planilha.')
         if not processo.data_analise:
             processo.data_analise = data
             processo.save(update_fields=['data_analise'])
+        if numero_relatorio:
+            linha = registrar(processo)
+
+    processo.refresh_from_db()
+    numero_relatorio = (processo.numero_relatorio or '').strip()
+
+    if (
+        especie_gera_relatorio(processo)
+        and gerar
+        and not numero_relatorio
+    ):
+        raise RelatorioInvalido(
+            'Não foi possível gerar o número do relatório. '
+            'Tente de novo ou informe um número específico.')
+
+    encaminhado = False
+    if encaminhar:
+        if especie_gera_relatorio(processo) and not numero_relatorio:
+            raise RelatorioInvalido(
+                'Gere o número do relatório antes de encaminhar '
+                '(botão Gerar número e salvar).')
+        from .tramitacao import liberar_assinatura
+        liberar_assinatura(processo.id, usuario)
+        encaminhado = True
 
     partes = []
     if gerar and numero_relatorio and numero_relatorio != numero_antes:
         partes.append(f'Número {numero_relatorio} gerado.')
-    elif numero_relatorio:
+    elif numero_relatorio and not encaminhado:
         partes.append(
             f'Análise salva. Número do relatório: {numero_relatorio}.')
-    else:
+    elif not numero_relatorio and not encaminhado:
         partes.append('Análise salva sem número de relatório.')
     if diligencias_criadas:
         partes.append(
             f'{len(diligencias_criadas)} diligência(s) apontada(s).')
     if criado:
         partes.append('Processo criado sem entrada prévia do Protocolo.')
+    if encaminhado:
+        partes.append('Encaminhado ao Controlador.')
 
     return {
         'linha_id': linha.id if linha else None,
@@ -3596,5 +3633,6 @@ def salvar_nova_analise(usuario, dados):
         'numero_processo': processo.numero_processo,
         'diligencias': len(diligencias_criadas),
         'gerou_numero': bool(gerar and numero_relatorio),
+        'encaminhado': encaminhado,
         'mensagem': ' '.join(partes),
     }
