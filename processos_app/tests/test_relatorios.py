@@ -1258,13 +1258,19 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertIn(
             '14.554.502.023.075',
             svc_processos.formatar_valor('=1455450+2023075,5'))
-        # Período na planilha costuma ser data formatada (jun.-26), não ISO.
+        # Período como data (ex. 1951 no Sheets) → dd/mm/aaaa, não ISO.
+        self.assertEqual(
+            relatorios._texto_periodo_celula(datetime.date(2026, 9, 1)),
+            '01/09/2026')
         self.assertEqual(
             relatorios._texto_periodo_celula(datetime.date(2026, 6, 1)),
-            'jun.-26')
+            '01/06/2026')
         self.assertEqual(
             relatorios._data_celula('07/10/2026'),
             datetime.date(2026, 10, 7))
+        self.assertEqual(
+            relatorios._data_celula('10/6/2026'),
+            datetime.date(2026, 6, 10))
 
         admin = criar_usuario('admin_formula_valor', 'GESTAO', is_superuser=True)
         wb = Workbook()
@@ -1302,7 +1308,7 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertEqual(linha.valor, 'R$ 3.478.525,50')
         self.assertNotIn('14.554.502.023.075', linha.valor)
         self.assertEqual(linha.data_relatorio, datetime.date(2026, 7, 10))
-        self.assertEqual(linha.periodo, 'jun.-26')
+        self.assertEqual(linha.periodo, '01/06/2026')
 
     def test_data_relatorio_e_do_gerar_nao_do_assumir(self):
         """Data do número nasce no Gerar, não quando o processo é assumido."""
@@ -1337,6 +1343,12 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertEqual(liberado.situacao_linha, 'RESERVADA')
         self.assertIsNone(liberado.processo_id)
         self.assertEqual(liberado.data_relatorio, hoje)
+        # Número disponível: só nº e data — sem processo/objeto/valor/etc.
+        self.assertEqual(liberado.numero_processo, '')
+        self.assertEqual(liberado.objeto, '')
+        self.assertEqual(liberado.valor, '')
+        self.assertEqual(liberado.secretaria, '')
+        self.assertEqual(liberado.analista, '')
 
         outro = self.novo_processo(self.especie_liq, numero_processo='troca-hoje-2/2026')
         self._salvar_liquidacao(outro)
@@ -1370,6 +1382,10 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertIsNone(linha.processo_id)
         self.assertFalse(processo.numero_relatorio)
         self.assertEqual(linha.data_relatorio, hoje)
+        self.assertEqual(linha.numero_processo, '')
+        self.assertEqual(linha.objeto, '')
+        self.assertEqual(linha.valor, '')
+        self.assertEqual(linha.analista, '')
 
         outro = self.novo_processo(self.especie_liq, numero_processo='desfaz-2/2026')
         self._salvar_liquidacao(outro)
@@ -2069,3 +2085,353 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertEqual(subv.periodo, 'Renovação')
         self.assertEqual(subv.objeto, 'Renovação para o ano de 2026')
         self.assertEqual(subv.contratada, 'Lar Teste')
+
+    def test_nova_analise_sem_protocolo_salva_e_gera_numero_na_planilha(self):
+        from processos_app.models import Pendencia, Processo
+
+        admin = criar_usuario('admin_nova_avulsa', 'GESTAO', is_superuser=True)
+        self.client.force_login(admin)
+        busca = self.client.get(reverse('controle_relatorio_nova_analise_buscar'), {
+            'numero_processo': '99999/2026',
+            'grupo': 'LIQUIDACOES',
+        })
+        self.assertEqual(busca.status_code, 200)
+        payload = busca.json()
+        self.assertTrue(payload['ok'])
+        self.assertFalse(payload['encontrado'])
+
+        # Salvar análise NÃO emite número nem grava planilha.
+        salva = self.client.post(
+            reverse('controle_relatorio_nova_analise_salvar'),
+            {
+                'numero_processo': '99999/2026',
+                'grupo': 'LIQUIDACOES',
+                'data_relatorio': '2026-10-08',
+                'secretaria': 'Unidade de Teste',
+                'objeto': 'Teste nova análise avulsa',
+                'valor': '1500,50',
+                'analista': 'Ana Teste',
+                'diligencias': [
+                    'Falta nota fiscal',
+                    'Complementar empênio',
+                ],
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
+        self.assertEqual(salva.status_code, 200, salva.content)
+        corpo_salva = salva.json()
+        self.assertTrue(corpo_salva['ok'], corpo_salva)
+        self.assertFalse(corpo_salva.get('gerou_numero'))
+        self.assertIsNotNone(corpo_salva['processo_id'])
+        processo = Processo.objects.get(id=corpo_salva['processo_id'])
+        self.assertFalse(processo.numero_relatorio)
+        self.assertEqual(
+            Pendencia.objects.filter(processo=processo).count(), 2)
+        self.assertFalse(
+            LinhaControleRelatorio.objects.filter(processo=processo).exists())
+
+        # Gerar número por último: trava + planilha.
+        gera = self.client.post(
+            reverse('controle_relatorio_nova_analise_salvar'),
+            {
+                'numero_processo': '99999/2026',
+                'grupo': 'LIQUIDACOES',
+                'gerar_numero': '1',
+                'data_relatorio': '2026-10-08',
+                'secretaria': 'Unidade de Teste',
+                'objeto': 'Teste nova análise avulsa',
+                'valor': '1500,50',
+                'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
+        self.assertEqual(gera.status_code, 200, gera.content)
+        corpo = gera.json()
+        self.assertTrue(corpo['ok'], corpo)
+        self.assertTrue(corpo.get('gerou_numero'))
+        processo.refresh_from_db()
+        self.assertTrue(processo.numero_relatorio)
+        linha = LinhaControleRelatorio.objects.get(processo=processo)
+        self.assertEqual(linha.situacao_linha, 'ATIVA')
+        self.assertEqual(linha.numero_relatorio, processo.numero_relatorio)
+        self.assertIn('1.500,50', linha.valor)
+
+    def test_nova_analise_com_processo_liquidacao_vincula(self):
+        processo = self.novo_processo(
+            self.especie_liq, numero_processo='88881/2026')
+        self.client.force_login(self.analista_liq)
+        resp = self.client.post(
+            reverse('controle_relatorio_nova_analise_salvar'),
+            {
+                'numero_processo': '88881/2026',
+                'grupo': 'LIQUIDACOES',
+                'numero_relatorio': '44001',
+                'data_relatorio': '2026-10-08',
+                'secretaria': processo.secretaria,
+                'objeto': 'Objeto via nova análise',
+                'destino': 'Unidade de Teste',
+                'valor': '2000',
+                'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+                'analista': 'Caio Liq',
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        corpo = resp.json()
+        self.assertTrue(corpo['ok'], corpo)
+        self.assertFalse(corpo['so_linha'])
+        processo.refresh_from_db()
+        self.assertEqual(processo.numero_relatorio, '44001')
+        self.assertEqual(processo.objeto, 'Objeto via nova análise')
+        linha = LinhaControleRelatorio.objects.get(processo=processo)
+        self.assertEqual(linha.situacao_linha, 'ATIVA')
+        self.assertTrue(relatorios.processo_tem_analise_registrada(processo))
+
+    def test_protocolo_nao_usa_nova_analise(self):
+        self.client.force_login(self.protocolo)
+        self.assertEqual(
+            self.client.get(reverse('controle_relatorio_nova_analise_buscar'), {
+                'numero_processo': '1/2026',
+            }).status_code,
+            403,
+        )
+
+    def test_analista_licitacoes_pode_nova_analise_com_diligencia(self):
+        from processos_app.models import Pendencia, Processo
+
+        self.client.force_login(self.analista_lic)
+        pagina = self.client.get(reverse('controle_analise'))
+        self.assertEqual(pagina.status_code, 200)
+        self.assertContains(pagina, 'Nova análise')
+        self.assertContains(pagina, 'modalNovaAnalise')
+        self.assertContains(pagina, 'Lista de diligências')
+        self.assertContains(pagina, 'Finalizar')
+        self.assertContains(pagina, 'Dados do relatório')
+        self.assertContains(pagina, 'Gerar número')
+        self.assertContains(pagina, 'Salvar análise')
+
+        resp = self.client.post(
+            reverse('controle_relatorio_nova_analise_salvar'),
+            {
+                'numero_processo': 'LIC-AVULSO/2026',
+                'grupo': 'LIQUIDACOES',
+                'data_relatorio': '2026-10-08',
+                'objeto': 'Análise avulsa Licitações',
+                'analista': 'Ana Lic',
+                'diligencias': 'Pedido de esclarecimento à unidade',
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        corpo = resp.json()
+        self.assertTrue(corpo['ok'], corpo)
+        processo = Processo.objects.get(numero_processo='LIC-AVULSO/2026')
+        self.assertEqual(
+            Pendencia.objects.filter(processo=processo).count(), 1)
+        self.assertFalse(processo.numero_relatorio)
+
+    def test_controle_relatorio_mostra_botao_nova_analise(self):
+        self.client.force_login(self.analista_liq)
+        pagina = self.client.get(
+            reverse('controle_relatorio') + '?aba=LIQUIDACOES&secao=analises')
+        self.assertEqual(pagina.status_code, 200)
+        self.assertContains(pagina, 'Nova análise')
+        self.assertContains(pagina, 'modalNovaAnalise')
+        # Mesma estrutura da tela analista/processo.html.
+        self.assertContains(pagina, 'form-section')
+        self.assertContains(pagina, 'Dados do relatório — Liquidação')
+        self.assertContains(pagina, 'Lista de diligências')
+        self.assertContains(pagina, 'Finalizar')
+        self.assertContains(pagina, 'id="nova_secretaria"')
+        self.assertContains(pagina, '<select id="nova_secretaria"')
+        self.assertContains(pagina, 'id="nova_destino"')
+        self.assertContains(pagina, '<select id="nova_destino"')
+        self.assertContains(pagina, 'id="nova_valor"')
+        self.assertContains(pagina, 'placeholder="R$ 0,00"')
+        self.assertContains(pagina, 'formatarMoeda')
+        self.assertContains(pagina, 'id="nova_status_analise"')
+        self.assertContains(pagina, 'Ainda sem número — use Gerar número')
+        self.assertContains(pagina, 'Gerar número')
+        self.assertContains(pagina, 'Salvar análise')
+
+    def test_nova_analise_busca_formata_valor(self):
+        processo = self.novo_processo(
+            self.especie_liq, numero_processo='fmt-valor/2026')
+        processo.valor = '1500,50'
+        processo.secretaria = 'Unidade de Teste'
+        processo.save(update_fields=['valor', 'secretaria'])
+        self.client.force_login(self.analista_liq)
+        busca = self.client.get(reverse('controle_relatorio_nova_analise_buscar'), {
+            'numero_processo': 'fmt-valor/2026',
+            'grupo': 'LIQUIDACOES',
+        })
+        self.assertEqual(busca.status_code, 200)
+        dados = busca.json()['dados']
+        self.assertEqual(dados['valor'], 'R$ 1.500,50')
+        self.assertEqual(dados['secretaria'], 'Unidade de Teste')
+        layout = busca.json()['layout']
+        self.assertEqual(layout['titulo'], 'Dados do relatório — Liquidação')
+        self.assertIn('valor', layout['formulario'])
+        self.assertIn('destino', layout['formulario'])
+
+    def test_fixture_planilha_importa_e_processos_ativos_pendentes_finalizados(self):
+        """Sobe a amostra do Controle 2026, cria ativos e checa Pendentes/Finalizados.
+
+        Fixture: processos_app/tests/fixtures/controle_relatorios_2026_amostra.xlsx
+        (estrutura da planilha CGM — LIQUIDAÇÕES com fórmula de valor, amarelo
+        reservado, Adiantamento e Bolsa Atleta).
+        """
+        from pathlib import Path
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from processos_app.models import UnidadeAdministrativa
+
+        fixture = (
+            Path(__file__).resolve().parent
+            / 'fixtures'
+            / 'controle_relatorios_2026_amostra.xlsx'
+        )
+        self.assertTrue(fixture.is_file(), f'Fixture ausente: {fixture}')
+
+        for nome in ('SMTSP', 'SMF', 'SMS', 'SMTST'):
+            UnidadeAdministrativa.objects.get_or_create(
+                nome=nome, defaults={'ativo': True})
+
+        admin = criar_usuario('admin_fixture_planilha', 'GESTAO', is_superuser=True)
+        self.client.force_login(admin)
+        with fixture.open('rb') as fh:
+            arquivo = SimpleUploadedFile(
+                fixture.name,
+                fh.read(),
+                content_type=(
+                    'application/vnd.openxmlformats-officedocument.'
+                    'spreadsheetml.sheet'
+                ),
+            )
+        resp = self.client.post(
+            reverse('controle_relatorio_importar'),
+            {
+                'grupo': relatorios.GRUPO_IMPORTACAO_COMPLETA,
+                'planilha': arquivo,
+            },
+        )
+        self.assertEqual(resp.status_code, 302)
+
+        # Linhas históricas da planilha (inclui fórmula → valor correto).
+        saibro = LinhaControleRelatorio.objects.get(numero_relatorio='1319')
+        self.assertEqual(saibro.numero_processo, '13673/2025')
+        self.assertEqual(saibro.valor, 'R$ 3.478.525,50')
+        self.assertEqual(saibro.periodo, '01/06/2026')
+        self.assertEqual(saibro.situacao_linha, 'HISTORICA')
+
+        pagto = LinhaControleRelatorio.objects.get(numero_relatorio='1320')
+        self.assertEqual(pagto.numero_processo, '88881/2026')
+
+        med = LinhaControleRelatorio.objects.get(numero_relatorio='1322')
+        self.assertEqual(med.numero_processo, '55551/2026')
+
+        reservado = LinhaControleRelatorio.objects.get(numero_relatorio='1321')
+        self.assertTrue(reservado.sem_relatorio)
+
+        adiant = LinhaControleRelatorio.objects.get(
+            sequencia='ADIANTAMENTO', numero_processo='21257/2025')
+        self.assertEqual(adiant.contratada, 'Servidor Teste')
+        bolsa = LinhaControleRelatorio.objects.get(
+            sequencia='BOLSA_ATLETA', numero_relatorio='001')
+        self.assertEqual(bolsa.numero_processo, '13024/2025')
+        self.assertEqual(bolsa.volume, '22.950/2024')
+
+        # Processos ativos: uns já “finalizados” (têm linha no Controle),
+        # outros só na fila (Pendentes) — números da própria planilha.
+        finalizado_a = self.novo_processo(
+            self.especie_liq, numero_processo='13673/2025',
+            secretaria='SMTSP', objeto='aquis. De saibro')
+        finalizado_b = self.novo_processo(
+            self.especie_liq, numero_processo='88881/2026',
+            secretaria='SMF', objeto='Pagamento fornecedor X')
+        # Pendente: nº que aparece na planilha só como origem / outro contexto,
+        # sem linha de pagamento vinculada — e um processo novo da mesma secretaria.
+        pendente_planilha = self.novo_processo(
+            self.especie_liq, numero_processo='6100/2023',
+            secretaria='SMTSP', objeto='Processo origem ainda sem relatório')
+        pendente_novo = self.novo_processo(
+            self.especie_liq, numero_processo='99901/2026',
+            secretaria='SMS', objeto='Entrada nova aguardando análise')
+
+        # Vincula históricos importados aos processos (como na operação real).
+        for proc, num_rel in (
+            (finalizado_a, '1319'),
+            (finalizado_b, '1320'),
+        ):
+            linha = LinhaControleRelatorio.objects.get(numero_relatorio=num_rel)
+            linha.processo = proc
+            linha.situacao_linha = LinhaControleRelatorio.SITUACAO_ATIVA
+            linha.save(update_fields=['processo', 'situacao_linha', 'atualizado_em'])
+            proc.numero_relatorio = num_rel
+            proc.data_analise = linha.data_relatorio
+            proc.save(update_fields=['numero_relatorio', 'data_analise'])
+
+        # Processo ativo ainda sem relatório (Pendente) — depois liga o amarelo.
+        reuso = self.novo_processo(
+            self.especie_liq, numero_processo='77771/2026',
+            secretaria='SMTST', objeto='Vai reaproveitar nº amarelo')
+
+        self.client.force_login(self.protocolo)
+        pend = self.client.get(reverse('listar_processos') + '?fase=pendentes')
+        self.assertEqual(pend.status_code, 200)
+        self.assertContains(pend, '6100/2023')
+        self.assertContains(pend, '99901/2026')
+        self.assertContains(pend, '77771/2026')
+        self.assertNotContains(pend, '13673/2025')
+        self.assertNotContains(pend, '88881/2026')
+
+        fim = self.client.get(reverse('listar_processos') + '?fase=finalizados')
+        self.assertContains(fim, '13673/2025')
+        self.assertContains(fim, '88881/2026')
+        self.assertNotContains(fim, '99901/2026')
+
+        # Amarelo 1321 associado ao processo → Gerar número reusa (regra antiga).
+        LinhaControleRelatorio.objects.filter(numero_relatorio='1321').update(
+            numero_processo='77771/2026',
+            sem_relatorio=True,
+        )
+        self.client.force_login(self.analista_liq)
+        gera = self.client.post(
+            reverse('controle_relatorio_nova_analise_salvar'),
+            {
+                'numero_processo': '77771/2026',
+                'grupo': 'LIQUIDACOES',
+                'gerar_numero': '1',
+                'data_relatorio': '2026-10-08',
+                'secretaria': 'SMTST',
+                'objeto': 'Vai reaproveitar nº amarelo',
+                'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
+        self.assertEqual(gera.status_code, 200, gera.content)
+        corpo = gera.json()
+        self.assertTrue(corpo['ok'], corpo)
+        reuso.refresh_from_db()
+        self.assertEqual(reuso.numero_relatorio, '1321')
+        self.assertTrue(corpo.get('gerou_numero'))
+
+        planilha = self.client.get(
+            reverse('controle_relatorio') + '?aba=LIQUIDACOES&secao=analises')
+        self.assertEqual(planilha.status_code, 200)
+        self.assertContains(planilha, '13673/2025')
+        self.assertContains(planilha, 'R$ 3.478.525,50')
+        self.assertContains(planilha, '1321')
+
+        # Depois do Gerar, sai de Pendentes e entra em Finalizados.
+        self.client.force_login(self.protocolo)
+        pend2 = self.client.get(reverse('listar_processos') + '?fase=pendentes')
+        self.assertNotContains(pend2, '77771/2026')
+        fim2 = self.client.get(reverse('listar_processos') + '?fase=finalizados')
+        self.assertContains(fim2, '77771/2026')

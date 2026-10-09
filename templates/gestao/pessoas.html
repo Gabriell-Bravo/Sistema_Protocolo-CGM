@@ -157,7 +157,10 @@
                         </td>
                         <td class="col-actions">
                             <form method="post" action="{% url 'gestao_pessoas_desativar' registro_id=registro.id %}"
-                                  onsubmit="return confirm('Desativar este registro? Ele continua no histórico.');">
+                                  data-confirm="Desativar este registro? Ele continua no histórico."
+                                  data-confirm-title="Desativar"
+                                  data-confirm-ok="Desativar"
+                                  data-confirm-danger>
                                 {% csrf_token %}
                                 <button type="submit" class="btn btn--sm btn--ghost">Desativar</button>
                             </form>

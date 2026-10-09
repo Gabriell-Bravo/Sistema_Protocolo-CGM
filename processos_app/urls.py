@@ -50,7 +50,6 @@ urlpatterns = [
          name='get_especies_by_genero'),
     path('api/get_all_especies/', views.get_all_especies, name='get_all_especies'),
     path('analista/', views.area_analista, name='area_analista'),
-    path('analista/meus-processos/', views.meus_processos, name='meus_processos'),
     path('analista/controle-analise/',
          views.controle_analise, name='controle_analise'),
     path('analista/processo/<int:process_id>/',
@@ -171,4 +170,8 @@ urlpatterns = [
          name='controle_relatorio_desvincular_linha'),
     path('controle-relatorio/linha/<int:linha_id>/apagar/',
          rel.apagar_linha, name='controle_relatorio_apagar_linha'),
+    path('controle-relatorio/nova-analise/buscar/',
+         rel.nova_analise_buscar, name='controle_relatorio_nova_analise_buscar'),
+    path('controle-relatorio/nova-analise/salvar/',
+         rel.nova_analise_salvar, name='controle_relatorio_nova_analise_salvar'),
 ]

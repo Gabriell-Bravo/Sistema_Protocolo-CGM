@@ -315,6 +315,12 @@
       <span class="sheet-hint">próximo nº {{ sequencia.proximo }} · {{ total }} linha{{ total|pluralize:"s" }}</span>
     </div>
     <div class="sheet-bar__right">
+      {% if pode_nova_analise %}
+      <button type="button" class="btn btn--primary" data-modal-open="modalNovaAnalise">
+        <span class="material-symbols-rounded">add_notes</span>
+        Nova análise
+      </button>
+      {% endif %}
       <form method="get" class="search" style="margin:0;">
         <input type="hidden" name="aba" value="{{ aba }}">
         <input type="hidden" name="secao" value="analises">
@@ -540,6 +546,7 @@
       toastEl.classList.remove('is-on');
     }, 2800);
   }
+  window.sheetToast = toast;
 
   function urlComId(tpl, id) {
     return tpl.replace('/0/', '/' + id + '/');
@@ -728,54 +735,7 @@
   window.addEventListener('scroll', function () { fecharMenus(); }, true);
   window.addEventListener('resize', function () { fecharMenus(); });
 
-  function executarAcao(tr, acao) {
-    var id = tr.dataset.linhaId;
-    var numero = tr.dataset.numero || '';
-    var processo = tr.dataset.processo || '';
-    var url = null;
-    var dados = { grupo: grupo };
-    var confirmar = null;
-
-    if (acao === 'sem-relatorio') {
-      url = urlComId(app.dataset.urlSem, id);
-      confirmar = tr.dataset.semRelatorio === '1'
-        ? ('Remover a marca de sem relatório do nº ' + numero + '?')
-        : ('Marcar o nº ' + numero + ' como sem relatório? A linha fica amarela.');
-    } else if (acao === 'desfazer') {
-      url = urlComId(app.dataset.urlDesfazer, id);
-      confirmar = (
-        'Desfazer o relatório nº ' + numero + '?\n\n'
-        + '• Se a data for hoje → fica verde (reuso automático no Gerar)\n'
-        + '• Se for outro dia → fica vermelho (reuso só com nº específico)'
-      );
-    } else if (acao === 'cancelar') {
-      url = urlComId(app.dataset.urlCancelar, id);
-      dados.destino_numero = 'excluir';
-      confirmar = 'Cancelar o relatório nº ' + numero + '?\nA linha fica vermelha — reuso só com número específico na análise.';
-    } else if (acao === 'apagar') {
-      url = urlComId(app.dataset.urlApagar, id);
-      confirmar = 'Apagar de verdade a linha do nº ' + (numero || '—') + '?';
-    } else if (acao === 'desvincular') {
-      url = urlComId(app.dataset.urlDesvincular, id);
-      confirmar = 'Desvincular o processo ' + processo + ' do nº ' + numero + '?';
-    } else if (acao === 'vincular') {
-      url = urlComId(app.dataset.urlVincular, id);
-      var informado = window.prompt(
-        'Informe o nº do processo para vincular ao relatório ' + numero + ':',
-        processo || '');
-      if (informado == null) return;
-      informado = String(informado).trim();
-      if (!informado) {
-        toast('Informe o número do processo.', false);
-        return;
-      }
-      dados.numero_processo = informado;
-    } else {
-      return;
-    }
-
-    if (confirmar && !window.confirm(confirmar)) return;
-
+  function postAcao(tr, acao, url, dados) {
     postForm(url, dados).then(function (res) {
       if (!res.ok) {
         toast((res.data && res.data.mensagem) || 'Ação não concluída.', false);
@@ -800,6 +760,84 @@
       }
     }).catch(function () {
       toast('Falha de rede.', false);
+    });
+  }
+
+  function executarAcao(tr, acao) {
+    var id = tr.dataset.linhaId;
+    var numero = tr.dataset.numero || '';
+    var processo = tr.dataset.processo || '';
+    var url = null;
+    var dados = { grupo: grupo };
+    var confirmar = null;
+    var titulo = 'Confirmar';
+    var perigo = false;
+
+    if (acao === 'sem-relatorio') {
+      url = urlComId(app.dataset.urlSem, id);
+      confirmar = tr.dataset.semRelatorio === '1'
+        ? ('Remover a marca de sem relatório do nº ' + numero + '?')
+        : ('Marcar o nº ' + numero + ' como sem relatório? A linha fica amarela.');
+      titulo = 'Sem relatório';
+    } else if (acao === 'desfazer') {
+      url = urlComId(app.dataset.urlDesfazer, id);
+      confirmar = (
+        'Desfazer o relatório nº ' + numero + '?\n\n'
+        + '• Se a data for hoje → fica verde (reuso automático no Gerar)\n'
+        + '• Se for outro dia → fica vermelho (reuso só com nº específico)'
+      );
+      titulo = 'Desfazer relatório';
+      perigo = true;
+    } else if (acao === 'cancelar') {
+      url = urlComId(app.dataset.urlCancelar, id);
+      dados.destino_numero = 'excluir';
+      confirmar = 'Cancelar o relatório nº ' + numero + '?\nA linha fica vermelha — reuso só com número específico na análise.';
+      titulo = 'Cancelar relatório';
+      perigo = true;
+    } else if (acao === 'apagar') {
+      url = urlComId(app.dataset.urlApagar, id);
+      confirmar = 'Apagar de verdade a linha do nº ' + (numero || '—') + '?';
+      titulo = 'Apagar linha';
+      perigo = true;
+    } else if (acao === 'desvincular') {
+      url = urlComId(app.dataset.urlDesvincular, id);
+      confirmar = 'Desvincular o processo ' + processo + ' do nº ' + numero + '?';
+      titulo = 'Desvincular';
+      perigo = true;
+    } else if (acao === 'vincular') {
+      url = urlComId(app.dataset.urlVincular, id);
+      window.appPrompt('Informe o nº do processo para vincular ao relatório ' + numero + '.', {
+        titulo: 'Vincular processo',
+        campoLabel: 'Nº do processo',
+        valorPadrao: processo || '',
+        confirmLabel: 'Vincular',
+        required: true
+      }).then(function (informado) {
+        if (informado == null) return;
+        informado = String(informado).trim();
+        if (!informado) {
+          window.appAlert('Informe o número do processo.', { titulo: 'Vincular processo' });
+          return;
+        }
+        dados.numero_processo = informado;
+        postAcao(tr, acao, url, dados);
+      });
+      return;
+    } else {
+      return;
+    }
+
+    var seguir = function () { postAcao(tr, acao, url, dados); };
+    if (!confirmar) {
+      seguir();
+      return;
+    }
+    window.appConfirm(confirmar, {
+      titulo: titulo,
+      confirmLabel: 'Confirmar',
+      danger: perigo
+    }).then(function (ok) {
+      if (ok) seguir();
     });
   }
 
@@ -983,4 +1021,6 @@
   });
 })();
 </script>
+{% include "analista/_modal_nova_analise.html" with nova_analise_grupo=aba sequencias_nova_analise=grupos_destino layout_planilha=layout_planilha %}
+{# nova_analise_grupo recebe a aba atual (ex.: LIQUIDACOES) #}
 {% endblock %}

@@ -2782,6 +2782,12 @@ button.encaminhamento__opcao:disabled {
     max-height: 92vh;
 }
 
+.modal__dialog--70 {
+    width: min(70vw, 980px);
+    max-width: 96vw;
+    max-height: 90vh;
+}
+
 .anexo-preview-body {
     min-height: 360px;
     display: flex;
@@ -3253,5 +3259,52 @@ tr.is-inativo td {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+}
+
+/* --------------------------------------------------------------------------
+   Diálogo do sistema (alerta / confirmação / pergunta)
+   -------------------------------------------------------------------------- */
+.modal--dialogo {
+    z-index: 140;
+}
+
+.dialogo-sistema__msg {
+    margin: 0 0 16px;
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text);
+}
+
+.dialogo-sistema__acoes {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+/* .field/.btn definem display e sobrescrevem o [hidden] do HTML. */
+#dialogoSistemaCampoWrap[hidden],
+#dialogoSistemaCampoHint[hidden],
+#dialogoSistemaCancelar[hidden] {
+    display: none !important;
+}
+
+.modal--dialogo .modal__header .material-symbols-rounded {
+    color: var(--primary, #1d4ed8);
+}
+
+.modal--dialogo.is-danger .modal__header .material-symbols-rounded {
+    color: var(--danger, #b91c1c);
+}
+
+.modal--dialogo.is-info .modal__header .material-symbols-rounded {
+    color: var(--primary, #1d4ed8);
+}
+
+.modal--dialogo.is-success .modal__header .material-symbols-rounded {
+    color: var(--success, #166534);
 }
 

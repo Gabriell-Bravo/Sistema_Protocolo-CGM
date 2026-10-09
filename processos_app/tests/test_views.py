@@ -5,6 +5,7 @@ import json
 
 from django.test import override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from processos_app.models import EspecieProcesso, EventoProcesso, ProcessHistory, Processo
 from processos_app.services import tramitacao
@@ -42,7 +43,6 @@ class TelasPorPapelTest(BaseProcessoTestCase):
         self._get(self.analista_lic, 'area_analista')
         self._get(self.analista_lic, 'area_analista', query='?filtro=disponiveis')
         self._get(self.analista_lic, 'analista_processo', self.processo.id)
-        self._get(self.analista_lic, 'meus_processos')
         self._get(self.analista_lic, 'meus_atendimentos')
         self._get(self.analista_lic, 'listar_finalizados')
         self._get(self.analista_lic, 'gestao_liberados_assinatura')
@@ -72,7 +72,6 @@ class TelasPorPapelTest(BaseProcessoTestCase):
         self._get(self.analista_liq, 'analista_processo', self.processo.id, esperado=403)
         self._get(self.protocolo, 'gestao_diligencias', esperado=403)
         self._get(self.protocolo, 'gestao_liberados_assinatura', esperado=403)
-        self._get(self.protocolo, 'meus_processos', esperado=302)
 
     def test_analista_consulta_finalizados_assinatura_e_diligencias_sem_editar(self):
         from processos_app.services import pendencias
@@ -603,9 +602,37 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
     def test_processos_ativos_mostra_quem_analisa(self):
         processo = self.processo_em_analise()
         self.client.force_login(self.protocolo)
-        resposta = self.client.get(reverse('listar_processos'))
+        resposta = self.client.get(reverse('listar_processos') + '?fase=pendentes')
         self.assertContains(resposta, 'Em análise por')
         self.assertContains(resposta, processo.nome_analista)
+
+    def test_processos_ativos_separa_pendentes_e_finalizados(self):
+        from processos_app.models import LinhaControleRelatorio
+
+        pendente = self.novo_processo(numero_processo='7101/2026')
+        finalizado = self.novo_processo(
+            self.especie_liq, numero_processo='7102/2026')
+        LinhaControleRelatorio.objects.create(
+            processo=finalizado,
+            numero_relatorio='7102',
+            numero_processo=finalizado.numero_processo,
+            data_relatorio=timezone.localdate(),
+            situacao_linha='ATIVA',
+            sequencia='LIQUIDACOES',
+            grupo='LIQUIDACOES',
+        )
+        finalizado.numero_relatorio = '7102'
+        finalizado.save(update_fields=['numero_relatorio'])
+
+        self.client.force_login(self.protocolo)
+        pend = self.client.get(reverse('listar_processos') + '?fase=pendentes')
+        self.assertContains(pend, 'Pendentes')
+        self.assertContains(pend, pendente.numero_processo)
+        self.assertNotContains(pend, finalizado.numero_processo)
+
+        fim = self.client.get(reverse('listar_processos') + '?fase=finalizados')
+        self.assertContains(fim, finalizado.numero_processo)
+        self.assertNotContains(fim, pendente.numero_processo)
 
     def test_fila_padrao_mostra_quem_esta_analisando_e_esconde_o_controlador(self):
         disponivel = self.novo_processo(numero_processo='1001/2026')
@@ -638,30 +665,62 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         self.assertContains(resposta, '1004/2026')
         self.assertContains(resposta, 'A assinatura do Controlador é fora do sistema')
 
-    def test_meus_processos_mostra_comigo_e_ja_trabalhei(self):
+    def test_fila_analista_somente_consulta_sem_assumir_nem_analisar(self):
+        disponivel = self.novo_processo(numero_processo='fila-disp/2026')
         comigo = self.processo_em_analise()
-        comigo.numero_processo = 'mp-comigo/2026'
+        comigo.numero_processo = 'fila-meu/2026'
         comigo.save(update_fields=['numero_processo'])
 
-        feito = self.processo_em_analise()
-        feito.numero_processo = 'mp-feito/2026'
-        feito.save(update_fields=['numero_processo'])
-        tramitacao.liberar_assinatura(feito.id, self.analista_lic)
-
         self.client.force_login(self.analista_lic)
-        pagina = self.client.get(reverse('meus_processos'))
+        pagina = self.client.get(reverse('area_analista'))
+        self.assertTrue(pagina.context['fila_somente_leitura'])
+        self.assertFalse(pagina.context['pode_assumir'])
+        self.assertContains(pagina, 'Somente processos com entrada pelo Protocolo')
+        self.assertContains(pagina, 'fila-disp/2026')
+        self.assertContains(pagina, 'fila-meu/2026')
+        self.assertNotContains(pagina, 'Assumir processo')
+        self.assertNotContains(pagina, 'Encaminhar ao Controlador')
+        self.assertNotContains(pagina, 'Devolver à fila')
+        # Só "Ver" nas ações — não o botão "Analisar" da fila.
+        self.assertNotRegex(
+            pagina.content.decode(),
+            r'edit_note[\s\S]{0,80}Analisar')
+        self.assertContains(pagina, 'Ver')
+
+        # POST direto também é bloqueado.
+        bloqueado = self.client.post(
+            reverse('assumir_processo', args=[disponivel.id]))
+        self.assertEqual(bloqueado.status_code, 302)
+        disponivel.refresh_from_db()
+        self.assertNotEqual(disponivel.situacao_tramite, 'EM_ANALISE')
+        self.assertIsNone(disponivel.analista_responsavel_id)
+
+    def test_fila_analista_so_mostra_entrada_do_protocolo(self):
+        """Fila de análise: só processos cadastrados pelo Protocolo."""
+        from processos_app.models import EventoProcesso, Processo
+        from processos_app.services import relatorios as svc_relatorios
+
+        do_protocolo = self.novo_processo(
+            self.especie_liq, numero_processo='fila-proto/2026')
+        sem_protocolo = svc_relatorios.salvar_nova_analise(self.analista_liq, {
+            'numero_processo': 'fila-nova/2026',
+            'grupo': 'LIQUIDACOES',
+            'data_relatorio': '2026-10-08',
+            'objeto': 'Stub Nova análise',
+            'analista': 'Caio Liq',
+        })
+        stub_id = sem_protocolo['processo_id']
+        self.assertFalse(
+            EventoProcesso.objects.filter(
+                processo_id=stub_id, tipo='PROCESSO_CADASTRADO').exists())
+        self.assertTrue(Processo.objects.filter(id=stub_id).exists())
+        self.assertTrue(Processo.objects.filter(id=do_protocolo.id).exists())
+
+        self.client.force_login(self.analista_liq)
+        pagina = self.client.get(reverse('area_analista'))
         self.assertEqual(pagina.status_code, 200)
-        self.assertContains(pagina, 'Meus processos')
-        self.assertContains(pagina, 'mp-comigo/2026')
-        self.assertNotContains(pagina, 'mp-feito/2026')
-
-        feitos = self.client.get(reverse('meus_processos') + '?filtro=feitos')
-        self.assertContains(feitos, 'mp-feito/2026')
-        self.assertNotContains(feitos, 'mp-comigo/2026')
-
-        todos = self.client.get(reverse('meus_processos') + '?filtro=todos')
-        self.assertContains(todos, 'mp-comigo/2026')
-        self.assertContains(todos, 'mp-feito/2026')
+        self.assertContains(pagina, 'fila-proto/2026')
+        self.assertNotContains(pagina, 'fila-nova/2026')
 
     def test_historico_mostra_usuario_entrada_e_saida(self):
         processo = self.novo_processo(numero_processo='hist-user/2026')

@@ -1,0 +1,624 @@
+{# Modal Nova análise — mesmos blocos da tela analista/processo.html. #}
+{% if pode_nova_analise %}
+{% with L=layout_planilha|default_if_none:None %}
+<div class="modal" id="modalNovaAnalise" role="dialog" aria-labelledby="tituloNovaAnalise"
+     data-url-buscar="{% url 'controle_relatorio_nova_analise_buscar' %}"
+     data-url-salvar="{% url 'controle_relatorio_nova_analise_salvar' %}"
+     data-grupo-default="{{ nova_analise_grupo|default:'LIQUIDACOES' }}">
+    <div class="modal__dialog modal__dialog--70">
+        <div class="modal__header">
+            <span class="modal__title" id="tituloNovaAnalise">Nova análise</span>
+            <button type="button" class="icon-btn" data-modal-close="modalNovaAnalise" aria-label="Fechar">
+                <span class="material-symbols-rounded">close</span>
+            </button>
+        </div>
+        <div class="modal__body">
+            <div id="novaAnalisePasso1">
+                <p class="field__hint" style="margin:0 0 14px;">
+                    Informe o número do processo físico. Não depende do Protocolo ter cadastrado antes.
+                    Em seguida a tela é a mesma da análise: salve, aponte diligências e use
+                    <strong>Gerar número</strong> por último.
+                </p>
+                <div class="form-grid">
+                    <div class="field">
+                        <label class="field__label" for="nova_numero_busca">Nº do processo</label>
+                        <input type="text" id="nova_numero_busca" class="input" autocomplete="off"
+                               placeholder="Ex.: 13673/2025">
+                    </div>
+                    <div class="field">
+                        <label class="field__label" for="nova_grupo_busca">Grupo de numeração</label>
+                        <select id="nova_grupo_busca" class="select">
+                            {% for item in sequencias_nova_analise %}
+                            <option value="{{ item.codigo }}"
+                                {% if item.codigo == nova_analise_grupo %}selected{% endif %}>
+                                {{ item.nome }}
+                            </option>
+                            {% empty %}
+                            <option value="LIQUIDACOES">Liquidação</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="form-actions" style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
+                    <button type="button" class="btn btn--primary" id="btnNovaAnaliseBuscar">
+                        <span class="material-symbols-rounded">search</span>
+                        Continuar
+                    </button>
+                    <button type="button" class="btn btn--outline" data-modal-close="modalNovaAnalise">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+
+            <form id="formNovaAnalise" method="post" action="{% url 'controle_relatorio_nova_analise_salvar' %}" hidden>
+                {% csrf_token %}
+                <input type="hidden" name="grupo" id="nova_grupo" value="">
+                <input type="hidden" name="gerar_numero" id="nova_gerar_numero" value="">
+                <div id="novaAnaliseAviso" class="alert alert--info" style="margin-bottom:14px;" hidden></div>
+
+                <div class="form-section">
+                    <div class="form-section__title">
+                        <span class="material-symbols-rounded">edit_note</span>
+                        <span id="novaTituloSecao">{% if L %}{{ L.titulo }}{% else %}Dados do relatório{% endif %}</span>
+                    </div>
+                    <p class="field__hint" style="margin:-6px 0 14px;" id="novaHintSecao">
+                        Mesmos campos da tela de análise e da planilha do Controle de Relatórios.
+                        <strong>Salvar análise</strong> grava os dados;
+                        <strong>Gerar número</strong> emite o sequencial na planilha.
+                    </p>
+                    <div class="form-grid form-grid--full" id="novaCamposGrid">
+                        {# Ordem igual a analista/processo.html: nº, data, grupo, depois campos da planilha. #}
+                        <div class="field" id="blocoNovaNumeroRelatorio" data-nova-campo="numero_relatorio">
+                            <label class="field__label" for="nova_numero_relatorio" id="lblNovaNumero">
+                                {% if L %}{{ L.rotulos.numero_relatorio }}{% else %}Nº relatório{% endif %}
+                            </label>
+                            <input type="text" id="nova_numero_relatorio" class="input" readonly
+                                   value="Ainda sem número — use Gerar número">
+                            <input type="hidden" id="nova_numero_relatorio_envio" name="numero_relatorio" value="">
+                            <span class="field__hint" id="novaHintProximo">
+                                <strong>Salvar análise</strong> grava os dados sem emitir número.
+                                <strong>Gerar número</strong> emite o sequencial.
+                                Próximo sugerido (só referência): —
+                            </span>
+                        </div>
+                        <div class="field" data-nova-campo="data_relatorio">
+                            <label class="field__label" for="nova_data" id="lblNovaData">
+                                {% if L %}{{ L.rotulos.data_relatorio }}{% else %}Data do relatório{% endif %}
+                            </label>
+                            <input type="date" id="nova_data" name="data_relatorio" class="input" required>
+                            <span class="field__hint">Data que será gravada no Controle de relatório.</span>
+                        </div>
+                        <div class="field" data-nova-campo="grupo">
+                            <label class="field__label">Grupo de numeração</label>
+                            <input type="text" class="input" id="nova_grupo_nome" value="" readonly>
+                            <span class="field__hint">Escolhido no passo anterior.</span>
+                        </div>
+                        <div class="field" data-nova-campo="numero_processo">
+                            <label class="field__label" for="nova_numero_processo" id="lblNovaProcesso">
+                                {% if L %}{{ L.rotulos.numero_processo }}{% else %}Nº processo{% endif %}
+                            </label>
+                            <input type="text" id="nova_numero_processo" name="numero_processo" class="input" required>
+                        </div>
+                        <div class="field" data-nova-campo="volume">
+                            <label class="field__label" for="nova_volume">Volume / concessão</label>
+                            <input type="text" id="nova_volume" name="volume" class="input">
+                        </div>
+                        <div class="field" data-nova-campo="analista">
+                            <label class="field__label" for="nova_analista" id="lblNovaAnalista">
+                                {% if L %}{{ L.rotulos.analista }}{% else %}Analista / relator{% endif %}
+                            </label>
+                            <input type="text" id="nova_analista" name="analista" class="input">
+                        </div>
+                        <div class="field field--wide" data-nova-campo="secretaria">
+                            <label class="field__label" for="nova_secretaria" id="lblNovaSecretaria">
+                                {% if L %}{{ L.rotulos.secretaria }}{% else %}Secretaria{% endif %}
+                            </label>
+                            <select id="nova_secretaria" name="secretaria" class="select">
+                                <option value="">Selecione</option>
+                                {% for nome in secretarias %}
+                                <option value="{{ nome }}">{{ nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="field field--wide" data-nova-campo="objeto">
+                            <label class="field__label" for="nova_objeto" id="lblNovaObjeto">
+                                {% if L %}{{ L.rotulos.objeto }}{% else %}Objeto{% endif %}
+                            </label>
+                            <textarea id="nova_objeto" name="objeto" class="textarea" rows="2"></textarea>
+                        </div>
+                        <div class="field field--wide" data-nova-campo="contratada">
+                            <label class="field__label" for="nova_contratada" id="lblNovaContratada">
+                                {% if L %}{{ L.rotulos.contratada }}{% else %}Contratada / Favorecido{% endif %}
+                            </label>
+                            <input type="text" id="nova_contratada" name="contratada" class="input">
+                        </div>
+                        <div class="field" data-nova-campo="valor">
+                            <label class="field__label" for="nova_valor" id="lblNovaValor">
+                                {% if L %}{{ L.rotulos.valor }}{% else %}Valor{% endif %}
+                            </label>
+                            <input type="text" id="nova_valor" name="valor" class="input"
+                                   inputmode="decimal" autocomplete="off" placeholder="R$ 0,00">
+                        </div>
+                        <div class="field" data-nova-campo="destino">
+                            <label class="field__label" for="nova_destino" id="lblNovaDestino">
+                                {% if L %}{{ L.rotulos.destino }}{% else %}Destino{% endif %}
+                            </label>
+                            <select id="nova_destino" name="destino" class="select">
+                                <option value="">Selecione</option>
+                                {% for nome in secretarias %}
+                                <option value="{{ nome }}">{{ nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="field" data-nova-campo="periodo">
+                            <label class="field__label" for="nova_periodo" id="lblNovaPeriodo">
+                                {% if L %}{{ L.rotulos.periodo }}{% else %}Período{% endif %}
+                            </label>
+                            <input type="text" id="nova_periodo" name="periodo" class="input">
+                        </div>
+                        <div class="field" data-nova-campo="status_analise">
+                            <label class="field__label" for="nova_status_analise" id="lblNovaStatus">
+                                {% if L %}{{ L.rotulos.status_analise }}{% else %}Status da análise{% endif %}
+                            </label>
+                            <select id="nova_status_analise" name="status_analise" class="select">
+                                {% for value, label in all_status_analise %}
+                                <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="field field--wide" data-nova-campo="observacao">
+                            <label class="field__label" for="nova_observacao" id="lblNovaObs">
+                                {% if L %}{{ L.rotulos.observacao }}{% else %}Observação{% endif %}
+                            </label>
+                            <textarea id="nova_observacao" name="observacao" class="textarea" rows="3"></textarea>
+                        </div>
+                        <div class="field field--checkbox field--wide" data-nova-campo="sem_relatorio">
+                            <label class="check">
+                                <input type="checkbox" id="nova_sem" name="sem_relatorio" value="1">
+                                <span>Sem relatório</span>
+                            </label>
+                            <span class="field__hint">Marque se não houve peça de relatório. Mesmo assim é obrigatório ter número e data antes de encaminhar (use Gerar número).</span>
+                        </div>
+                    </div>
+                </div>
+
+                <section class="card" style="margin-top:14px;" id="blocoNovaDiligencias">
+                    <div class="card__header">
+                        <span class="card__title">Lista de diligências</span>
+                        <span class="card__hint" id="novaDiligenciasHint">0 itens</span>
+                    </div>
+                    <div class="card__body">
+                        <ul class="pendencia-list" id="novaListaPendenciasExistentes"></ul>
+                        <ul class="pendencia-list" id="novaListaDiligenciasNovas"></ul>
+                        <div class="empty empty--compact" id="novaDiligenciasVazio">
+                            <span class="material-symbols-rounded">playlist_add</span>
+                            <div class="empty__title">Nenhuma diligência registrada</div>
+                            <div>Descreva cada item que precisa ser atendido pela Secretaria.</div>
+                        </div>
+                        <div class="pendencia-add" style="margin-top:10px;">
+                            <label class="field__label" for="novaDescricaoDiligencia">Nova diligência</label>
+                            <div class="pendencia-add__row">
+                                <textarea id="novaDescricaoDiligencia" class="textarea" rows="2"
+                                          placeholder="Descreva a diligência…"></textarea>
+                                <button type="button" class="btn btn--primary" id="btnNovaAddDiligencia">
+                                    <span class="material-symbols-rounded">add</span>
+                                    Adicionar
+                                </button>
+                            </div>
+                        </div>
+                        <div id="novaDiligenciasHidden"></div>
+                    </div>
+                </section>
+
+                <section class="card" style="margin-top:14px;" id="acoesNovaAnalise">
+                    <div class="card__header">
+                        <span class="card__title">Finalizar</span>
+                        <span class="card__hint">Salve, gere o número e encaminhe</span>
+                    </div>
+                    <div class="card__body">
+                        <div class="form-actions" style="margin:0; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+                            <button type="submit" class="btn btn--outline" id="btnNovaAnaliseSalvar" data-acao="salvar">
+                                <span class="material-symbols-rounded">save</span>
+                                Salvar análise
+                            </button>
+                            <button type="submit" class="btn btn--primary" id="btnNovaAnaliseGerar" data-acao="gerar">
+                                <span class="material-symbols-rounded">pin</span>
+                                Gerar número
+                            </button>
+                            <button type="button" class="btn btn--outline" id="btnNovaAnaliseVoltar">
+                                Voltar
+                            </button>
+                            <button type="button" class="btn btn--ghost" data-modal-close="modalNovaAnalise">
+                                Cancelar
+                            </button>
+                        </div>
+                        <p id="novaAnaliseErro" class="field__hint" style="color:var(--danger, #b91c1c); margin-top:10px;" hidden></p>
+                    </div>
+                </section>
+            </form>
+        </div>
+    </div>
+</div>
+{% endwith %}
+
+<script>
+(function () {
+    var modal = document.getElementById('modalNovaAnalise');
+    if (!modal) return;
+    var passo1 = document.getElementById('novaAnalisePasso1');
+    var form = document.getElementById('formNovaAnalise');
+    var aviso = document.getElementById('novaAnaliseAviso');
+    var erro = document.getElementById('novaAnaliseErro');
+    var campoValor = document.getElementById('nova_valor');
+    var campoNumero = document.getElementById('nova_numero_relatorio');
+    var listaExistentes = document.getElementById('novaListaPendenciasExistentes');
+    var listaNovas = document.getElementById('novaListaDiligenciasNovas');
+    var vazioDil = document.getElementById('novaDiligenciasVazio');
+    var hiddenBox = document.getElementById('novaDiligenciasHidden');
+    var hintDil = document.getElementById('novaDiligenciasHint');
+    var diligenciasNovas = [];
+    var acaoSalvar = 'salvar';
+    var proximoCache = null;
+    var urlBuscar = modal.getAttribute('data-url-buscar');
+    var csrf = (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
+
+    function formatarMoeda(input) {
+        var digitos = (input.value || '').replace(/\D/g, '');
+        if (!digitos) {
+            input.value = '';
+            return;
+        }
+        digitos = digitos.replace(/^0+/, '') || '0';
+        while (digitos.length < 3) digitos = '0' + digitos;
+        var centavos = digitos.slice(-2);
+        var inteiro = digitos.slice(0, -2).replace(/^0+/, '') || '0';
+        inteiro = inteiro.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        input.value = 'R$ ' + inteiro + ',' + centavos;
+    }
+
+    function setSelect(id, valor) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        var v = valor != null ? String(valor) : '';
+        if (!v) {
+            el.value = '';
+            return;
+        }
+        var existe = false;
+        for (var i = 0; i < el.options.length; i++) {
+            if (el.options[i].value === v) {
+                existe = true;
+                break;
+            }
+        }
+        if (!existe) {
+            var op = document.createElement('option');
+            op.value = v;
+            op.textContent = v;
+            el.appendChild(op);
+        }
+        el.value = v;
+    }
+
+    function mostrarErro(msg) {
+        if (!erro) return;
+        if (msg) {
+            erro.textContent = msg;
+            erro.hidden = false;
+        } else {
+            erro.textContent = '';
+            erro.hidden = true;
+        }
+    }
+
+    function syncDiligenciasHidden() {
+        if (!hiddenBox) return;
+        hiddenBox.innerHTML = '';
+        diligenciasNovas.forEach(function (texto) {
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'diligencias';
+            input.value = texto;
+            hiddenBox.appendChild(input);
+        });
+        var nExist = listaExistentes ? listaExistentes.children.length : 0;
+        var total = nExist + diligenciasNovas.length;
+        if (hintDil) {
+            hintDil.textContent = total + (total === 1 ? ' item' : ' itens');
+        }
+        if (vazioDil) vazioDil.hidden = total > 0;
+    }
+
+    function renderDiligenciasNovas() {
+        if (!listaNovas) return;
+        listaNovas.innerHTML = '';
+        diligenciasNovas.forEach(function (texto, idx) {
+            var li = document.createElement('li');
+            li.className = 'pendencia-item';
+            li.innerHTML =
+                '<div><div class="pendencia-item__text"></div>' +
+                '<div class="pendencia-item__meta"><span class="badge badge--warning">Nova (ao salvar)</span></div></div>' +
+                '<button type="button" class="btn btn--ghost btn--sm" data-rm="' + idx + '" title="Remover">' +
+                '<span class="material-symbols-rounded">close</span></button>';
+            li.querySelector('.pendencia-item__text').textContent = texto;
+            listaNovas.appendChild(li);
+        });
+        listaNovas.querySelectorAll('[data-rm]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var i = parseInt(btn.getAttribute('data-rm'), 10);
+                diligenciasNovas.splice(i, 1);
+                renderDiligenciasNovas();
+                syncDiligenciasHidden();
+            });
+        });
+        syncDiligenciasHidden();
+    }
+
+    function renderPendenciasExistentes(lista) {
+        if (!listaExistentes) return;
+        listaExistentes.innerHTML = '';
+        (lista || []).forEach(function (p) {
+            var li = document.createElement('li');
+            li.className = 'pendencia-item';
+            li.innerHTML =
+                '<div><div class="pendencia-item__text"></div>' +
+                '<div class="pendencia-item__meta"><span class="badge badge--warning"></span></div></div>';
+            li.querySelector('.pendencia-item__text').textContent = p.descricao || '';
+            li.querySelector('.badge').textContent = p.status_label || p.status || 'Aberta';
+            listaExistentes.appendChild(li);
+        });
+        syncDiligenciasHidden();
+    }
+
+    function aplicarLayout(meta) {
+        var layout = (meta && meta.layout) || {};
+        var rotulos = layout.rotulos || {};
+        var formulario = layout.formulario || [];
+        var mapa = {
+            lblNovaNumero: 'numero_relatorio',
+            lblNovaData: 'data_relatorio',
+            lblNovaProcesso: 'numero_processo',
+            lblNovaAnalista: 'analista',
+            lblNovaSecretaria: 'secretaria',
+            lblNovaObjeto: 'objeto',
+            lblNovaContratada: 'contratada',
+            lblNovaValor: 'valor',
+            lblNovaDestino: 'destino',
+            lblNovaPeriodo: 'periodo',
+            lblNovaStatus: 'status_analise',
+            lblNovaObs: 'observacao'
+        };
+        Object.keys(mapa).forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el && rotulos[mapa[id]]) el.textContent = rotulos[mapa[id]];
+        });
+        var titulo = document.getElementById('novaTituloSecao');
+        if (titulo && layout.titulo) titulo.textContent = layout.titulo;
+        var sel = document.getElementById('nova_grupo_busca');
+        var nomeGrupo = document.getElementById('nova_grupo_nome');
+        if (nomeGrupo && sel) {
+            var opt = sel.options[sel.selectedIndex];
+            nomeGrupo.value = opt ? opt.textContent.trim() : (meta.grupo || '');
+        }
+        // Mesmos campos da tela de análise + dados do processo (sem meta à parte no modal).
+        var fixos = {
+            numero_relatorio: true, data_relatorio: true, grupo: true,
+            numero_processo: true, analista: true, sem_relatorio: true,
+            volume: true, secretaria: true, objeto: true
+        };
+        var visiveis = {};
+        Object.keys(fixos).forEach(function (k) { visiveis[k] = true; });
+        formulario.forEach(function (k) { visiveis[k] = true; });
+        // contratada só quando o formulário da planilha a inclui (ex.: Adiantamento).
+        document.querySelectorAll('#novaCamposGrid [data-nova-campo]').forEach(function (el) {
+            var chave = el.getAttribute('data-nova-campo');
+            el.hidden = !visiveis[chave];
+        });
+    }
+
+    function resetPasso1() {
+        passo1.hidden = false;
+        form.hidden = true;
+        mostrarErro('');
+        if (aviso) aviso.hidden = true;
+        document.getElementById('nova_gerar_numero').value = '';
+        diligenciasNovas = [];
+        renderDiligenciasNovas();
+        renderPendenciasExistentes([]);
+        if (campoNumero) {
+            campoNumero.readOnly = true;
+            campoNumero.value = 'Ainda sem número — use Gerar número';
+        }
+        var hiddenNum = document.getElementById('nova_numero_relatorio_envio');
+        if (hiddenNum) hiddenNum.value = '';
+        var btnGerar = document.getElementById('btnNovaAnaliseGerar');
+        if (btnGerar) btnGerar.hidden = false;
+    }
+
+    function preencher(dados, meta) {
+        aplicarLayout(meta);
+        var textos = {
+            numero_processo: 'nova_numero_processo',
+            volume: 'nova_volume',
+            data_relatorio: 'nova_data',
+            analista: 'nova_analista',
+            objeto: 'nova_objeto',
+            contratada: 'nova_contratada',
+            periodo: 'nova_periodo',
+            observacao: 'nova_observacao'
+        };
+        Object.keys(textos).forEach(function (chave) {
+            var el = document.getElementById(textos[chave]);
+            if (el) el.value = dados[chave] != null ? dados[chave] : '';
+        });
+        setSelect('nova_secretaria', dados.secretaria || '');
+        setSelect('nova_destino', dados.destino || '');
+        setSelect('nova_status_analise', dados.status_analise || 'NAO_APLICAVEL');
+        if (campoValor) {
+            campoValor.value = dados.valor != null ? dados.valor : '';
+            if (campoValor.value && campoValor.value.indexOf('R$') !== 0) {
+                formatarMoeda(campoValor);
+            }
+        }
+        var jaTem = (dados.numero_relatorio || '').trim();
+        var hiddenNum = document.getElementById('nova_numero_relatorio_envio');
+        if (campoNumero) {
+            campoNumero.value = jaTem
+                ? ('Relatório ' + jaTem)
+                : 'Ainda sem número — use Gerar número';
+            campoNumero.readOnly = true;
+        }
+        if (hiddenNum) hiddenNum.value = jaTem;
+        var btnGerar = document.getElementById('btnNovaAnaliseGerar');
+        if (btnGerar) btnGerar.hidden = !!jaTem;
+        document.getElementById('nova_grupo').value = meta.grupo || '';
+        document.getElementById('nova_sem').checked = !!dados.sem_relatorio;
+        proximoCache = meta.proximo_numero;
+        var hint = document.getElementById('novaHintProximo');
+        if (hint) {
+            hint.innerHTML = jaTem
+                ? ('Número já emitido: <strong>' + jaTem + '</strong>.')
+                : ('<strong>Salvar análise</strong> grava os dados sem emitir número. '
+                    + '<strong>Gerar número</strong> emite o sequencial (já na planilha). '
+                    + 'Próximo sugerido (só referência): ' + (proximoCache || '—'));
+        }
+        renderPendenciasExistentes(meta.pendencias || []);
+        diligenciasNovas = [];
+        renderDiligenciasNovas();
+        if (aviso) {
+            if (meta.aviso) {
+                aviso.textContent = meta.aviso;
+                aviso.hidden = false;
+            } else {
+                aviso.hidden = true;
+            }
+        }
+        passo1.hidden = true;
+        form.hidden = false;
+        mostrarErro('');
+    }
+
+    if (campoValor) {
+        campoValor.addEventListener('input', function () { formatarMoeda(campoValor); });
+        campoValor.addEventListener('blur', function () { formatarMoeda(campoValor); });
+    }
+
+    document.getElementById('btnNovaAddDiligencia').addEventListener('click', function () {
+        var ta = document.getElementById('novaDescricaoDiligencia');
+        var texto = (ta.value || '').trim();
+        if (!texto) {
+            window.appAlert('Descreva a diligência antes de adicionar.', {
+                titulo: 'Diligência', tipo: 'info'
+            });
+            return;
+        }
+        diligenciasNovas.push(texto);
+        ta.value = '';
+        renderDiligenciasNovas();
+        ta.focus();
+    });
+
+    document.getElementById('btnNovaAnaliseBuscar').addEventListener('click', function () {
+        var numero = (document.getElementById('nova_numero_busca').value || '').trim();
+        var grupo = document.getElementById('nova_grupo_busca').value;
+        if (!numero) {
+            window.appAlert('Informe o número do processo.', {
+                titulo: 'Nova análise', tipo: 'info'
+            });
+            return;
+        }
+        var url = urlBuscar + '?numero_processo=' + encodeURIComponent(numero)
+            + '&grupo=' + encodeURIComponent(grupo);
+        fetch(url, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+            .then(function (res) {
+                if (!res.j.ok) {
+                    window.appAlert(res.j.mensagem || 'Não foi possível buscar o processo.', {
+                        titulo: 'Nova análise', tipo: 'info', icone: 'error'
+                    });
+                    return;
+                }
+                preencher(res.j.dados || {}, res.j);
+            })
+            .catch(function () {
+                window.appAlert('Falha na busca. Tente de novo.', {
+                    titulo: 'Nova análise', tipo: 'info', icone: 'error'
+                });
+            });
+    });
+
+    document.getElementById('btnNovaAnaliseVoltar').addEventListener('click', resetPasso1);
+
+    form.querySelectorAll('button[type="submit"][data-acao]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            acaoSalvar = btn.getAttribute('data-acao') || 'salvar';
+        });
+    });
+
+    form.addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        mostrarErro('');
+        if (campoValor) formatarMoeda(campoValor);
+        syncDiligenciasHidden();
+        var gerar = acaoSalvar === 'gerar';
+        document.getElementById('nova_gerar_numero').value = gerar ? '1' : '';
+        var body = new FormData(form);
+        if (!gerar) {
+            body.set('gerar_numero', '');
+        }
+        var btnSalvar = document.getElementById('btnNovaAnaliseSalvar');
+        var btnGerar = document.getElementById('btnNovaAnaliseGerar');
+        if (btnSalvar) btnSalvar.disabled = true;
+        if (btnGerar) btnGerar.disabled = true;
+        fetch(form.action, {
+            method: 'POST',
+            body: body,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json',
+                'X-CSRFToken': body.get('csrfmiddlewaretoken') || csrf
+            }
+        })
+            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+            .then(function (res) {
+                if (!res.j.ok) {
+                    mostrarErro(res.j.mensagem || 'Não foi possível salvar.');
+                    return;
+                }
+                if (typeof window.sheetToast === 'function') {
+                    window.sheetToast(res.j.mensagem || 'Análise salva.', true);
+                    window.location.reload();
+                } else {
+                    window.appAlert(res.j.mensagem || 'Análise salva.', {
+                        titulo: 'Análise', tipo: 'success', icone: 'check_circle'
+                    }).then(function () { window.location.reload(); });
+                }
+            })
+            .catch(function () { mostrarErro('Falha ao salvar. Tente de novo.'); })
+            .finally(function () {
+                if (btnSalvar) btnSalvar.disabled = false;
+                if (btnGerar) btnGerar.disabled = false;
+            });
+    });
+
+    modal.addEventListener('click', function (ev) {
+        if (ev.target === modal) resetPasso1();
+    });
+    document.querySelectorAll('[data-modal-close="modalNovaAnalise"]').forEach(function (btn) {
+        btn.addEventListener('click', resetPasso1);
+    });
+    document.querySelectorAll('[data-modal-open="modalNovaAnalise"]').forEach(function (btnOpen) {
+        btnOpen.addEventListener('click', function () {
+            var def = modal.getAttribute('data-grupo-default') || 'LIQUIDACOES';
+            var sel = document.getElementById('nova_grupo_busca');
+            if (sel && def) sel.value = def;
+            document.getElementById('nova_numero_busca').value = '';
+            resetPasso1();
+            setTimeout(function () {
+                document.getElementById('nova_numero_busca').focus();
+            }, 50);
+        });
+    });
+})();
+</script>
+{% endif %}

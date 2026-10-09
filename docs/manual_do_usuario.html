@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Manual do usuário — Sistema de Protocolo CGM</title>
+<style>
+  :root {
+    --ink: #1c2833;
+    --muted: #5d6d7e;
+    --line: #d5dde6;
+    --paper: #ffffff;
+    --sand: #f6f3ee;
+    --navy: #0c3a52;
+    --navy-2: #14506e;
+    --teal: #0f6e62;
+    --gold: #b8862f;
+    --protocolo: #1a5276;
+    --analista: #0e6b5c;
+    --gestao: #8a4e16;
+    --soft-blue: #e8f1f8;
+    --soft-teal: #e7f5f2;
+    --soft-amber: #fbf3e6;
+    --soft-sand: #f7f4ef;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", Calibri, Arial, sans-serif;
+    color: var(--ink);
+    font-size: 11.5pt;
+    line-height: 1.5;
+    background: white;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  @page {
+    size: A4;
+    margin: 16mm 15mm 18mm 15mm;
+  }
+  @page:first {
+    margin: 0;
+  }
+
+  h1, h2, h3, h4 { margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+  p { margin: 0 0 8px; }
+  strong { font-weight: 650; }
+
+  .cover {
+    height: 297mm;
+    width: 210mm;
+    background: #0b3348;
+    color: white;
+    position: relative;
+    overflow: hidden;
+    page-break-after: always;
+  }
+  .cover-bar {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 12mm;
+    background: #d4a24a;
+  }
+  .cover-inner {
+    padding: 28mm 18mm 22mm 26mm;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .cover-kicker {
+    font-size: 11pt;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #f0d7a2;
+    font-weight: 650;
+    margin-bottom: 6px;
+  }
+  .cover-org {
+    font-size: 13pt;
+    color: #d5e4ee;
+    margin-bottom: 0;
+  }
+  .cover-city {
+    font-size: 12pt;
+    color: #9fb6c6;
+    margin-bottom: 0;
+  }
+  .cover-rule {
+    width: 42mm;
+    height: 3px;
+    background: #d4a24a;
+    margin: 18mm 0 10mm;
+    border: 0;
+  }
+  .cover h1 {
+    font-size: 36pt;
+    line-height: 1.02;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    margin: 0 0 8px;
+  }
+  .cover-sub {
+    font-size: 16pt;
+    color: #d7e6f0;
+    font-weight: 500;
+    margin: 0 0 8px;
+  }
+  .cover-lead {
+    font-size: 12.5pt;
+    color: #c5d5e0;
+    max-width: 140mm;
+    margin-top: 6mm;
+    line-height: 1.45;
+  }
+  .cover-roles {
+    margin-top: auto;
+    display: flex;
+    gap: 4mm;
+  }
+  .cover-role {
+    flex: 1;
+    border: 1px solid rgba(255,255,255,0.22);
+    background: rgba(255,255,255,0.06);
+    border-radius: 4mm;
+    padding: 5mm 4mm 4.5mm;
+  }
+  .cover-role span {
+    display: block;
+    font-size: 8.5pt;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #f0d7a2;
+    margin-bottom: 2mm;
+  }
+  .cover-role strong {
+    display: block;
+    font-size: 12pt;
+    font-weight: 650;
+  }
+  .cover-foot {
+    margin-top: 10mm;
+    display: flex;
+    justify-content: space-between;
+    color: #9fb6c6;
+    font-size: 10pt;
+    border-top: 1px solid rgba(255,255,255,0.15);
+    padding-top: 4mm;
+  }
+
+  h2.sec {
+    font-size: 18pt;
+    color: var(--navy);
+    margin: 0 0 3mm;
+    padding-bottom: 2mm;
+    border-bottom: 2.5px solid var(--gold);
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  h3 {
+    font-size: 13pt;
+    color: var(--navy-2);
+    margin: 6mm 0 2.5mm;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  .lead { font-size: 12pt; color: #314556; margin-bottom: 4mm; }
+
+  .chapter {
+    break-before: page;
+    page-break-before: always;
+    border-radius: 3mm;
+    padding: 6mm 6mm 5mm;
+    margin: 0 0 6mm;
+    color: white;
+  }
+  .chapter p { margin: 0; }
+  .chapter .kicker {
+    font-size: 9pt;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    opacity: 0.85;
+    margin-bottom: 1.5mm;
+  }
+  .chapter h2 {
+    font-size: 22pt;
+    margin-bottom: 2mm;
+    border: 0;
+    color: white;
+    padding: 0;
+  }
+  .chapter .desc { font-size: 12pt; line-height: 1.4; }
+  .chapter.protocolo { background: var(--protocolo); }
+  .chapter.analista { background: var(--analista); }
+  .chapter.gestao { background: var(--gestao); }
+  .chapter.comum { background: var(--navy); }
+  .chapter.fluxo { background: #1d4f63; }
+  .chapter.faq { background: #3d4c5c; }
+
+  .menu-line {
+    background: var(--sand);
+    border-radius: 2mm;
+    padding: 3mm 4mm;
+    margin: 0 0 5mm;
+    font-size: 10.5pt;
+  }
+  .menu-line strong { color: var(--navy); }
+
+  .chip {
+    display: inline-block;
+    background: #e7eef3;
+    color: var(--navy);
+    border-radius: 2mm;
+    padding: 0.2mm 2mm 0.5mm;
+    font-weight: 650;
+    font-size: 10pt;
+    line-height: 1.35;
+    white-space: nowrap;
+  }
+  .chapter .chip { background: rgba(255,255,255,0.16); color: white; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 2mm 0 4mm;
+    font-size: 10.5pt;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  th {
+    text-align: left;
+    background: var(--navy);
+    color: white;
+    font-weight: 650;
+    padding: 2.2mm 3mm;
+  }
+  td {
+    padding: 2.2mm 3mm;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  tr:nth-child(even) td { background: #f4f7fa; }
+  th:first-child { border-radius: 2mm 0 0 0; }
+  th:last-child { border-radius: 0 2mm 0 0; }
+
+  ol.steps, ul.clean { margin: 1mm 0 4mm; padding: 0; list-style: none; }
+  ol.steps { counter-reset: passo; }
+  ol.steps li {
+    counter-increment: passo;
+    display: flex;
+    gap: 3mm;
+    align-items: flex-start;
+    margin: 0 0 2.4mm;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  ol.steps li::before {
+    content: counter(passo);
+    flex: 0 0 6.5mm;
+    width: 6.5mm;
+    height: 6.5mm;
+    border-radius: 50%;
+    background: var(--navy);
+    color: white;
+    font-size: 9.5pt;
+    font-weight: 700;
+    text-align: center;
+    line-height: 6.5mm;
+    margin-top: 0.4mm;
+  }
+  ul.clean li {
+    position: relative;
+    padding-left: 5mm;
+    margin: 0 0 1.8mm;
+  }
+  ul.clean li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 2.2mm;
+    width: 2mm;
+    height: 2mm;
+    border-radius: 50%;
+    background: var(--gold);
+  }
+
+  .roles {
+    display: flex;
+    flex-direction: column;
+    gap: 3mm;
+    margin: 3mm 0 5mm;
+  }
+  .role {
+    display: flex;
+    border-radius: 2.5mm;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .role-tag {
+    width: 38mm;
+    color: white;
+    font-weight: 700;
+    font-size: 10pt;
+    padding: 3.5mm 3mm;
+    display: flex;
+    align-items: center;
+  }
+  .role-body { padding: 3mm 4mm; flex: 1; background: white; }
+  .role-body strong { display: block; margin-bottom: 0.5mm; }
+  .role-body span { color: var(--muted); font-size: 10.5pt; }
+  .role.p .role-tag { background: var(--protocolo); }
+  .role.a .role-tag { background: var(--analista); }
+  .role.g .role-tag { background: var(--gestao); }
+
+  .note, .tip, .warn, .routine {
+    border-radius: 2.5mm;
+    padding: 3.5mm 4mm 3mm;
+    margin: 3mm 0 4mm;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .note { background: var(--soft-sand); border-left: 1.4mm solid var(--gold); }
+  .tip { background: var(--soft-teal); border-left: 1.4mm solid var(--teal); }
+  .warn { background: var(--soft-amber); border-left: 1.4mm solid #c47b1a; }
+  .note .lbl, .tip .lbl, .warn .lbl, .routine .lbl {
+    font-size: 8.5pt;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-bottom: 1mm;
+  }
+  .note .lbl { color: #8a6420; }
+  .tip .lbl { color: var(--teal); }
+  .warn .lbl { color: #8a4e16; }
+  .note p:last-child, .tip p:last-child, .warn p:last-child { margin-bottom: 0; }
+
+  .routine {
+    background: var(--navy);
+    color: white;
+  }
+  .routine .lbl { color: #f0d7a2; }
+  .routine ol.steps li::before { background: #d4a24a; color: #1c2833; }
+  .routine .chip { background: rgba(255,255,255,0.16); color: white; }
+
+  .flow { margin: 2mm 0 4mm; padding: 0; list-style: none; }
+  .flow li {
+    display: grid;
+    grid-template-columns: 8mm 32mm 1fr;
+    gap: 3mm;
+    align-items: start;
+    padding: 0 0 3.2mm;
+    position: relative;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .flow li:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    left: 3.6mm;
+    top: 7.5mm;
+    bottom: 0;
+    width: 0.6mm;
+    background: #d5dde6;
+  }
+  .flow .n {
+    width: 7.4mm;
+    height: 7.4mm;
+    border-radius: 50%;
+    background: var(--navy);
+    color: white;
+    text-align: center;
+    line-height: 7.4mm;
+    font-weight: 700;
+    font-size: 10pt;
+    position: relative;
+    z-index: 1;
+  }
+  .flow .who {
+    font-size: 9pt;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--navy-2);
+    padding-top: 1.2mm;
+  }
+  .flow .txt strong { display: block; }
+  .flow .txt span { color: #3d5160; }
+
+  .two {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4mm;
+    margin: 2mm 0 4mm;
+  }
+  .card {
+    border: 1px solid var(--line);
+    border-radius: 2.5mm;
+    padding: 3.5mm 4mm 3mm;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    background: white;
+  }
+  .card h4 {
+    font-size: 11.5pt;
+    color: var(--navy);
+    margin-bottom: 1.5mm;
+  }
+  .card p:last-child { margin: 0; }
+
+  .faq { margin: 0; }
+  .qa {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    border-bottom: 1px solid var(--line);
+    padding: 3.2mm 0;
+  }
+  .qa .q {
+    font-weight: 700;
+    color: var(--navy);
+    margin-bottom: 1mm;
+  }
+  .qa .a { margin: 0; }
+
+  .sumario { margin: 2mm 0 0; padding: 0; list-style: none; }
+  .sumario li {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 4mm;
+    padding: 2.4mm 0;
+    border-bottom: 1px dotted #c5d0da;
+    font-size: 12pt;
+  }
+  .sumario .num {
+    color: var(--gold);
+    font-weight: 700;
+    margin-right: 2mm;
+  }
+
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <div class="cover-bar"></div>
+  <div class="cover-inner">
+    <p class="cover-kicker">Uso interno</p>
+    <p class="cover-org">Controladoria Geral do Município</p>
+    <p class="cover-city">Prefeitura de Saquarema</p>
+    <hr class="cover-rule">
+    <h1>Manual do<br>usuário</h1>
+    <p class="cover-sub">Sistema de Protocolo</p>
+    <p class="cover-lead">Um guia simples para o dia a dia. Cada pessoa vê menus diferentes. Leia a parte do seu papel: Protocolo, Analista ou Gestão.</p>
+    <div class="cover-roles">
+      <div class="cover-role">
+        <span>Entrada e saída</span>
+        <strong>Protocolo</strong>
+      </div>
+      <div class="cover-role">
+        <span>Análise</span>
+        <strong>Analista</strong>
+      </div>
+      <div class="cover-role">
+        <span>Acompanhamento</span>
+        <strong>Gestão</strong>
+      </div>
+    </div>
+    <div class="cover-foot">
+      <span>Sistema de Protocolo e Gestão de Processos</span>
+      <span>Setembro de 2026</span>
+    </div>
+  </div>
+</section>
+
+<h2 class="sec">Como usar este manual</h2>
+<p class="lead">Este manual é para quem usa o sistema no dia a dia. Não precisa ler tudo: vá direto ao capítulo do seu papel.</p>
+<p>As palavras em destaque, como <span class="chip">Salvar Processo</span>, são os nomes dos botões e dos menus, do jeito que aparecem na tela.</p>
+
+<div class="roles">
+  <div class="role p">
+    <div class="role-tag">Protocolo</div>
+    <div class="role-body">
+      <strong>Registra a entrada e a saída do processo</strong>
+      <span>Depois do login, abre Processos Ativos. Capítulo 3.</span>
+    </div>
+  </div>
+  <div class="role a">
+    <div class="role-tag">Analista</div>
+    <div class="role-body">
+      <strong>Analisa o processo do seu grupo</strong>
+      <span>Licitações e Contratos, ou Liquidações. Depois do login, abre a Fila de análise. Capítulo 4.</span>
+    </div>
+  </div>
+  <div class="role g">
+    <div class="role-tag">Gestão</div>
+    <div class="role-body">
+      <strong>Acompanha, prioriza e diligencia</strong>
+      <span>Depois do login, abre o Dashboard. Capítulo 5.</span>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  <div class="lbl">Sem acesso</div>
+  <p>Não tem conta, esqueceu a senha ou o menu não bate com o seu trabalho? Fale com quem passou o acesso.</p>
+</div>
+
+<h3>Sumário</h3>
+<ol class="sumario">
+  <li><span><span class="num">1</span> Como entrar, sair e se virar na tela</span></li>
+  <li><span><span class="num">2</span> Como o processo anda no sistema</span></li>
+  <li><span><span class="num">3</span> Protocolo</span></li>
+  <li><span><span class="num">4</span> Analista (Licitações e Liquidações)</span></li>
+  <li><span><span class="num">5</span> Gestão</span></li>
+  <li><span><span class="num">6</span> Dúvidas frequentes</span></li>
+</ol>
+
+<header class="chapter comum">
+  <p class="kicker">Capítulo 1</p>
+  <h2>Como entrar, sair e se virar na tela</h2>
+  <p class="desc">O começo é igual para todo mundo. O que muda é o menu, conforme o papel da conta.</p>
+</header>
+
+<h3>Entrar</h3>
+<ol class="steps">
+  <li>Abra o sistema no navegador.</li>
+  <li>Digite o usuário e a senha.</li>
+  <li>Clique em <span class="chip">Entrar</span>.</li>
+</ol>
+
+<h3>Sair</h3>
+<p>No menu da esquerda, em <span class="chip">Conta</span>, clique em <span class="chip">Sair</span>.</p>
+
+<h3>Alterar a própria senha</h3>
+<ol class="steps">
+  <li>Abra o menu <span class="chip">Alterar Senha</span>.</li>
+  <li>Informe a senha atual e a nova senha, duas vezes.</li>
+  <li>Clique em <span class="chip">Alterar senha</span>.</li>
+</ol>
+
+<h3>Menu e aparência</h3>
+<ul class="clean">
+  <li>O menu fica à esquerda. O botão de menu (três linhas) recolhe ou expande.</li>
+  <li>O ícone de lua ou sol, no topo, troca entre modo claro e modo escuro. A preferência fica salva no seu navegador.</li>
+  <li>No rodapé do menu aparecem o seu nome e o seu papel.</li>
+  <li>Cada papel vê só os menus do seu trabalho. Isso é normal.</li>
+</ul>
+
+<header class="chapter fluxo">
+  <p class="kicker">Capítulo 2</p>
+  <h2>Como o processo anda</h2>
+  <p class="desc">O sistema acompanha a passagem física do processo pela CGM. A assinatura do Controlador é no papel.</p>
+</header>
+
+<ol class="flow">
+  <li>
+    <span class="n">1</span>
+    <span class="who">Protocolo</span>
+    <div class="txt"><strong>Entrada</strong><span>O processo é cadastrado no sistema.</span></div>
+  </li>
+  <li>
+    <span class="n">2</span>
+    <span class="who">Fila</span>
+    <div class="txt"><strong>Disponível para análise</strong><span>Entrou e ainda ninguém assumiu.</span></div>
+  </li>
+  <li>
+    <span class="n">3</span>
+    <span class="who">Analista</span>
+    <div class="txt"><strong>Em análise</strong><span>Um analista assume e preenche a análise.</span></div>
+  </li>
+  <li>
+    <span class="n">4</span>
+    <span class="who">Analista</span>
+    <div class="txt"><strong>Encaminha para o Controlador</strong><span>A análise está pronta para assinatura.</span></div>
+  </li>
+  <li>
+    <span class="n">5</span>
+    <span class="who">Gestão</span>
+    <div class="txt"><strong>Para assinar</strong><span>A Gestão recolhe o processo. A assinatura é no papel.</span></div>
+  </li>
+  <li>
+    <span class="n">6</span>
+    <span class="who">Protocolo</span>
+    <div class="txt"><strong>Disponível para retirada</strong><span>O órgão já pode buscar.</span></div>
+  </li>
+  <li>
+    <span class="n">7</span>
+    <span class="who">Protocolo</span>
+    <div class="txt"><strong>Saída registrada</strong><span>O processo deixa a CGM e vai para Finalizados.</span></div>
+  </li>
+</ol>
+
+<div class="warn">
+  <div class="lbl">Saída sem esperar a análise</div>
+  <p>Enquanto a análise e a assinatura ainda não estiverem organizadas no dia a dia, o Protocolo não precisa esperar essas etapas. Em <span class="chip">Processos Ativos</span>, o botão de saída (ícone de porta) registra a saída na hora.</p>
+</div>
+
+<div class="note">
+  <div class="lbl">Direcionar para um colega</div>
+  <p>Às vezes o analista direciona a assinatura para outro analista. O processo fica <strong>Direcionado para assinatura</strong> até o colega liberar. Quem analisou continua sendo a mesma pessoa. O colega só encaminha ao Controlador.</p>
+</div>
+
+<h3>Situações que aparecem na tela</h3>
+<table>
+  <thead>
+    <tr><th>Situação</th><th>O que significa</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Disponível para análise</td><td>Entrou e ainda ninguém assumiu.</td></tr>
+    <tr><td>Em análise por [nome]</td><td>Um analista está com o processo.</td></tr>
+    <tr><td>Direcionado para [nome]</td><td>Foi encaminhado para outro analista liberar.</td></tr>
+    <tr><td>Com o Controlador</td><td>Pronto para o Controlador assinar, no papel.</td></tr>
+    <tr><td>Disponível para retirada</td><td>Já pode ser retirado pelo órgão.</td></tr>
+    <tr><td>Saída concluída</td><td>Já saiu da CGM.</td></tr>
+  </tbody>
+</table>
+
+<div class="tip">
+  <div class="lbl">Cancelar não é apagar</div>
+  <p>Cancelar não apaga o processo. O registro fica, com o motivo. Só a Gestão cancela.</p>
+</div>
+
+<header class="chapter protocolo">
+  <p class="kicker">Capítulo 3</p>
+  <h2>Protocolo</h2>
+  <p class="desc">Registra a entrada, acompanha o que está na casa e registra a saída.</p>
+</header>
+
+<p class="menu-line"><strong>Menu:</strong> Novo Processo · Processos Ativos · Retirada · Finalizados · Alterar Senha · Sair</p>
+
+<h3>3.1 Cadastrar um processo novo</h3>
+<ol class="steps">
+  <li>Clique em <span class="chip">Novo Processo</span>.</li>
+  <li>Preencha os campos abaixo.</li>
+  <li>Clique em <span class="chip">Salvar Processo</span>.</li>
+</ol>
+
+<table>
+  <thead>
+    <tr><th>Campo</th><th>Como preencher</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Número do processo</td><td>Obrigatório. Se o número já passou pela CGM, o sistema sugere os dados da última vez.</td></tr>
+    <tr><td>Volume</td><td>Informe o volume do processo.</td></tr>
+    <tr><td>Secretaria</td><td>Escolha na lista das unidades cadastradas.</td></tr>
+    <tr><td>Data e hora de entrada</td><td>Já vêm com o momento atual. Só mude se o registro for depois da chegada física.</td></tr>
+    <tr><td>Espécie</td><td>Ao escolher, o sistema mostra o grupo (Licitações e Contratos ou Liquidações) e, se for o caso, o tipo de monitoramento.</td></tr>
+    <tr><td>Objeto</td><td>Descreva o objeto do processo.</td></tr>
+    <tr><td>Contratada / Favorecido / Interessado</td><td>Preencha se a espécie exigir.</td></tr>
+    <tr><td>É recorrente?</td><td>O padrão é Não.</td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <div class="lbl">Espécie que ainda não existe</div>
+  <p>Use <span class="chip">Outros (espécie não cadastrada)</span>, digite o nome e escolha o grupo. Depois peça à Gestão para cadastrar essa espécie, se ela for recorrente.</p>
+</div>
+
+<p>Na entrada, o Protocolo não preenche prioridade, analista, despacho nem destino de saída. Isso acontece depois, no momento certo.</p>
+
+<h3>3.2 Processos Ativos</h3>
+<p>Aqui estão os processos que ainda estão na CGM, sem saída. Na coluna <span class="chip">Situação</span>, se estiver em análise, aparece o nome de quem assumiu.</p>
+<p>Você pode:</p>
+<ul class="clean">
+  <li>Buscar por número, secretaria, objeto, contratada e outros dados.</li>
+  <li>Filtrar por prioridade, situação, grupo e espécie.</li>
+  <li><strong>Editar</strong> os dados de protocolo (ícone de lápis): número, volume, secretaria, entrada, espécie, objeto, contratada e recorrente.</li>
+  <li><strong>Registrar saída</strong> (ícone de porta): o processo sai da CGM na hora, mesmo que ainda não tenha passado por análise.</li>
+  <li>Abrir o <span class="chip">Histórico</span>, para ver quantas vezes o processo já passou pela CGM.</li>
+</ul>
+<div class="warn">
+  <div class="lbl">O Protocolo não faz</div>
+  <p>Não cancela processo, não assume análise e não muda prioridade.</p>
+</div>
+
+<h3>3.3 Retirada</h3>
+<p>Há duas formas de registrar a saída.</p>
+<div class="two">
+  <div class="card">
+    <h4>No dia a dia</h4>
+    <p>Em <span class="chip">Processos Ativos</span>, clique no botão de saída (ícone de porta) na linha do processo. Confirme. Pronto.</p>
+  </div>
+  <div class="card">
+    <h4>Quando a tramitação completa estiver em uso</h4>
+    <p>Primeiro disponibilize para retirada. Depois, quando o órgão vier buscar, registre a saída.</p>
+  </div>
+</div>
+
+<p><strong>Passo 1. Depois que o Controlador assinou, no papel</strong></p>
+<p>Na lista <span class="chip">Aguardando assinatura do Controlador</span>, clique em <span class="chip">Disponibilizar para retirada</span>.</p>
+
+<p><strong>Passo 2. Quando o órgão vier buscar</strong></p>
+<ol class="steps">
+  <li>Na lista <span class="chip">Processos disponíveis para retirada</span>, marque os processos.</li>
+  <li>Confira o destino. Se estiver errado, clique em <span class="chip">Alterar destino</span>, informe o novo destino e quem autorizou.</li>
+  <li>Clique em <span class="chip">Registrar saída</span>.</li>
+</ol>
+<div class="tip">
+  <div class="lbl">Saída em lote</div>
+  <p>Ou registra todos os processos marcados, ou não registra nenhum.</p>
+</div>
+
+<h3>3.4 Finalizados</h3>
+<p>Processos que já saíram. Dá para filtrar, ver o histórico e <span class="chip">Exportar Excel</span>. Para exportar, é obrigatório informar o período de saída.</p>
+<p>Alguns processos pedem monitoramento depois da saída: pendente, atrasado, concluído ou não aplicável. Quem conclui o monitoramento é Analista ou Gestão. O Protocolo só consulta.</p>
+
+<div class="routine">
+  <div class="lbl">Rotina do dia — Protocolo</div>
+  <ol class="steps">
+    <li>Chegou processo: <span class="chip">Novo Processo</span> e depois <span class="chip">Salvar Processo</span>.</li>
+    <li>Acompanhe em <span class="chip">Processos Ativos</span>.</li>
+    <li>O processo saiu: em Processos Ativos, use o botão de saída (ícone de porta).</li>
+    <li>Se precisar de planilha: <span class="chip">Finalizados</span> e depois <span class="chip">Exportar Excel</span>.</li>
+  </ol>
+</div>
+
+<header class="chapter analista">
+  <p class="kicker">Capítulo 4</p>
+  <h2>Analista</h2>
+  <p class="desc">Licitações e Contratos, e Liquidações, trabalham do mesmo jeito. Cada um vê só o próprio grupo.</p>
+</header>
+
+<div class="two">
+  <div class="card">
+    <h4>Licitações e Contratos</h4>
+    <p>Só processos desse grupo. Na análise, usa <span class="chip">Nº de despacho</span>.</p>
+  </div>
+  <div class="card">
+    <h4>Liquidações</h4>
+    <p>Só processos desse grupo. O sistema pode gerar o <span class="chip">Número do relatório</span> ao assumir. O campo de valor aparece como <span class="chip">Valor analisado</span>.</p>
+  </div>
+</div>
+
+<p class="menu-line"><strong>Menu:</strong> Fila de análise · Atendimentos indicados · Alterar Senha · Sair</p>
+
+<div class="warn">
+  <div class="lbl">O analista não faz</div>
+  <p>Não cadastra processo, não registra saída, não muda prioridade e não indica atendimento de diligência. Indicar atendimento é da Gestão.</p>
+</div>
+
+<h3>4.1 Fila de análise</h3>
+<p>Os cards no topo mostram quantos estão disponíveis, com você, com o Controlador, com prazo vencido e com atendimento indicado.</p>
+<p>A lista padrão, <span class="chip">Para trabalhar</span>, traz só o que você ainda pode agir: disponíveis, os que estão com você e os direcionados a você.</p>
+<div class="note">
+  <div class="lbl">Já foi para o Controlador</div>
+  <p>Processo já enviado ao Controlador não aparece na lista Para trabalhar. Ele só entra na conta do card. Clique no card se quiser ver quais são. Não há o que analisar neles.</p>
+</div>
+<p>Filtros: <span class="chip">Para trabalhar</span> <span class="chip">Disponíveis</span> <span class="chip">Comigo</span> <span class="chip">Direcionados para mim</span> <span class="chip">Vencidos</span></p>
+
+<table>
+  <thead>
+    <tr><th>Botão</th><th>Quando usar</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Assumir processo</td><td>Está disponível e você vai analisar.</td></tr>
+    <tr><td>Analisar</td><td>Já está com você.</td></tr>
+    <tr><td>Liberar assinatura</td><td>Foi direcionado para você só para liberar.</td></tr>
+    <tr><td>Ver</td><td>Só para consultar.</td></tr>
+  </tbody>
+</table>
+
+<h3>4.2 Analisar o processo</h3>
+<ol class="steps">
+  <li>Na fila, clique em <span class="chip">Assumir processo</span>, se ainda estiver disponível, ou em <span class="chip">Analisar</span>.</li>
+  <li>Preencha a análise: status, número, destino e, quando couber, valor, período e observação.</li>
+  <li>Clique em <span class="chip">Salvar análise</span> sempre que quiser gravar o andamento.</li>
+</ol>
+
+<table>
+  <thead>
+    <tr><th>Campo</th><th>O que informar</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Status da análise</td><td>Prosseguimento sem ressalva, com ressalva, Não Prosseguimento, Devolução para saneamento, entre outros.</td></tr>
+    <tr><td>Número</td><td><span class="chip">Nº de despacho</span> em Licitações, ou <span class="chip">Número do relatório</span> em Liquidações.</td></tr>
+    <tr><td>Destino</td><td>Para onde o processo segue.</td></tr>
+    <tr><td>Valor, período e observação</td><td>Quando couber.</td></tr>
+  </tbody>
+</table>
+
+<div class="warn">
+  <div class="lbl">Para liberar ou direcionar</div>
+  <p>O sistema exige pelo menos: status da análise (não use “Não Aplicável”), número de despacho ou de relatório, e destino. Algumas espécies também exigem valor.</p>
+</div>
+
+<h3>Encaminhar</h3>
+<p>Clique em <span class="chip">Encaminhar</span>. Abre uma lista com três opções:</p>
+<table>
+  <thead>
+    <tr><th>Opção</th><th>O que acontece</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Para o Controlador</td><td>A análise está pronta e o processo segue para assinatura.</td></tr>
+    <tr><td>Para outro analista</td><td>Escolha o colega. Quem analisou continua sendo você. O colega só encaminha ao Controlador.</td></tr>
+    <tr><td>Para a fila (sem análise)</td><td>O processo volta a ficar disponível, sem analista. Os dados da tentativa são limpos.</td></tr>
+  </tbody>
+</table>
+<p>As duas primeiras só funcionam com a análise preenchida.</p>
+
+<h3>4.3 Pendências</h3>
+<p>Se faltar documento ou informação:</p>
+<ol class="steps">
+  <li>Escreva o texto em <span class="chip">Nova pendência</span>.</li>
+  <li>Clique em <span class="chip">Adicionar</span>.</li>
+</ol>
+<p>A Gestão trata a diligência fora do sistema e, depois, indica o atendimento. Quando isso acontecer, a pendência aparece em <span class="chip">Atendimentos indicados</span>.</p>
+<p>Aí você pode:</p>
+<ul class="clean">
+  <li><span class="chip">Confirmar resolução</span> — a pendência fica resolvida.</li>
+  <li><span class="chip">Atendimento insuficiente</span> — explique o que ainda falta. A pendência volta para a Gestão.</li>
+</ul>
+<div class="note">
+  <div class="lbl">Cadastrou por engano</div>
+  <p>Cancele pelo ícone e informe o motivo. O registro não é apagado. Pendências de passagens anteriores da CGM aparecem só para leitura.</p>
+</div>
+
+<h3>4.4 Atendimentos indicados</h3>
+<p>Menu próprio com o que a Gestão já sinalizou. Dá para <span class="chip">Abrir processo</span>, <span class="chip">Confirmar resolução</span> ou marcar <span class="chip">Atendimento insuficiente</span>.</p>
+
+<div class="routine">
+  <div class="lbl">Rotina do dia — Analista</div>
+  <ol class="steps">
+    <li>Abra a <span class="chip">Fila de análise</span>.</li>
+    <li>Assuma um processo disponível do seu grupo.</li>
+    <li>Preencha a análise e clique em <span class="chip">Salvar análise</span>.</li>
+    <li>Se faltar algo, adicione uma pendência.</li>
+    <li>Quando estiver completo, clique em <span class="chip">Encaminhar</span> e escolha o destino.</li>
+    <li>No começo do dia, olhe <span class="chip">Atendimentos indicados</span>.</li>
+  </ol>
+</div>
+
+<header class="chapter gestao">
+  <p class="kicker">Capítulo 5</p>
+  <h2>Gestão</h2>
+  <p class="desc">Acompanha e organiza. Não assume processo, não preenche análise e não libera assinatura.</p>
+</header>
+
+<div class="note">
+  <div class="lbl">Tela de consulta</div>
+  <p>Na tela do processo aparece um aviso: a Gestão vê o processo, mas não pratica ato de analista.</p>
+</div>
+
+<p class="menu-line"><strong>Menu:</strong> Processos Ativos · Finalizados · Dashboard · Gestão de Processos · Para assinar · Diligências · Gestão de Pessoas CGM · Cadastros · Alterar Senha · Sair</p>
+
+<h3>5.1 Dashboard</h3>
+<p>Visão geral da casa: quantos estão em tramitação, disponíveis, em análise, para assinar, para retirar, vencidos, urgentes, com diligência e outros.</p>
+<ul class="clean">
+  <li>Os cards são clicáveis e levam à lista correspondente.</li>
+  <li>Dá para filtrar por período, grupo, analista, secretaria e espécie.</li>
+  <li>Há o quadro da equipe de análise, em ordem alfabética, sem ranking, e os tempos médios.</li>
+</ul>
+
+<h3>5.2 Gestão de Processos</h3>
+<p>Fila completa dos dois grupos. Use para ver o estoque e alterar a prioridade no seletor da linha. A mudança grava na hora.</p>
+<ul class="clean">
+  <li>O card <span class="chip">Com o Controlador</span> mostra quantos já foram encaminhados para assinatura.</li>
+  <li>A ação da linha é <span class="chip">Ver</span>. Não existe <span class="chip">Assumir</span> para a Gestão.</li>
+  <li>Se um analista assumiu por engano e o processo ficou preso, use <span class="chip">Devolver à fila</span>. O processo volta a ficar disponível (a análise em andamento é limpa).</li>
+</ul>
+
+<h3>5.3 Para assinar</h3>
+<p>Lista do que já foi liberado para assinatura. Use para saber o que recolher e levar ao Controlador. A assinatura em si é no papel.</p>
+<p>Depois de assinado, o Protocolo faz <span class="chip">Disponibilizar para retirada</span>.</p>
+
+<h3>5.4 Diligências</h3>
+<p>Pendências abertas pelos analistas.</p>
+<table>
+  <thead>
+    <tr><th>Situação</th><th>O que significa</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Aguardando atendimento</td><td>Ainda não foi tratada.</td></tr>
+    <tr><td>Atendimento indicado</td><td>A Gestão já sinalizou no sistema que o órgão atendeu.</td></tr>
+  </tbody>
+</table>
+<ol class="steps">
+  <li>Trate a diligência fora do sistema: telefone, ofício ou e-mail. Isso não é registrado aqui.</li>
+  <li>Quando o atendimento chegar, clique em <span class="chip">Indicar atendimento</span>.</li>
+  <li>O analista responsável confirma se resolveu ou se ainda está insuficiente.</li>
+</ol>
+<div class="tip">
+  <div class="lbl">Quem conclui a pendência</div>
+  <p>A Gestão não conclui tecnicamente a pendência. Quem confirma é o analista.</p>
+</div>
+
+<h3>5.5 Processos Ativos e Finalizados</h3>
+<p>São as mesmas listas do Protocolo, com algumas diferenças:</p>
+<ul class="clean">
+  <li>A Gestão não edita dados de protocolo.</li>
+  <li>A Gestão pode cancelar o processo, pelo ícone. Informe o motivo. O registro permanece.</li>
+  <li>Em Finalizados, a Gestão pode <span class="chip">Exportar Excel</span> e <span class="chip">Concluir monitoramento</span>.</li>
+</ul>
+<div class="note">
+  <div class="lbl">Monitoramento não é saída</div>
+  <p>Concluir monitoramento não registra a saída. É só o acompanhamento periódico, depois que o processo já saiu.</p>
+</div>
+
+<h3>5.6 Gestão de Pessoas CGM</h3>
+<p>Registre férias, cursos e outras indisponibilidades da equipe.</p>
+<ol class="steps">
+  <li>Escolha o servidor, o tipo, o período (ou o dia da semana, se for recorrente) e, se quiser, uma observação.</li>
+  <li>Clique em <span class="chip">Registrar</span>.</li>
+</ol>
+<p><span class="chip">Desativar</span> um registro não apaga o histórico. Essa informação aparece para o analista na hora de direcionar a assinatura, mas não bloqueia o trabalho de ninguém.</p>
+
+<h3>5.7 Cadastros</h3>
+<p>Parametrize o sistema. Não há exclusão: dá para inativar e reativar.</p>
+<table>
+  <thead>
+    <tr><th>Aba</th><th>Para que serve</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Unidades Administrativas</td><td>Secretarias da lista de entrada.</td></tr>
+    <tr><td>Espécies de Processo</td><td>Nome, grupo, monitoramento, se gera número de relatório, se exige contratada ou valor.</td></tr>
+    <tr><td>Prioridades</td><td>Prazos.</td></tr>
+    <tr><td>Tipos de Indisponibilidade</td><td>Férias, curso e outros.</td></tr>
+  </tbody>
+</table>
+<ul class="clean">
+  <li>Para incluir: preencha <span class="chip">Novo registro</span> e clique em <span class="chip">Adicionar</span>.</li>
+  <li>Para ajustar um existente: altere e clique em <span class="chip">Salvar</span>.</li>
+  <li>Alguns campos ficam travados depois de criados, como o grupo da espécie e o código da prioridade, para não bagunçar processos antigos.</li>
+</ul>
+
+<div class="routine">
+  <div class="lbl">Rotina do dia — Gestão</div>
+  <ol class="steps">
+    <li>Olhe o <span class="chip">Dashboard</span>.</li>
+    <li>Ajuste prioridades em <span class="chip">Gestão de Processos</span>, se precisar.</li>
+    <li>Use <span class="chip">Para assinar</span> para recolher o que vai ao Controlador.</li>
+    <li>Em <span class="chip">Diligências</span>, indique os atendimentos que já chegaram.</li>
+    <li>Mantenha <span class="chip">Cadastros</span> e <span class="chip">Gestão de Pessoas CGM</span> em dia.</li>
+  </ol>
+</div>
+
+<header class="chapter faq">
+  <p class="kicker">Capítulo 6</p>
+  <h2>Dúvidas frequentes</h2>
+  <p class="desc">Respostas curtas para o que mais aparece no dia a dia.</p>
+</header>
+
+<div class="faq">
+  <div class="qa">
+    <p class="q">Por que não vejo o menu Novo Processo, Fila ou Dashboard?</p>
+    <p class="a">O menu segue o papel da sua conta. Se estiver errado, fale com quem passou o acesso.</p>
+  </div>
+  <div class="qa">
+    <p class="q">Posso apagar um processo?</p>
+    <p class="a">Não. A Gestão pode cancelar, mas o registro continua no histórico.</p>
+  </div>
+  <div class="qa">
+    <p class="q">O analista de Licitações vê processo de Liquidação?</p>
+    <p class="a">Não. Cada analista só vê o próprio grupo. A Gestão vê os dois.</p>
+  </div>
+  <div class="qa">
+    <p class="q">Cadastrei a pendência. E agora?</p>
+    <p class="a">A Gestão faz a diligência fora do sistema e clica em <span class="chip">Indicar atendimento</span>. Depois o analista confirma se resolveu.</p>
+  </div>
+  <div class="qa">
+    <p class="q">O processo precisa ser analisado para eu dar saída?</p>
+    <p class="a">Não. Em <span class="chip">Processos Ativos</span>, o Protocolo registra a saída na hora. Análise e assinatura são etapas extras, para quando a casa estiver organizada.</p>
+  </div>
+  <div class="qa">
+    <p class="q">Onde assino o despacho no sistema?</p>
+    <p class="a">Em lugar nenhum. A assinatura do Controlador é no papel. No sistema, o analista encaminha para o Controlador e a Gestão usa a tela <span class="chip">Para assinar</span> para saber o que recolher.</p>
+  </div>
+  <div class="qa">
+    <p class="q">O que é monitoramento?</p>
+    <p class="a">Em algumas espécies, depois da saída a CGM acompanha o processo de tempos em tempos: pendente, atrasado ou concluído. Não é uma lista de tarefas do dia.</p>
+  </div>
+  <div class="qa">
+    <p class="q">Esqueci a senha.</p>
+    <p class="a">Peça a quem passou o acesso para redefinir.</p>
+  </div>
+</div>
+
+<p style="margin-top:8mm;color:#5d6d7e;font-size:10pt;">Sistema de Protocolo e Gestão de Processos — Controladoria Geral do Município de Saquarema.</p>
+
+</body>
+</html>

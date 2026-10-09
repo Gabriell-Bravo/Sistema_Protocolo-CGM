@@ -457,11 +457,16 @@
             const prazo = sugestao.prazo_dias != null
                 ? (' (' + sugestao.prazo_dias + (sugestao.prazo_dias === 1 ? ' dia' : ' dias') + ')')
                 : '';
-            const aceitar = window.confirm(
+            const aceitar = await window.appConfirm(
                 'Encontramos "' + sugestao.termo + '" neste processo.\n\n' +
                 'Deseja definir a prioridade como ' + sugestao.nome + prazo + '?\n\n' +
-                'OK = sim, aplicar ' + sugestao.nome + '\n' +
-                'Cancelar = manter "' + (prioridadeSelect.options[prioridadeSelect.selectedIndex].text || dados.prioridade) + '"'
+                'Confirmar = aplicar ' + sugestao.nome + '\n' +
+                'Cancelar = manter "' + (prioridadeSelect.options[prioridadeSelect.selectedIndex].text || dados.prioridade) + '"',
+                {
+                    titulo: 'Prioridade sugerida',
+                    confirmLabel: 'Aplicar ' + sugestao.nome,
+                    cancelLabel: 'Manter atual'
+                }
             );
             if (aceitar) {
                 prioridadeSelect.value = sugestao.codigo;

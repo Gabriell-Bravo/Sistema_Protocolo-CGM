@@ -1,0 +1,25 @@
+{# Diálogo único do sistema (alerta / confirmação / pergunta). Usado por app.js. #}
+<div class="modal modal--dialogo" id="dialogoSistema" role="alertdialog" aria-modal="true"
+     aria-labelledby="dialogoSistemaTitulo" aria-describedby="dialogoSistemaMensagem">
+    <div class="modal__dialog modal__dialog--sm">
+        <div class="modal__header">
+            <span class="material-symbols-rounded" id="dialogoSistemaIcone" aria-hidden="true">help</span>
+            <span class="modal__title" id="dialogoSistemaTitulo">Confirmar</span>
+            <button type="button" class="icon-btn" id="dialogoSistemaFechar" aria-label="Fechar">
+                <span class="material-symbols-rounded">close</span>
+            </button>
+        </div>
+        <div class="modal__body">
+            <p class="dialogo-sistema__msg" id="dialogoSistemaMensagem"></p>
+            <div class="field" id="dialogoSistemaCampoWrap" hidden>
+                <label class="field__label" for="dialogoSistemaCampo" id="dialogoSistemaCampoLabel">Informe</label>
+                <input type="text" class="input" id="dialogoSistemaCampo" autocomplete="off">
+                <span class="field__hint" id="dialogoSistemaCampoHint" hidden></span>
+            </div>
+            <div class="form-actions dialogo-sistema__acoes">
+                <button type="button" class="btn btn--outline" id="dialogoSistemaCancelar">Cancelar</button>
+                <button type="button" class="btn btn--primary" id="dialogoSistemaOk">Confirmar</button>
+            </div>
+        </div>
+    </div>
+</div>

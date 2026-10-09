@@ -305,6 +305,13 @@ def pode_consultar_controle_relatorio(user):
     return grupo_do_analista(user) == GRUPO_LIQUIDACOES
 
 
+def pode_nova_analise(user):
+    """Nova análise pelo Controle: Liquidações, Licitações ou administrador."""
+    if eh_administrador(user):
+        return True
+    return grupo_do_analista(user) in (GRUPO_LIQUIDACOES, GRUPO_LICITACOES)
+
+
 def pode_definir_ultimo_relatorio(user):
     """Só o administrador informa o último número já usado."""
     return eh_administrador(user)
@@ -479,6 +486,7 @@ def contexto_de_permissoes(user):
         'pode_editar_cadastros': pode_editar_cadastros(user),
         'pode_cancelar_processo': pode_cancelar_processo(user),
         'pode_consultar_controle_relatorio': pode_consultar_controle_relatorio(user),
+        'pode_nova_analise': pode_nova_analise(user),
         'pode_definir_ultimo_relatorio': pode_definir_ultimo_relatorio(user),
         'pode_destinar_numeros_relatorio': pode_destinar_numeros_relatorio(user),
         'pode_alterar_sequencia_relatorio': pode_alterar_sequencia_relatorio(user),
@@ -512,6 +520,7 @@ def contexto_processor(request):
             'pode_editar_cadastros': False,
             'pode_cancelar_processo': False,
             'pode_consultar_controle_relatorio': False,
+            'pode_nova_analise': False,
             'pode_definir_ultimo_relatorio': False,
             'pode_destinar_numeros_relatorio': False,
             'pode_alterar_sequencia_relatorio': False,

@@ -19,10 +19,11 @@ from django.db.models.functions import Cast
 from django.utils import timezone
 
 from ..models import (
-    LinhaControleRelatorio, Processo, ReservaNumeroRelatorio, SequenciaRelatorio,
+    EspecieProcesso, LinhaControleRelatorio, Pendencia, Processo,
+    ReservaNumeroRelatorio, SequenciaRelatorio,
 )
 from . import permissions as perm
-from .eventos import registrar_diff
+from .eventos import registrar_diff, registrar_evento_pendencia
 from .processos import converter_data, formatar_valor
 
 _OPS_ARITMETICOS = {
@@ -982,8 +983,33 @@ def _preservar_numero_apos_troca(linha):
     _preservar_numero_liberado(linha)
 
 
+def _limpar_dados_linha_numero_disponivel(linha):
+    """Número disponível: só nº e data ficam; o restante da linha zera."""
+    linha.numero_processo = ''
+    linha.volume = ''
+    linha.secretaria = ''
+    linha.contratada = ''
+    linha.objeto = ''
+    linha.valor = ''
+    linha.periodo = ''
+    linha.destino = ''
+    linha.analista = ''
+    linha.status_analise = ''
+    linha.sem_relatorio = False
+    if not linha.data_relatorio:
+        linha.data_relatorio = timezone.localdate()
+
+
+_CAMPOS_LIMPOS_NUMERO_DISPONIVEL = (
+    'processo', 'situacao_linha', 'observacao',
+    'numero_processo', 'volume', 'secretaria', 'contratada', 'objeto',
+    'valor', 'periodo', 'destino', 'analista', 'status_analise',
+    'sem_relatorio', 'data_relatorio', 'atualizado_em',
+)
+
+
 def _preservar_numero_liberado(linha):
-    """Mantém número e data na planilha em vermelho (só número específico)."""
+    """Mantém só número e data na planilha em vermelho (número específico)."""
     if linha is None:
         return
     numero = (linha.numero_relatorio or '').strip()
@@ -995,12 +1021,12 @@ def _preservar_numero_liberado(linha):
     linha.observacao = (
         'Número liberado — reuso só com número específico na análise.'
     )
-    linha.save(update_fields=[
-        'processo', 'situacao_linha', 'observacao', 'atualizado_em'])
+    _limpar_dados_linha_numero_disponivel(linha)
+    linha.save(update_fields=list(_CAMPOS_LIMPOS_NUMERO_DISPONIVEL))
 
 
 def _preservar_numero_devolvido(linha, observacao=None):
-    """Mantém número e data na planilha (verde) para reuso no mesmo dia."""
+    """Mantém só número e data na planilha (verde) para reuso no mesmo dia."""
     if linha is None:
         return
     numero = (linha.numero_relatorio or '').strip()
@@ -1012,8 +1038,8 @@ def _preservar_numero_devolvido(linha, observacao=None):
     linha.observacao = observacao or (
         'Número liberado ao voltar à fila — disponível para reuso no mesmo dia.'
     )
-    linha.save(update_fields=[
-        'processo', 'situacao_linha', 'observacao', 'atualizado_em'])
+    _limpar_dados_linha_numero_disponivel(linha)
+    linha.save(update_fields=list(_CAMPOS_LIMPOS_NUMERO_DISPONIVEL))
 
 
 def liberar_numero_ao_marcar_sem_relatorio(processo):
@@ -1029,24 +1055,15 @@ def liberar_numero_ao_marcar_sem_relatorio(processo):
     if linha is not None and (linha.numero_relatorio or '').strip():
         _preservar_numero_liberado(linha)
     else:
-        # Garante o número na planilha mesmo sem linha previa.
+        # Só número e data — sem carregar dados do processo na linha livre.
         LinhaControleRelatorio.objects.create(
             processo=None,
-            numero_processo=processo.numero_processo or '',
-            volume=processo.volume or '',
             numero_relatorio=numero,
             sem_relatorio=False,
             situacao_linha=LinhaControleRelatorio.SITUACAO_CANCELADA,
             data_relatorio=processo.data_analise or timezone.localdate(),
-            secretaria=processo.secretaria or '',
-            contratada=processo.contratada or '',
-            objeto=processo.objeto or '',
-            valor=processo.valor or '',
-            periodo=processo.periodo or '',
-            destino=processo.destino or '',
-            analista=processo.nome_analista or '',
-            status_analise='',
-            observacao='Número liberado — disponível para uso com número específico.',
+            observacao=(
+                'Número liberado — disponível para uso com número específico.'),
             grupo=processo.genero or '',
             sequencia=sequencia_do_processo(processo) or GRUPO_PADRAO,
         )
@@ -2545,6 +2562,25 @@ _MESES_ABREV_PLANILHA = (
 )
 
 
+def _data_de_serial_excel(valor):
+    """Converte número serial do Excel em date, ou None."""
+    if not isinstance(valor, (int, float)) or isinstance(valor, bool):
+        return None
+    # Relatórios/anos soltos (ex.: 2026) não são serial de data.
+    if valor < 20000 or valor > 80000:
+        return None
+    try:
+        from openpyxl.utils.datetime import from_excel
+        convertido = from_excel(valor)
+    except Exception:
+        return None
+    if isinstance(convertido, datetime):
+        return convertido.date()
+    if isinstance(convertido, date):
+        return convertido
+    return None
+
+
 def _data_celula(valor):
     """Interpreta data da planilha; textos no padrão BR (dd/mm/aaaa)."""
     if valor is None or valor == '':
@@ -2553,18 +2589,9 @@ def _data_celula(valor):
         return valor.date()
     if isinstance(valor, date):
         return valor
-    if isinstance(valor, (int, float)) and not isinstance(valor, bool):
-        # Número serial do Excel (às vezes vem sem tipagem de data).
-        try:
-            from openpyxl.utils.datetime import from_excel
-            convertido = from_excel(valor)
-        except Exception:
-            return None
-        if isinstance(convertido, datetime):
-            return convertido.date()
-        if isinstance(convertido, date):
-            return convertido
-        return None
+    serial = _data_de_serial_excel(valor)
+    if serial is not None:
+        return serial
     texto = str(valor).strip()
     if not texto:
         return None
@@ -2573,22 +2600,50 @@ def _data_celula(valor):
             return datetime.strptime(texto, formato).date()
         except ValueError:
             continue
+    # 10/6/2026 ou 1/9/26 (sem zero à esquerda) — comum no Sheets/Excel.
+    m = re.fullmatch(
+        r'(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})', texto)
+    if m:
+        dia, mes, ano = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if ano < 100:
+            ano += 2000
+        try:
+            return date(ano, mes, dia)
+        except ValueError:
+            return None
     try:
         return converter_data(texto)
     except ValidationError:
         return None
 
 
-def _texto_periodo_celula(valor):
-    """Mantém o estilo da planilha (jun.-26) quando o Excel guarda data."""
+def _texto_periodo_celula(valor, celula=None):
+    """Texto do período: mantém string da planilha; data vira dd/mm/aaaa.
+
+    No Controle, a maioria das células de período é texto (``ago.-26``,
+    ``01/08 a 31/08/2026``). Algumas (ex. nº 1951) são data de verdade
+    no Excel/Sheets (``01/09/2026``). Serial numérico também vira data.
+    Formato ``mmm`` da célula preserva abreviação ``set.-26``.
+    """
     if isinstance(valor, datetime):
-        valor = valor.date()
-    if isinstance(valor, date):
+        valor_data = valor.date()
+    elif isinstance(valor, date):
+        valor_data = valor
+    else:
+        valor_data = _data_de_serial_excel(valor)
+        if valor_data is None:
+            return _texto_celula(valor)
+
+    fmt = ''
+    if celula is not None:
+        fmt = str(getattr(celula, 'number_format', '') or '').casefold()
+    if 'mmm' in fmt:
         return (
-            f'{_MESES_ABREV_PLANILHA[valor.month - 1]}-'
-            f'{str(valor.year)[2:]}'
+            f'{_MESES_ABREV_PLANILHA[valor_data.month - 1]}-'
+            f'{str(valor_data.year)[2:]}'
         )
-    return _texto_celula(valor)
+    # Exibe como na planilha (01/09/2026), não ISO 2026-09-01.
+    return valor_data.strftime('%d/%m/%Y')
 
 
 def _numero_relatorio_celula(valor):
@@ -2728,14 +2783,23 @@ def _importar_linhas_aba(
                 f'{objeto} — {modalidade}' if objeto else modalidade
             )[:5000]
         obs_planilha = _texto_celula(cel('observacao_planilha'), limite=500)
-        periodo = _texto_periodo_celula(cel('periodo'))
+        idx_periodo = colunas.get('periodo')
+        celula_periodo = (
+            row[idx_periodo]
+            if idx_periodo is not None and idx_periodo < len(row)
+            else None
+        )
+        periodo = _texto_periodo_celula(cel('periodo'), celula_periodo)
         idxs_parcelas = colunas.get('parcelas') or []
         if not periodo and idxs_parcelas:
             partes = []
             for n, idx in enumerate(idxs_parcelas, 1):
                 if idx >= len(valores):
                     continue
-                trecho = _texto_periodo_celula(valores[idx])
+                trecho = _texto_periodo_celula(
+                    valores[idx],
+                    row[idx] if idx < len(row) else None,
+                )
                 if trecho:
                     partes.append(f'{n}ª: {trecho}')
             periodo = ' · '.join(partes)[:255]
@@ -3042,3 +3106,447 @@ def importar_planilha_excel(usuario, arquivo, grupo=GRUPO_PADRAO):
         raise RelatorioInvalido(
             'Nenhuma linha com número de relatório foi encontrada na planilha.')
     return resultado
+
+
+# --------------------------------------------------------------------------
+# Nova análise (sem depender da entrada do Protocolo)
+# --------------------------------------------------------------------------
+
+def _nome_usuario(usuario):
+    if not usuario:
+        return ''
+    return (usuario.get_full_name() or usuario.username or '').strip()
+
+
+def _processo_por_numero(numero_processo):
+    chave = (numero_processo or '').strip()
+    if not chave:
+        return None
+    return (
+        Processo.objects
+        .filter(numero_processo__iexact=chave)
+        .select_related('analista_responsavel', 'especie_fk')
+        .order_by('-id')
+        .first()
+    )
+
+
+def _diligencias_do_payload(dados):
+    """Lista de textos de diligência vindos do modal (getlist ou lista)."""
+    itens = []
+    if hasattr(dados, 'getlist'):
+        itens.extend(dados.getlist('diligencias') or [])
+        itens.extend(dados.getlist('diligencia') or [])
+    else:
+        bruto = dados.get('diligencias') or dados.get('diligencia') or []
+        if isinstance(bruto, str):
+            itens.append(bruto)
+        elif isinstance(bruto, (list, tuple)):
+            itens.extend(bruto)
+    return [str(x).strip() for x in itens if str(x or '').strip()]
+
+
+def _pendencias_resumo(processo):
+    if processo is None:
+        return []
+    qs = (
+        Pendencia.objects
+        .filter(processo=processo)
+        .exclude(status='CANCELADA')
+        .order_by('-criada_em', '-id')
+    )
+    return [
+        {
+            'id': p.id,
+            'descricao': p.descricao,
+            'status': p.status,
+            'status_label': p.get_status_display(),
+        }
+        for p in qs
+    ]
+
+
+def _especie_para_sequencia(grupo):
+    info = info_sequencia(grupo) or {}
+    for nome in info.get('especies') or ():
+        esp = EspecieProcesso.objects.filter(nome=nome, ativo=True).first()
+        if esp is not None:
+            return esp
+    return (
+        EspecieProcesso.objects
+        .filter(grupo=GRUPO_PADRAO, ativo=True, gera_relatorio=True)
+        .order_by('id')
+        .first()
+    )
+
+
+def _garantir_processo_nova_analise(usuario, numero_processo, grupo, campos):
+    """Garante Processo para diligências/análise sem exigir o Protocolo."""
+    processo = _processo_por_numero(numero_processo)
+    criado = False
+    if processo is None:
+        especie = _especie_para_sequencia(grupo)
+        genero = especie.grupo if especie else GRUPO_PADRAO
+        agora = timezone.localtime()
+        processo = Processo.objects.create(
+            numero_processo=numero_processo[:255],
+            volume=(campos.get('volume') or '1')[:255],
+            secretaria=(campos.get('secretaria') or '—')[:255],
+            objeto=(campos.get('objeto') or 'Análise sem entrada prévia do Protocolo'),
+            contratada=(campos.get('contratada') or None) or None,
+            genero=genero,
+            especie=(especie.nome if especie else '')[:255],
+            especie_fk=especie,
+            situacao_tramite='EM_ANALISE',
+            analista_responsavel=usuario,
+            data_entrada=timezone.localdate(),
+            hora_entrada=agora.time().replace(microsecond=0),
+            status_analise=(
+                campos.get('status_analise') or 'NAO_APLICAVEL')[:50],
+            observacao_protocolo=(
+                'Entrada via Nova análise (sem cadastro prévio do Protocolo).'),
+            prioridade='NORMAL',
+        )
+        criado = True
+    else:
+        mudancas = []
+        if (
+            processo.situacao_tramite == 'DISPONIVEL'
+            and not processo.analista_responsavel_id
+        ):
+            processo.situacao_tramite = 'EM_ANALISE'
+            processo.analista_responsavel = usuario
+            mudancas.extend(['situacao_tramite', 'analista_responsavel'])
+        elif (
+            processo.situacao_tramite == 'EM_ANALISE'
+            and not processo.analista_responsavel_id
+        ):
+            processo.analista_responsavel = usuario
+            mudancas.append('analista_responsavel')
+        if mudancas:
+            processo.save(update_fields=mudancas)
+    return processo, criado
+
+
+def _registrar_diligencias_nova_analise(processo, usuario, textos):
+    criadas = []
+    for descricao in textos:
+        pendencia = Pendencia.objects.create(
+            processo=processo,
+            descricao=descricao,
+            criada_por=usuario,
+            responsavel_tecnico=usuario,
+            status='AGUARDANDO_ATENDIMENTO',
+        )
+        registrar_evento_pendencia(pendencia, 'CRIADA', usuario, descricao)
+        registrar_diff(processo, 'pendencia_adicionada', '', descricao, usuario)
+        criadas.append(pendencia)
+    if criadas and processo.tem_pendencia != 'SIM':
+        processo.tem_pendencia = 'SIM'
+        processo.save(update_fields=['tem_pendencia'])
+    return criadas
+
+
+def processo_tem_analise_registrada(processo):
+    """Usado em Processos Ativos: Pendentes × Finalizados."""
+    if processo is None:
+        return False
+    if processo.situacao_tramite in (
+            'AGUARDANDO_ASSINATURA', 'ASSINATURA_DIRECIONADA',
+            'DISPONIVEL_RETIRADA'):
+        return True
+    if (processo.numero_relatorio or '').strip() or processo.sem_relatorio:
+        return True
+    if LinhaControleRelatorio.objects.filter(
+            processo=processo,
+            situacao_linha=LinhaControleRelatorio.SITUACAO_ATIVA,
+    ).exists():
+        return True
+    numero = (processo.numero_processo or '').strip()
+    if not numero:
+        return False
+    return LinhaControleRelatorio.objects.filter(
+        numero_processo__iexact=numero,
+        situacao_linha__in=(
+            LinhaControleRelatorio.SITUACAO_ATIVA,
+            LinhaControleRelatorio.SITUACAO_HISTORICA,
+        ),
+    ).exclude(numero_relatorio='', sem_relatorio=False).exists()
+
+
+def buscar_para_nova_analise(usuario, numero_processo, grupo=GRUPO_PADRAO):
+    """Resolve o nº do processo para auto-preencher o modal Nova análise."""
+    perm.assert_permissao(
+        perm.pode_nova_analise(usuario),
+        'Somente analista (Licitações ou Liquidações) e o administrador '
+        'iniciam Nova análise.')
+    numero = (numero_processo or '').strip()
+    if not numero:
+        raise RelatorioInvalido('Informe o número do processo.')
+    if not sequencia_valida(grupo):
+        grupo = GRUPO_PADRAO
+
+    processo = _processo_por_numero(numero)
+    layout = layout_planilha(grupo)
+    estado = estado_sequencia(grupo)
+    base = {
+        'encontrado': processo is not None,
+        'numero_processo': numero,
+        'grupo': grupo,
+        'proximo_numero': estado['proximo'],
+        'layout': {
+            'titulo': layout.get('titulo'),
+            'rotulos': layout.get('rotulos'),
+            'formulario': layout.get('formulario'),
+        },
+        'dados': {
+            'numero_processo': numero,
+            'volume': '',
+            'numero_relatorio': '',
+            'data_relatorio': timezone.localdate().isoformat(),
+            'secretaria': '',
+            'contratada': '',
+            'objeto': '',
+            'valor': '',
+            'periodo': '',
+            'destino': '',
+            'analista': _nome_usuario(usuario),
+            'observacao': '',
+            'sem_relatorio': False,
+            'status_analise': '',
+        },
+    }
+    base['pendencias'] = []
+    if processo is None:
+        # Última linha histórica com este nº (se houver).
+        anterior = (
+            LinhaControleRelatorio.objects
+            .filter(numero_processo__iexact=numero)
+            .exclude(situacao_linha=LinhaControleRelatorio.SITUACAO_CANCELADA)
+            .order_by('-data_relatorio', '-id')
+            .first()
+        )
+        if anterior is not None:
+            base['dados'].update({
+                'volume': anterior.volume or '',
+                'secretaria': anterior.secretaria or '',
+                'contratada': anterior.contratada or '',
+                'objeto': anterior.objeto or '',
+                'valor': formatar_valor(anterior.valor or '') or '',
+                'periodo': anterior.periodo or '',
+                'destino': anterior.destino or '',
+                'observacao': anterior.observacao or '',
+            })
+            base['aviso'] = (
+                'Processo ainda não está no sistema. Campos vieram de linha '
+                'anterior do Controle. Salve a análise, aponte diligências e '
+                'só no fim use Gerar número (grava na planilha com trava).'
+            )
+        else:
+            base['aviso'] = (
+                'Processo ainda não cadastrado pelo Protocolo. Você pode '
+                'preencher a análise e as diligências aqui. O número do '
+                'relatório só é gerado ao clicar em Gerar número — já na planilha.'
+            )
+        return base
+
+    dados_proc = _dados_da_linha(processo)
+    base['dados'].update({
+        'numero_processo': processo.numero_processo or numero,
+        'volume': dados_proc.get('volume') or processo.volume or '',
+        'secretaria': processo.secretaria or '',
+        'contratada': processo.contratada or '',
+        'objeto': processo.objeto or '',
+        'valor': formatar_valor(processo.valor or '') or '',
+        'periodo': processo.periodo or '',
+        'destino': processo.destino or '',
+        'analista': processo.nome_analista or _nome_usuario(usuario),
+        'observacao': processo.observacao or '',
+        'status_analise': processo.status_analise or '',
+        'numero_relatorio': processo.numero_relatorio or '',
+        'sem_relatorio': bool(processo.sem_relatorio),
+        'data_relatorio': (
+            (processo.data_analise or timezone.localdate()).isoformat()
+        ),
+    })
+    base['processo_id'] = processo.id
+    base['genero'] = processo.genero or ''
+    base['especie'] = processo.especie or ''
+    base['situacao'] = processo.situacao_exibicao
+    base['pendencias'] = _pendencias_resumo(processo)
+    base['aviso'] = (
+        'Processo encontrado. Dados preenchidos automaticamente. '
+        'Salve a análise, aponte diligências e use Gerar número por último '
+        '(grava na planilha e evita dois usuários pegarem o mesmo nº).'
+    )
+    return base
+
+
+@transaction.atomic
+def salvar_nova_analise(usuario, dados):
+    """Salva análise/diligências; número só sob Gerar número (trava + planilha)."""
+    perm.assert_permissao(
+        perm.pode_nova_analise(usuario),
+        'Somente analista (Licitações ou Liquidações) e o administrador '
+        'iniciam Nova análise.')
+
+    numero_processo = str(dados.get('numero_processo') or '').strip()
+    if not numero_processo:
+        raise RelatorioInvalido('Informe o número do processo.')
+
+    grupo = str(dados.get('grupo') or GRUPO_PADRAO).strip() or GRUPO_PADRAO
+    if not sequencia_valida(grupo):
+        raise RelatorioInvalido('Grupo de numeração inválido.')
+
+    gerar = str(dados.get('gerar_numero') or '') in (
+        '1', 'true', 'True', 'on', 'sim')
+    sem_relatorio = str(dados.get('sem_relatorio') or '') in (
+        '1', 'true', 'True', 'on', 'sim')
+    numero_manual = _numero_relatorio_celula(dados.get('numero_relatorio'))
+    diligencias = _diligencias_do_payload(dados)
+
+    try:
+        data = converter_data(dados.get('data_relatorio'))
+    except ValidationError as exc:
+        raise RelatorioInvalido('; '.join(exc.messages))
+    if data is None:
+        data = timezone.localdate()
+
+    valor_bruto = dados.get('valor')
+    if valor_bruto in (None, ''):
+        valor = ''
+    else:
+        valor = formatar_valor(valor_bruto)[:255]
+
+    analista = str(dados.get('analista') or '').strip()[:255] or _nome_usuario(
+        usuario)
+    campos = {
+        'volume': str(dados.get('volume') or '').strip()[:255],
+        'secretaria': str(dados.get('secretaria') or '').strip()[:255],
+        'contratada': str(dados.get('contratada') or '').strip()[:255],
+        'objeto': str(dados.get('objeto') or '').strip(),
+        'valor': valor,
+        'periodo': str(dados.get('periodo') or '').strip()[:255],
+        'destino': str(dados.get('destino') or '').strip()[:255],
+        'analista': analista,
+        'observacao': str(dados.get('observacao') or '').strip(),
+        'status_analise': str(dados.get('status_analise') or '').strip()[:40],
+        'sem_relatorio': sem_relatorio,
+    }
+
+    processo, criado = _garantir_processo_nova_analise(
+        usuario, numero_processo, grupo, campos)
+
+    # Espelha campos da análise no processo (número só depois, se pedido).
+    processo.secretaria = campos['secretaria'] or processo.secretaria
+    processo.contratada = campos['contratada'] or processo.contratada
+    processo.objeto = campos['objeto'] or processo.objeto
+    processo.valor = campos['valor'] or processo.valor
+    processo.periodo = campos['periodo'] or processo.periodo
+    processo.destino = campos['destino'] or processo.destino
+    if campos['destino']:
+        from . import cadastros
+        processo.destino_fk = cadastros.resolver_unidade(campos['destino'])
+    processo.observacao = campos['observacao']
+    if campos['status_analise']:
+        processo.status_analise = campos['status_analise']
+    processo.volume = campos['volume'] or processo.volume
+    processo.sem_relatorio = sem_relatorio
+    if grupo in ('BOLSA_ATLETA', 'AUXILIO_COMPETICAO'):
+        processo.processo_prestacao = numero_processo[:255]
+    processo.save()
+
+    diligencias_criadas = _registrar_diligencias_nova_analise(
+        processo, usuario, diligencias)
+
+    linha = None
+    numero_relatorio = (processo.numero_relatorio or '').strip()
+    numero_antes = numero_relatorio
+
+    if gerar:
+        # Número por último, com select_for_update dentro de proximo_numero,
+        # e já grava na planilha — dois usuários não saem com o mesmo nº.
+        if not numero_relatorio:
+            # atribuir_se_preciso preenche o instance e a planilha, mas não
+            # faz save do Processo — persistimos aqui em seguida.
+            if atribuir_se_preciso(processo):
+                processo.save(update_fields=['numero_relatorio', 'data_analise'])
+            elif especie_gera_relatorio(processo):
+                processo.numero_relatorio = proximo_numero(grupo)
+                processo.data_analise = data
+                processo.save(update_fields=['numero_relatorio', 'data_analise'])
+                registrar(processo)
+            else:
+                processo.data_analise = data
+                processo.save(update_fields=['data_analise'])
+        else:
+            processo.data_analise = data
+            processo.save(update_fields=['data_analise'])
+            registrar(processo)
+        processo.refresh_from_db()
+        numero_relatorio = (processo.numero_relatorio or '').strip()
+        linha = (
+            LinhaControleRelatorio.objects
+            .filter(processo=processo)
+            .order_by('-id')
+            .first()
+        )
+    elif numero_manual:
+        if numero_manual != numero_relatorio:
+            conflito = (
+                LinhaControleRelatorio.objects
+                .select_for_update()
+                .filter(filtro_sequencia(grupo), numero_relatorio=numero_manual)
+                .exclude(situacao_linha=LinhaControleRelatorio.SITUACAO_CANCELADA)
+                .exclude(processo=processo)
+                .exists()
+            )
+            if conflito:
+                raise RelatorioInvalido(
+                    f'O número {numero_manual} já está em uso neste grupo.')
+            processo.numero_relatorio = numero_manual
+        processo.data_analise = data
+        processo.save(update_fields=['numero_relatorio', 'data_analise', 'sem_relatorio'])
+        linha = registrar(processo)
+        numero_relatorio = (processo.numero_relatorio or '').strip()
+        numero_int = _inteiro(numero_relatorio)
+        if numero_int:
+            _atualizar_proximo_numero_grupo(grupo, numero_int)
+            reserva = reserva_do_numero(numero_int, grupo)
+            if reserva is not None:
+                reserva.delete()
+    elif sem_relatorio and numero_relatorio:
+        processo.data_analise = data
+        processo.save(update_fields=['data_analise', 'sem_relatorio'])
+        linha = registrar(processo)
+    else:
+        # Salvar análise: grava campos e diligências, sem emitir número.
+        if not processo.data_analise:
+            processo.data_analise = data
+            processo.save(update_fields=['data_analise'])
+
+    partes = []
+    if gerar and numero_relatorio and numero_relatorio != numero_antes:
+        partes.append(f'Número {numero_relatorio} gerado.')
+    elif numero_relatorio:
+        partes.append(
+            f'Análise salva. Número do relatório: {numero_relatorio}.')
+    else:
+        partes.append('Análise salva sem número de relatório.')
+    if diligencias_criadas:
+        partes.append(
+            f'{len(diligencias_criadas)} diligência(s) apontada(s).')
+    if criado:
+        partes.append('Processo criado sem entrada prévia do Protocolo.')
+
+    return {
+        'linha_id': linha.id if linha else None,
+        'processo_id': processo.id,
+        'so_linha': False,
+        'criado': criado,
+        'numero_relatorio': numero_relatorio,
+        'numero_processo': processo.numero_processo,
+        'diligencias': len(diligencias_criadas),
+        'gerou_numero': bool(gerar and numero_relatorio),
+        'mensagem': ' '.join(partes),
+    }

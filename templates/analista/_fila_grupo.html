@@ -62,7 +62,12 @@
                     </td>
                     <td class="col-actions">
                         <div class="actions">
-                            {% if pode_assumir and processo.pode_assumir %}
+                            {% if fila_somente_leitura %}
+                                <a href="{% url 'analista_processo' processo.id %}" class="btn btn--outline btn--sm">
+                                    <span class="material-symbols-rounded">visibility</span>
+                                    Ver
+                                </a>
+                            {% elif pode_assumir and processo.pode_assumir %}
                                 <form method="post" action="{% url 'assumir_processo' processo.id %}">
                                     {% csrf_token %}
                                     <button type="submit" class="btn btn--primary btn--sm">
@@ -74,7 +79,9 @@
                                 <form method="post" action="{% url 'tram_liberar_assinatura' processo.id %}">
                                     {% csrf_token %}
                                     <button type="submit" class="btn btn--primary btn--sm"
-                                            onclick="return confirm('Encaminhar este processo para o Controlador?');">
+                                            data-confirm="Encaminhar este processo para o Controlador?"
+                                            data-confirm-title="Encaminhar"
+                                            data-confirm-ok="Encaminhar">
                                         <span class="material-symbols-rounded">draw</span>
                                         Encaminhar ao Controlador
                                     </button>
@@ -86,7 +93,12 @@
                                 </a>
                                 {% if not modo_gestao %}
                                 <form method="post" action="{% url 'tram_declinar_analise' processo.id %}"
-                                      onsubmit="return confirm('Devolver este processo à fila?\n\nA análise em andamento será limpa (incluindo número de relatório, se houver) e o processo ficará disponível de novo.');">
+                                      data-confirm="Devolver este processo à fila?
+
+A análise em andamento será limpa (incluindo número de relatório, se houver) e o processo ficará disponível de novo."
+                                      data-confirm-title="Devolver à fila"
+                                      data-confirm-ok="Devolver"
+                                      data-confirm-danger>
                                     {% csrf_token %}
                                     <input type="hidden" name="motivo" value="Devolvido à fila">
                                     <button type="submit" class="btn btn--outline btn--sm" title="Devolver à fila">
@@ -109,7 +121,12 @@
                                 {% if modo_gestao or pode_desfazer_tramite %}
                                 {% if processo.situacao_tramite == 'EM_ANALISE' %}
                                 <form method="post" action="{% url 'tram_declinar_analise' processo.id %}"
-                                      onsubmit="return confirm('Devolver este processo à fila?\n\nA análise em andamento será limpa (incluindo número de relatório, se houver) e o processo ficará disponível de novo.');">
+                                      data-confirm="Devolver este processo à fila?
+
+A análise em andamento será limpa (incluindo número de relatório, se houver) e o processo ficará disponível de novo."
+                                      data-confirm-title="Devolver à fila"
+                                      data-confirm-ok="Devolver"
+                                      data-confirm-danger>
                                     {% csrf_token %}
                                     <input type="hidden" name="motivo" value="Devolvido à fila">
                                     <input type="hidden" name="next" value="{{ request.get_full_path }}">

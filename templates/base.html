@@ -87,12 +87,6 @@
                     <span class="material-symbols-rounded">fact_check</span>
                     <span class="nav-item__label">Fila de análise</span>
                 </a>
-                <a href="{% url 'meus_processos' %}"
-                   class="nav-item {% if nav == 'meus_processos' %}is-active{% endif %}"
-                   title="Meus processos">
-                    <span class="material-symbols-rounded">folder_shared</span>
-                    <span class="nav-item__label">Meus processos</span>
-                </a>
                 <a href="{% url 'meus_atendimentos' %}"
                    class="nav-item {% if nav == 'meus_atendimentos' %}is-active{% endif %}"
                    title="Atendimentos indicados">
@@ -258,9 +252,11 @@
 
         <main class="content {% block content_class %}{% endblock %}">
             {% if messages %}
-                <div class="stack" style="margin-bottom: 16px;">
+                <div class="stack" style="margin-bottom: 16px;" id="flashAlerts">
                     {% for message in messages %}
-                        <div class="alert {% if message.tags == 'error' %}alert--danger{% elif message.tags == 'success' %}alert--success{% else %}alert--info{% endif %}">
+                        <div class="alert {% if message.tags == 'error' %}alert--danger{% elif message.tags == 'success' %}alert--success{% else %}alert--info{% endif %}"
+                             data-flash-text="{{ message|escape }}"
+                             data-flash-tags="{{ message.tags }}">
                             <span class="material-symbols-rounded">{% if message.tags == 'error' %}error{% elif message.tags == 'success' %}check_circle{% else %}info{% endif %}</span>
                             <span>{{ message }}</span>
                         </div>
@@ -273,6 +269,7 @@
 </div>
 {% endwith %}
 
+{% include "includes/dialogo_sistema.html" %}
 <script src="{% static 'js/app.js' %}"></script>
 {% block extra_js %}{% endblock %}
 </body>

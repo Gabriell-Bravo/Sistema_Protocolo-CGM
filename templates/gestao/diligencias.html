@@ -76,7 +76,9 @@
                             <form method="post" action="{% url 'pend_indicar_atendimento' pendencia.id %}">
                                 {% csrf_token %}
                                 <button type="submit" class="btn btn--primary btn--sm"
-                                        onclick="return confirm('Indicar que houve atendimento suficiente para nova análise técnica?');">
+                                        data-confirm="Indicar que houve atendimento suficiente para nova análise técnica?"
+                                        data-confirm-title="Indicar atendimento"
+                                        data-confirm-ok="Indicar">
                                     <span class="material-symbols-rounded">assignment_turned_in</span>
                                     Indicar atendimento
                                 </button>

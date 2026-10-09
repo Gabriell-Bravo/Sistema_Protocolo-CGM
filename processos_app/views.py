@@ -31,7 +31,6 @@ from . import views_tramitacao
 from .services import cadastros as svc_cadastros
 from .services import indicadores
 from .services import monitoramento as svc_monitoramento
-from .services import meus_processos as svc_meus_processos
 from .services import controle_analise as svc_controle_analise
 from .services import pendencias as svc_pendencias
 from .services import processos as svc_processos
@@ -362,11 +361,12 @@ def salvar_processo(request):
 
 @login_required
 def listar_processos(request):
-    """Processos ativos (item 58): não saíram e não foram cancelados.
+    """Processos ativos — consulta do que está na CGM (Protocolo/Gestão).
 
-    Com ?aba=cgm, lista só os da Controladoria Geral do Município
-    e os da espécie Contabilidade (Protocolo e Gestão).
+    Fase: pendentes (sem análise no Controle) ou finalizados (análise
+    já registrada). Com ?aba=cgm, só CGM/Contabilidade.
     """
+    from .models import LinhaControleRelatorio
     from .services import secretaria_cgm as svc_cgm
 
     aba_cgm = request.GET.get('aba') == 'cgm'
@@ -382,6 +382,9 @@ def listar_processos(request):
     genero_filtro = request.GET.get('genero', 'todas')
     especie_filtro = request.GET.get('especie', 'todas')
     situacao_filtro = request.GET.get('situacao', 'todas')
+    fase = (request.GET.get('fase') or 'pendentes').strip()
+    if fase not in ('pendentes', 'finalizados', 'todos'):
+        fase = 'pendentes'
 
     if aba_cgm:
         processos_query = (svc_cgm.apenas_processos_cgm(tramitacao.ativos())
@@ -415,12 +418,36 @@ def listar_processos(request):
         processos_query = processos_query.filter(situacao_tramite=situacao_filtro)
 
     # Pendência calculada dos registros reais (item 31), numa consulta só.
+    linha_analise = LinhaControleRelatorio.objects.filter(
+        Q(processo=OuterRef('pk')) | Q(
+            numero_processo__iexact=OuterRef('numero_processo')),
+        situacao_linha__in=(
+            LinhaControleRelatorio.SITUACAO_ATIVA,
+            LinhaControleRelatorio.SITUACAO_HISTORICA,
+        ),
+    ).filter(Q(sem_relatorio=True) | ~Q(numero_relatorio=''))
     processos_query = processos_query.annotate(
         pendencias_abertas=Count('pendencias', filter=Q(
             pendencias__status__in=Pendencia.STATUS_ABERTOS), distinct=True),
         tem_evento_cadastro=Exists(EventoProcesso.objects.filter(
             processo=OuterRef('pk'), tipo='PROCESSO_CADASTRADO')),
+        tem_analise_controle=Exists(linha_analise),
     )
+    filtro_analise_feita = (
+        Q(tem_analise_controle=True)
+        | Q(situacao_tramite__in=(
+            'AGUARDANDO_ASSINATURA', 'ASSINATURA_DIRECIONADA',
+            'DISPONIVEL_RETIRADA'))
+        | Q(sem_relatorio=True)
+        | (~Q(numero_relatorio='') & Q(numero_relatorio__isnull=False))
+    )
+    total_pendentes = processos_query.filter(~filtro_analise_feita).count()
+    total_finalizados = processos_query.filter(filtro_analise_feita).count()
+    if fase == 'pendentes':
+        processos_query = processos_query.filter(~filtro_analise_feita)
+    elif fase == 'finalizados':
+        processos_query = processos_query.filter(filtro_analise_feita)
+
     # Mesma ordem da fila / Para assinar: Urgente → Prioritário → Normal,
     # e dentro de cada faixa a entrada mais antiga.
     processos_query = ordem_fila(processos_query)
@@ -449,6 +476,8 @@ def listar_processos(request):
         prazos_service.anotar(processo, hoje)
         processo.pode_registrar_saida = (
             pode_saida and tramitacao.pode_saida_direta(processo))
+        processo.analise_finalizada = svc_relatorios.processo_tem_analise_registrada(
+            processo)
 
     all_generos = [g for g in Processo.objects.values_list('genero', flat=True)
                    .distinct().order_by('genero') if can_access_genero(request.user, g)]
@@ -465,6 +494,9 @@ def listar_processos(request):
         'total_atrasados': total_atrasados,
         'total_vence_hoje': total_vence_hoje,
         'total_prioritarios': total_prioritarios,
+        'total_pendentes': total_pendentes,
+        'total_finalizados': total_finalizados,
+        'fase': fase,
         'prioridade_filtro': prioridade_filtro,
         'termo_pesquisa': termo_pesquisa,
         'genero_filtro': genero_filtro,
@@ -1235,13 +1267,21 @@ def montar_grupos_liquidacoes(processos):
     return grupos
 
 
-def consultar_fila_grupos(request, opcoes_filtro=FILTROS_ANALISTA):
+def consultar_fila_grupos(request, opcoes_filtro=FILTROS_ANALISTA,
+                          so_entrada_protocolo=False):
     """Fila dos dois grupos de análise, com busca e filtro (item 37).
 
     Devolve (todos, licitacoes, grupos_liquidacoes, termo, filtro, contagens).
     `todos` é o conjunto sem filtro — base dos totais do topo da tela.
     Liquidações vêm separadas por sequência (blocos empilhados).
+
+    so_entrada_protocolo: só processos cadastrados pelo Protocolo
+    (exclui stubs criados pela Nova análise).
     """
+    from django.db.models import Exists, OuterRef
+
+    from .models import EventoProcesso
+
     termo_pesquisa = request.GET.get('pesquisa', '').strip()
     padrao = opcoes_filtro[0][0]
     filtro = request.GET.get('filtro', padrao)
@@ -1259,6 +1299,15 @@ def consultar_fila_grupos(request, opcoes_filtro=FILTROS_ANALISTA):
         'analista_responsavel', 'assinatura_direcionada_para',
         'prioridade_fk', 'especie_fk',
     )
+    if so_entrada_protocolo:
+        cadastro = EventoProcesso.objects.filter(
+            processo_id=OuterRef('pk'),
+            tipo='PROCESSO_CADASTRADO',
+        )
+        base_query = base_query.filter(Exists(cadastro)).exclude(
+            observacao_protocolo__startswith=(
+                'Entrada via Nova análise')
+        )
     processos_query = filter_processes_by_user_level(request.user, base_query)
 
     if termo_pesquisa:
@@ -1315,7 +1364,8 @@ def area_analista(request):
     (
         processos, licitacoes, grupos_liquidacoes, termo_pesquisa, filtro,
         contagens,
-    ) = consultar_fila_grupos(request, FILTROS_ANALISTA)
+    ) = consultar_fila_grupos(
+        request, FILTROS_ANALISTA, so_entrada_protocolo=True)
 
     total_disponiveis = sum(1 for p in processos if p.situacao_fila == 'disponivel')
     total_comigo = sum(1 for p in processos if p.situacao_fila == 'voce')
@@ -1345,30 +1395,9 @@ def area_analista(request):
         'total_atrasados': total_atrasados,
         'termo_pesquisa': termo_pesquisa,
         'modo_gestao': False,
-        'pode_assumir': pode_assumir_processos(request.user),
-    })
-
-
-@login_required
-@user_passes_test(pode_usar_area_analista)
-def meus_processos(request):
-    """Processos com o analista agora e os em que ele já atuou."""
-    filtro = (request.GET.get('filtro') or 'comigo').strip()
-    termo = request.GET.get('pesquisa', '').strip()
-    processos, totais, filtro = svc_meus_processos.listar(
-        request.user, filtro=filtro, termo=termo)
-    filtros = [
-        ('comigo', 'Comigo agora', totais['comigo']),
-        ('feitos', 'Já analisados', totais['feitos']),
-        ('todos', 'Todos', totais['todos']),
-    ]
-    return render(request, 'analista/meus_processos.html', {
-        'processos': processos,
-        'filtro_atual': filtro,
-        'filtros': filtros,
-        'totais': totais,
-        'termo_pesquisa': termo,
-        'total': len(processos),
+        # Fila do analista é só consulta; análise vai pelo Controle (Nova análise).
+        'pode_assumir': False,
+        'fila_somente_leitura': True,
     })
 
 
@@ -1398,6 +1427,12 @@ def controle_analise(request):
         'termo_pesquisa': termo,
         'total': len(processos),
         'nav': 'controle_analise',
+        'sequencias_nova_analise': svc_relatorios.sequencias_disponiveis(),
+        'nova_analise_grupo': svc_relatorios.GRUPO_PADRAO,
+        'layout_planilha': svc_relatorios.layout_planilha(svc_relatorios.GRUPO_PADRAO),
+        'secretarias': [u.nome for u in svc_cadastros.unidades_ativas()],
+        'all_status_analise': Processo.STATUS_ANALISE_CHOICES,
+        **perm.contexto_de_permissoes(request.user),
     })
 
 
@@ -1461,19 +1496,12 @@ def gestao_alterar_prioridade(request, process_id):
 @login_required
 @user_passes_test(pode_usar_area_analista)
 def assumir_processo(request, process_id):
-    # Delegado para services/tramitacao.py (itens 39 e 52).
-    if request.method != 'POST':
-        return redirect('area_analista')
-    try:
-        processo = tramitacao.assumir(process_id, request.user)
-    except (PermissionDenied, ValidationError) as exc:
-        mensagens = getattr(exc, 'messages', [str(exc)])
-        messages.error(request, '; '.join(mensagens))
-        return redirect('area_analista')
-
-    messages.success(
-        request, "Processo assumido. A análise ficou registrada em seu nome.")
-    return redirect('analista_processo', process_id=processo.id)
+    """Desativado na Fila: consulta apenas. Análise pelo Controle."""
+    messages.error(
+        request,
+        'A Fila de análise é só consulta. Use Nova análise no Controle '
+        'de relatório ou Controle de análise.')
+    return redirect('area_analista')
 
 
 @login_required
@@ -1546,6 +1574,7 @@ def analista_processo(request, process_id):
                 request, "Você não tem permissão para esta ação neste processo.")
             return redirect('analista_processo', process_id=processo.id)
 
+        numero_antes = (processo.numero_relatorio or '').strip()
         try:
             alteracoes = registrar_analise(request, processo) if pode_editar else 0
         except ValidationError as exc:
@@ -1579,23 +1608,30 @@ def analista_processo(request, process_id):
                 return redirect('analista_processo', process_id=processo.id)
             messages.success(request, "Processo encaminhado. Passou a ser do analista escolhido.")
             return redirect('area_analista')
+
+        processo.refresh_from_db()
+        numero_agora = (processo.numero_relatorio or '').strip()
         if acao == 'gerar_numero':
-            processo.refresh_from_db()
-            if processo.numero_relatorio:
+            if numero_agora and numero_agora != numero_antes:
+                messages.success(
+                    request, f"Número {numero_agora} gerado.")
+            elif numero_agora:
                 messages.success(
                     request,
-                    f"Análise salva. Número do relatório: "
-                    f"{processo.numero_relatorio}.")
+                    f"Análise salva. Número do relatório: {numero_agora}.")
             elif alteracoes:
                 messages.success(
-                    request,
-                    f"Análise salva. {alteracoes} campo(s) atualizado(s). "
-                    f"Número não gerado (sem relatório ou espécie sem numeração).")
+                    request, "Análise salva sem número de relatório.")
             else:
                 messages.info(request, "Nenhuma alteração para salvar.")
         elif alteracoes:
-            messages.success(
-                request, f"Análise salva. {alteracoes} campo(s) atualizado(s).")
+            if numero_agora:
+                messages.success(
+                    request,
+                    f"Análise salva. Número do relatório: {numero_agora}.")
+            else:
+                messages.success(
+                    request, "Análise salva sem número de relatório.")
         else:
             messages.info(request, "Nenhuma alteração para salvar.")
         destino = request.POST.get('next') or ''

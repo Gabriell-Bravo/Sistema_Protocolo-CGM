@@ -10,6 +10,8 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_GET, require_POST
 
+from .models import Processo
+from .services import cadastros as svc_cadastros
 from .services import permissions as perm
 from .services import relatorios as svc
 
@@ -163,6 +165,10 @@ def controle_relatorio(request):
         'pode_definir_ultimo': pode_definir,
         'pode_destinar_numeros': pode_destinar,
         'reservas': reservas,
+        'secretarias': [u.nome for u in svc_cadastros.unidades_ativas()],
+        'all_status_analise': Processo.STATUS_ANALISE_CHOICES,
+        'sequencias_nova_analise': svc.sequencias_disponiveis(),
+        'nova_analise_grupo': grupo,
         **perm.contexto_de_permissoes(request.user),
     })
 
@@ -584,6 +590,47 @@ def apagar_linha(request, linha_id):
             request, grupo, ok=True,
             mensagem=f'Linha do relatório {numero} apagada do Controle.',
             extra={'linha_id': linha_id, 'apagada': True},
+        )
+    except (PermissionDenied, ValidationError) as exc:
+        return _resposta_linha_acao(
+            request, grupo, ok=False,
+            mensagem='; '.join(getattr(exc, 'messages', [str(exc)])),
+        )
+
+
+@login_required
+@require_GET
+@perm.exige(perm.pode_nova_analise,
+            'Somente analista e o administrador iniciam Nova análise.')
+def nova_analise_buscar(request):
+    """JSON: auto-preenchimento do modal Nova análise."""
+    grupo = (request.GET.get('grupo') or svc.GRUPO_PADRAO).strip()
+    numero = (request.GET.get('numero_processo') or '').strip()
+    try:
+        payload = svc.buscar_para_nova_analise(request.user, numero, grupo)
+        return JsonResponse({'ok': True, **payload})
+    except (PermissionDenied, ValidationError) as exc:
+        return JsonResponse({
+            'ok': False,
+            'mensagem': '; '.join(getattr(exc, 'messages', [str(exc)])),
+        }, status=400)
+
+
+@login_required
+@require_POST
+@perm.exige(perm.pode_nova_analise,
+            'Somente analista e o administrador iniciam Nova análise.')
+def nova_analise_salvar(request):
+    """Salva análise/diligências; número só com Gerar número (trava + planilha)."""
+    # QueryDict preserva getlist('diligencias'); .dict() ficaria só com a última.
+    dados = request.POST
+    grupo = dados.get('grupo') or svc.GRUPO_PADRAO
+    try:
+        resultado = svc.salvar_nova_analise(request.user, dados)
+        return _resposta_linha_acao(
+            request, grupo, ok=True,
+            mensagem=resultado.get('mensagem') or 'Análise registrada.',
+            extra=resultado,
         )
     except (PermissionDenied, ValidationError) as exc:
         return _resposta_linha_acao(

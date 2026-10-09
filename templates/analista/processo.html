@@ -284,19 +284,12 @@
     {% if processo.pode_assumir and not somente_leitura %}
         <div class="alert alert--info">
             <span class="material-symbols-rounded">info</span>
-            <span>Este processo está disponível. Ao assumir, você passa a ser o responsável e os demais analistas veem quem está analisando.</span>
+            <span>Este processo está disponível para análise. Registre pelo botão <strong>Nova análise</strong> no Controle de relatório ou Controle de análise.</span>
         </div>
-        <form method="post" action="{% url 'assumir_processo' processo.id %}">
-            {% csrf_token %}
-            <button type="submit" class="btn btn--primary">
-                <span class="material-symbols-rounded">handshake</span>
-                Assumir processo
-            </button>
-        </form>
     {% elif processo.situacao_tramite == 'EM_ANALISE' and not processo.eh_meu and not somente_leitura %}
         <div class="alert alert--info">
             <span class="material-symbols-rounded">person</span>
-            <span>Em análise por <strong>{{ processo.nome_analista }}</strong>. Não está disponível para assumir.</span>
+            <span>Em análise por <strong>{{ processo.nome_analista }}</strong>.</span>
         </div>
     {% endif %}
 
@@ -606,7 +599,10 @@
                 </div>
                 <div class="form-actions" style="margin-top:14px;">
                     <button type="submit" class="btn btn--primary"
-                            onclick="return confirm('Trocar o grupo de numeração deste processo? Se já houver número, ele será substituído pelo próximo do grupo novo.');">
+                            data-confirm="Trocar o grupo de numeração deste processo? Se já houver número, ele será substituído pelo próximo do grupo novo."
+                            data-confirm-title="Trocar grupo"
+                            data-confirm-ok="Aplicar grupo"
+                            data-confirm-danger>
                         <span class="material-symbols-rounded">swap_horiz</span>
                         Aplicar grupo
                     </button>
@@ -700,7 +696,9 @@
                     <button type="submit" form="formAnalise" name="acao" value="concluir"
                             class="encaminhamento__opcao"
                             {% if campos_faltantes %}disabled title="{% if eh_licitacao %}Anexe ao menos um arquivo primeiro.{% else %}Preencha a análise primeiro.{% endif %}"{% endif %}
-                            onclick="return confirm('Encaminhar este processo para o Controlador?');">
+                            data-confirm="Encaminhar este processo para o Controlador?"
+                            data-confirm-title="Encaminhar"
+                            data-confirm-ok="Encaminhar">
                         <span class="material-symbols-rounded">draw</span>
                         <div class="encaminhamento__texto">
                             <div class="encaminhamento__titulo">Encaminhar para o Controlador</div>
@@ -723,7 +721,12 @@
 
                     {% if pode_declinar %}
                     <button type="submit" form="formFilaSemAnalise" class="encaminhamento__opcao"
-                            onclick="return confirm('Devolver este processo à fila?\n\nA análise em andamento será limpa (incluindo número de relatório, se houver) e o processo ficará disponível de novo.');">
+                            data-confirm="Devolver este processo à fila?
+
+A análise em andamento será limpa (incluindo número de relatório, se houver) e o processo ficará disponível de novo."
+                            data-confirm-title="Devolver à fila"
+                            data-confirm-ok="Devolver"
+                            data-confirm-danger>
                         <span class="material-symbols-rounded">undo</span>
                         <div class="encaminhamento__texto">
                             <div class="encaminhamento__titulo">Devolver à fila</div>
@@ -920,12 +923,27 @@
 
 {% block extra_js %}
 <script>
-    // item 32: cancelar pendência exige motivo.
+    // item 32: cancelar pendência exige motivo (diálogo do sistema).
     function pedirMotivoCancelamento(form) {
-        const motivo = prompt('Motivo do cancelamento desta diligência:');
-        if (!motivo || !motivo.trim()) { return false; }
-        form.querySelector('input[name="motivo"]').value = motivo.trim();
-        return true;
+        if (form.dataset.motivoOk === '1') {
+            delete form.dataset.motivoOk;
+            return true;
+        }
+        window.appPrompt('Descreva o motivo do cancelamento desta diligência.', {
+            titulo: 'Cancelar diligência',
+            campoLabel: 'Motivo',
+            confirmLabel: 'Cancelar diligência',
+            cancelLabel: 'Voltar',
+            required: true,
+            danger: true
+        }).then(function (motivo) {
+            if (!motivo) return;
+            form.querySelector('input[name="motivo"]').value = String(motivo).trim();
+            form.dataset.motivoOk = '1';
+            if (typeof form.requestSubmit === 'function') form.requestSubmit();
+            else form.submit();
+        });
+        return false;
     }
 
     function mostrarPassoEncaminhar(passo) {

@@ -64,7 +64,10 @@
                                 </a>
                                 {# item 36: desativar preserva o histórico; não há exclusão #}
                                 <form action="{% url 'delete_user' u.id %}" method="post"
-                                      onsubmit="return confirm('{% if u.is_active %}Desativar{% else %}Reativar{% endif %} este usuário? O histórico dele é preservado.');">
+                                      data-confirm="{% if u.is_active %}Desativar{% else %}Reativar{% endif %} este usuário? O histórico dele é preservado."
+                                      data-confirm-title="{% if u.is_active %}Desativar usuário{% else %}Reativar usuário{% endif %}"
+                                      data-confirm-ok="{% if u.is_active %}Desativar{% else %}Reativar{% endif %}"
+                                      {% if u.is_active %}data-confirm-danger{% endif %}>
                                     {% csrf_token %}
                                     <button type="submit" class="icon-btn {% if u.is_active %}icon-btn--danger{% else %}icon-btn--success{% endif %}"
                                             title="{% if u.is_active %}Desativar usuário{% else %}Reativar usuário{% endif %}">
@@ -72,7 +75,10 @@
                                     </button>
                                 </form>
                                 <form action="{% url 'apagar_usuario' u.id %}" method="post"
-                                      onsubmit="return confirm('Apagar o usuário {{ u.username|escapejs }}? Ele deixa de entrar no sistema. Os processos em que ele atuou continuam registrados.');">
+                                      data-confirm="Apagar o usuário {{ u.username }}? Ele deixa de entrar no sistema. Os processos em que ele atuou continuam registrados."
+                                      data-confirm-title="Apagar usuário"
+                                      data-confirm-ok="Apagar"
+                                      data-confirm-danger>
                                     {% csrf_token %}
                                     <button type="submit" class="icon-btn icon-btn--danger" title="Apagar usuário">
                                         <span class="material-symbols-rounded">delete</span>

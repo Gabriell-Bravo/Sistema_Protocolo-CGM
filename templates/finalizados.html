@@ -328,7 +328,9 @@
 
     function editarProcesso(btn) {
         if (editingRow) {
-            alert("Já existe uma linha em edição. Por favor, salve ou cancele a edição atual.");
+            window.appAlert('Já existe uma linha em edição. Salve ou cancele a edição atual.', {
+                titulo: 'Edição em andamento'
+            });
             return;
         }
 
@@ -619,7 +621,7 @@
                         fieldValue = outrosInput.value.trim();
                     } else {
                         isValid = false;
-                        alert('Por favor, preencha o campo "Outros" para Gênero.');
+                        window.appAlert('Preencha o campo "Outros" para Gênero.', { titulo: 'Campo obrigatório' });
                         outrosInput.style.borderColor = '#e74c3c';
                         return;
                     }
@@ -629,7 +631,7 @@
                         fieldValue = outrosInput.value.trim();
                     } else {
                         isValid = false;
-                        alert('Por favor, preencha o campo "Outros" para Espécie.');
+                        window.appAlert('Preencha o campo "Outros" para Espécie.', { titulo: 'Campo obrigatório' });
                         outrosInput.style.borderColor = '#e74c3c';
                         return;
                     }
@@ -637,7 +639,7 @@
 
                 if (fieldValue === '' && ['numero_processo', 'secretaria', 'data_entrada', 'hora_entrada', 'genero', 'especie', 'objeto', 'prioridade'].includes(field)) {
                     isValid = false;
-                    alert(`O campo "${field}" é obrigatório.`);
+                    window.appAlert('O campo "' + field + '" é obrigatório.', { titulo: 'Campo obrigatório' });
                     input.classList.add('is-invalid');
                 } else {
                     data[field] = fieldValue === '' ? null : fieldValue;
@@ -664,13 +666,19 @@
 
             if (result.success) {
                 // item 51: campos fora da whitelist do papel são recusados pelo backend.
-                if (result.aviso) { alert(result.aviso); }
+                if (result.aviso) {
+                    await window.appAlert(result.aviso, { titulo: 'Aviso', tipo: 'info' });
+                }
                 location.reload();
             } else {
-                alert('Erro ao salvar: ' + result.message);
+                await window.appAlert('Erro ao salvar: ' + result.message, {
+                    titulo: 'Erro', icone: 'error'
+                });
             }
         } catch (error) {
-            alert('Erro na comunicação com o servidor: ' + error.message);
+            await window.appAlert('Erro na comunicação com o servidor: ' + error.message, {
+                titulo: 'Erro', icone: 'error'
+            });
             console.error('Erro de comunicação ou no servidor:', error);
         } finally {
             editingRow = null;
@@ -725,8 +733,14 @@
     // item 35: não há exclusão. O processo é cancelado, com motivo, e o
     // registro é preservado no histórico.
     async function deletarProcesso(id) {
-        const motivo = prompt('Motivo do cancelamento do processo (obrigatório):');
-        if (!motivo || !motivo.trim()) { return; }
+        const motivo = await window.appPrompt('Motivo do cancelamento do processo (obrigatório):', {
+            titulo: 'Cancelar processo',
+            campoLabel: 'Motivo',
+            confirmLabel: 'Cancelar processo',
+            required: true,
+            danger: true
+        });
+        if (!motivo || !String(motivo).trim()) { return; }
         try {
             const response = await fetch(`{% url 'deletar_processo' id=0 %}`.replace('0', id), {
                 method: 'POST',
@@ -734,42 +748,53 @@
                     'X-CSRFToken': csrftoken,
                     'Content-Type': 'application/x-www-form-urlencoded'
                 },
-                body: new URLSearchParams({ motivo: motivo.trim() })
+                body: new URLSearchParams({ motivo: String(motivo).trim() })
             });
             const result = await response.json();
             if (result.success) {
                 location.reload();
             } else {
-                alert('Não foi possível cancelar: ' + result.message);
+                await window.appAlert('Não foi possível cancelar: ' + result.message, {
+                    titulo: 'Erro', icone: 'error'
+                });
             }
         } catch (error) {
-            alert('Erro na comunicação com o servidor: ' + error.message);
+            await window.appAlert('Erro na comunicação com o servidor: ' + error.message, {
+                titulo: 'Erro', icone: 'error'
+            });
         }
     }
 
     async function concluirMonitoramento(processId) {
-        if (confirm('Tem certeza que deseja registrar este monitoramento como concluído?')) {
-            try {
-                const response = await fetch(`{% url 'concluir_monitoramento' process_id=0 %}`.replace('0', processId), {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': csrftoken,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({})
+        const ok = await window.appConfirm(
+            'Tem certeza que deseja registrar este monitoramento como concluído?',
+            { titulo: 'Concluir monitoramento', confirmLabel: 'Concluir' }
+        );
+        if (!ok) return;
+        try {
+            const response = await fetch(`{% url 'concluir_monitoramento' process_id=0 %}`.replace('0', processId), {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({})
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                location.reload();
+            } else {
+                await window.appAlert('Erro ao concluir monitoramento: ' + result.message, {
+                    titulo: 'Erro', icone: 'error'
                 });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    location.reload();
-                } else {
-                    alert('Erro ao concluir monitoramento: ' + result.message);
-                }
-            } catch (error) {
-                alert('Erro na comunicação com o servidor: ' + error.message);
-                console.error('Erro ao concluir monitoramento:', error);
             }
+        } catch (error) {
+            await window.appAlert('Erro na comunicação com o servidor: ' + error.message, {
+                titulo: 'Erro', icone: 'error'
+            });
+            console.error('Erro ao concluir monitoramento:', error);
         }
     }
 

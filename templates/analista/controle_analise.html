@@ -64,6 +64,12 @@
                 </div>
                 <button type="submit" class="btn btn--primary">Buscar</button>
             </form>
+            {% if pode_nova_analise %}
+            <button type="button" class="btn btn--primary" data-modal-open="modalNovaAnalise">
+                <span class="material-symbols-rounded">add_notes</span>
+                Nova análise
+            </button>
+            {% endif %}
             {% if termo_pesquisa %}
                 <a href="{% url 'controle_analise' %}?filtro={{ filtro_atual }}" class="btn btn--ghost">
                     <span class="material-symbols-rounded">filter_alt_off</span>
@@ -146,4 +152,5 @@
         </div>
     </section>
 </div>
+{% include "analista/_modal_nova_analise.html" with nova_analise_grupo='LIQUIDACOES' sequencias_nova_analise=sequencias_nova_analise layout_planilha=layout_planilha %}
 {% endblock %}

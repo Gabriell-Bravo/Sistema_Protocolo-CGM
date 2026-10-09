@@ -68,7 +68,10 @@
                     </a>
                     {% if pode_anexar %}
                     <form method="post" action="{% url 'remover_anexo' anexo.id %}"
-                          onsubmit="return confirm('Remover este arquivo?');">
+                          data-confirm="Remover este arquivo?"
+                          data-confirm-title="Remover arquivo"
+                          data-confirm-ok="Remover"
+                          data-confirm-danger>
                         {% csrf_token %}
                         <button type="submit" class="icon-btn icon-btn--danger" title="Remover arquivo">
                             <span class="material-symbols-rounded">delete</span>

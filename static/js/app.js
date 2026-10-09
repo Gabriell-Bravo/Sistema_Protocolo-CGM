@@ -187,15 +187,267 @@
                 return;
             }
             if (event.target.classList && event.target.classList.contains('modal')) {
+                // O diálogo do sistema tem fluxo próprio (cancelar = negar).
+                if (event.target.id === 'dialogoSistema') return;
                 event.target.classList.remove('is-open');
             }
         });
 
         document.addEventListener('keydown', function (event) {
             if (event.key !== 'Escape') return;
+            if (document.getElementById('dialogoSistema') &&
+                document.getElementById('dialogoSistema').classList.contains('is-open')) {
+                return; // tratado em initSystemDialogs
+            }
             var open = document.querySelectorAll('.modal.is-open');
             for (var i = 0; i < open.length; i++) open[i].classList.remove('is-open');
         });
+    }
+
+    /* ------------------------------------------ Diálogo do sistema (alerta/confirm) */
+    var dialogoResolver = null;
+
+    function fecharDialogoSistema(resultado) {
+        var modal = document.getElementById('dialogoSistema');
+        if (modal) modal.classList.remove('is-open');
+        var resolver = dialogoResolver;
+        dialogoResolver = null;
+        if (resolver) resolver(resultado);
+    }
+
+    function abrirDialogoSistema(opcoes) {
+        var opts = opcoes || {};
+        var modal = document.getElementById('dialogoSistema');
+        if (!modal) {
+            // Fallback raro (página sem include): usa o diálogo nativo.
+            if (opts.modo === 'prompt') {
+                var v = window.prompt(opts.mensagem || '', opts.valorPadrao || '');
+                return Promise.resolve(v);
+            }
+            if (opts.modo === 'alert') {
+                window.alert(opts.mensagem || '');
+                return Promise.resolve(true);
+            }
+            return Promise.resolve(window.confirm(opts.mensagem || ''));
+        }
+
+        if (dialogoResolver) {
+            fecharDialogoSistema(opts.modo === 'prompt' ? null : false);
+        }
+
+        var titulo = document.getElementById('dialogoSistemaTitulo');
+        var msg = document.getElementById('dialogoSistemaMensagem');
+        var icone = document.getElementById('dialogoSistemaIcone');
+        var btnOk = document.getElementById('dialogoSistemaOk');
+        var btnCancel = document.getElementById('dialogoSistemaCancelar');
+        var campoWrap = document.getElementById('dialogoSistemaCampoWrap');
+        var campo = document.getElementById('dialogoSistemaCampo');
+        var campoLabel = document.getElementById('dialogoSistemaCampoLabel');
+        var campoHint = document.getElementById('dialogoSistemaCampoHint');
+
+        modal.classList.remove('is-danger', 'is-info', 'is-success');
+        if (opts.danger) modal.classList.add('is-danger');
+        else if (opts.tipo === 'success') modal.classList.add('is-success');
+        else if (opts.tipo === 'info' || opts.modo === 'alert') modal.classList.add('is-info');
+
+        if (titulo) titulo.textContent = opts.titulo || (
+            opts.modo === 'alert' ? 'Aviso' :
+            opts.modo === 'prompt' ? 'Informe' : 'Confirmar'
+        );
+        if (msg) msg.textContent = opts.mensagem || '';
+        if (icone) {
+            icone.textContent = opts.icone || (
+                opts.danger ? 'warning' :
+                opts.modo === 'alert' ? 'info' :
+                opts.modo === 'prompt' ? 'edit' : 'help'
+            );
+        }
+        if (btnOk) {
+            btnOk.textContent = opts.confirmLabel || (
+                opts.modo === 'alert' ? 'OK' : 'Confirmar'
+            );
+            btnOk.className = opts.danger ? 'btn btn--danger' : 'btn btn--primary';
+        }
+        if (btnCancel) {
+            btnCancel.textContent = opts.cancelLabel || 'Cancelar';
+            btnCancel.hidden = opts.modo === 'alert';
+        }
+
+        if (campoWrap && campo) {
+            var ehPrompt = opts.modo === 'prompt';
+            campoWrap.hidden = !ehPrompt;
+            if (!ehPrompt) {
+                campo.value = '';
+            } else {
+                campo.value = opts.valorPadrao || '';
+                campo.setAttribute('data-required', opts.required === false ? '0' : '1');
+                if (campoLabel) {
+                    campoLabel.textContent = opts.campoLabel || 'Informe';
+                }
+                if (campoHint) {
+                    if (opts.campoHint) {
+                        campoHint.textContent = opts.campoHint;
+                        campoHint.hidden = false;
+                    } else {
+                        campoHint.hidden = true;
+                    }
+                }
+            }
+        }
+
+        return new Promise(function (resolve) {
+            dialogoResolver = resolve;
+            modal.classList.add('is-open');
+            window.setTimeout(function () {
+                if (opts.modo === 'prompt' && campo) {
+                    campo.focus();
+                    campo.select();
+                } else if (btnOk) {
+                    btnOk.focus();
+                }
+            }, 30);
+        });
+    }
+
+    window.appAlert = function (mensagem, opcoes) {
+        var opts = opcoes || {};
+        opts.modo = 'alert';
+        opts.mensagem = mensagem;
+        return abrirDialogoSistema(opts);
+    };
+
+    window.appConfirm = function (mensagem, opcoes) {
+        var opts = opcoes || {};
+        opts.modo = 'confirm';
+        opts.mensagem = mensagem;
+        return abrirDialogoSistema(opts);
+    };
+
+    window.appPrompt = function (mensagem, opcoes) {
+        var opts = opcoes || {};
+        opts.modo = 'prompt';
+        opts.mensagem = mensagem;
+        return abrirDialogoSistema(opts);
+    };
+
+    function initSystemDialogs() {
+        var modal = document.getElementById('dialogoSistema');
+        if (!modal) return;
+
+        var btnOk = document.getElementById('dialogoSistemaOk');
+        var btnCancel = document.getElementById('dialogoSistemaCancelar');
+        var btnFechar = document.getElementById('dialogoSistemaFechar');
+        var campo = document.getElementById('dialogoSistemaCampo');
+
+        function confirmar() {
+            var campoWrap = document.getElementById('dialogoSistemaCampoWrap');
+            if (campoWrap && !campoWrap.hidden && campo) {
+                var valor = (campo.value || '').trim();
+                if (!valor && campo.getAttribute('data-required') === '1') {
+                    campo.focus();
+                    return;
+                }
+                fecharDialogoSistema(valor || (campo.value || '').trim());
+                return;
+            }
+            fecharDialogoSistema(true);
+        }
+
+        function cancelar() {
+            var campoWrap = document.getElementById('dialogoSistemaCampoWrap');
+            fecharDialogoSistema(campoWrap && !campoWrap.hidden ? null : false);
+        }
+
+        if (btnOk) btnOk.addEventListener('click', confirmar);
+        if (btnCancel) btnCancel.addEventListener('click', cancelar);
+        if (btnFechar) btnFechar.addEventListener('click', cancelar);
+
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) cancelar();
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (!modal.classList.contains('is-open')) return;
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                cancelar();
+            } else if (event.key === 'Enter') {
+                var campoWrap = document.getElementById('dialogoSistemaCampoWrap');
+                if (campoWrap && !campoWrap.hidden) {
+                    event.preventDefault();
+                    confirmar();
+                }
+            }
+        });
+
+        // data-confirm em botões/links; data-confirm em forms (submit).
+        document.addEventListener('click', function (event) {
+            var el = event.target.closest('[data-confirm]');
+            if (!el) return;
+            // Form com data-confirm é tratado no submit.
+            if (el.tagName === 'FORM') return;
+            if (el.dataset.confirmAccepted === '1') {
+                delete el.dataset.confirmAccepted;
+                return;
+            }
+            if (el.dataset.confirmBusy === '1') {
+                event.preventDefault();
+                return;
+            }
+            var mensagem = el.getAttribute('data-confirm');
+            if (!mensagem) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            el.dataset.confirmBusy = '1';
+
+            window.appConfirm(mensagem, {
+                titulo: el.getAttribute('data-confirm-title') || 'Confirmar',
+                confirmLabel: el.getAttribute('data-confirm-ok') || 'Confirmar',
+                cancelLabel: el.getAttribute('data-confirm-cancel') || 'Cancelar',
+                danger: el.hasAttribute('data-confirm-danger'),
+                icone: el.getAttribute('data-confirm-icon') || ''
+            }).then(function (ok) {
+                delete el.dataset.confirmBusy;
+                if (!ok) return;
+                el.dataset.confirmAccepted = '1';
+                if (el.form && (el.type === 'submit' || el.getAttribute('type') === 'submit')) {
+                    if (typeof el.form.requestSubmit === 'function') {
+                        el.form.requestSubmit(el);
+                    } else {
+                        el.click();
+                    }
+                } else if (el.tagName === 'A' && el.getAttribute('href')) {
+                    window.location.href = el.href;
+                } else {
+                    el.click();
+                }
+            });
+        }, true);
+
+        document.addEventListener('submit', function (event) {
+            var form = event.target;
+            if (!form || form.nodeName !== 'FORM') return;
+            var mensagem = form.getAttribute('data-confirm');
+            if (!mensagem) return;
+            if (form.dataset.confirmAccepted === '1') {
+                delete form.dataset.confirmAccepted;
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            window.appConfirm(mensagem, {
+                titulo: form.getAttribute('data-confirm-title') || 'Confirmar',
+                confirmLabel: form.getAttribute('data-confirm-ok') || 'Confirmar',
+                cancelLabel: form.getAttribute('data-confirm-cancel') || 'Cancelar',
+                danger: form.hasAttribute('data-confirm-danger')
+            }).then(function (ok) {
+                if (!ok) return;
+                form.dataset.confirmAccepted = '1';
+                if (typeof form.requestSubmit === 'function') form.requestSubmit();
+                else form.submit();
+            });
+        }, true);
     }
 
     /**
@@ -267,11 +519,25 @@
     }
 
     window.pedirMotivoFormulario = function (form, mensagem) {
-        var motivo = window.prompt(mensagem);
-        if (!motivo || !motivo.trim()) { return false; }
-        var campo = form.querySelector('input[name="motivo"]');
-        if (campo) { campo.value = motivo.trim(); }
-        return true;
+        if (form.dataset.motivoOk === '1') {
+            delete form.dataset.motivoOk;
+            return true;
+        }
+        window.appPrompt(mensagem || 'Informe o motivo:', {
+            titulo: 'Motivo',
+            campoLabel: 'Motivo',
+            confirmLabel: 'Continuar',
+            required: true,
+            danger: true
+        }).then(function (motivo) {
+            if (!motivo) return;
+            var campo = form.querySelector('input[name="motivo"]');
+            if (campo) campo.value = String(motivo).trim();
+            form.dataset.motivoOk = '1';
+            if (typeof form.requestSubmit === 'function') form.requestSubmit();
+            else form.submit();
+        });
+        return false;
     };
 
     function initAnexos() {
@@ -371,6 +637,38 @@
         });
     }
 
+    function initFlashDialogs() {
+        var alerts = document.querySelectorAll('#flashAlerts [data-flash-text]');
+        if (!alerts.length || typeof window.appAlert !== 'function') return;
+        // Mostra o primeiro aviso relevante no diálogo do sistema (OK para fechar).
+        var escolhido = null;
+        for (var i = 0; i < alerts.length; i++) {
+            var tags = (alerts[i].getAttribute('data-flash-tags') || '').toLowerCase();
+            if (tags.indexOf('error') >= 0 || tags.indexOf('success') >= 0 || tags.indexOf('info') >= 0) {
+                escolhido = alerts[i];
+                break;
+            }
+        }
+        if (!escolhido) escolhido = alerts[0];
+        var texto = escolhido.getAttribute('data-flash-text') || '';
+        if (!texto) return;
+        var tags = (escolhido.getAttribute('data-flash-tags') || '').toLowerCase();
+        var opts = { titulo: 'Aviso' };
+        if (tags.indexOf('error') >= 0 || tags.indexOf('danger') >= 0) {
+            opts.titulo = 'Atenção';
+            opts.icone = 'error';
+            opts.danger = true;
+        } else if (tags.indexOf('success') >= 0) {
+            opts.titulo = 'Sucesso';
+            opts.tipo = 'success';
+            opts.icone = 'check_circle';
+        } else {
+            opts.tipo = 'info';
+            opts.icone = 'info';
+        }
+        window.appAlert(texto, opts);
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         initTheme();
         initSidebar();
@@ -378,7 +676,9 @@
         initFilters();
         initColumnPickers();
         initModals();
+        initSystemDialogs();
         initAnexos();
         initUrgencia();
+        initFlashDialogs();
     });
 })();

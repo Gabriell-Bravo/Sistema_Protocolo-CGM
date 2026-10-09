@@ -2,7 +2,7 @@
 
 {% block title %}{% if aba_cgm %}Processos CGM{% else %}Processos Ativos{% endif %}{% endblock %}
 {% block page_title %}{% if aba_cgm %}Processos CGM{% else %}Processos Ativos{% endif %}{% endblock %}
-{% block page_subtitle %}{% if aba_cgm %}Processos da {{ secretaria_cgm }} e da espécie Contabilidade — só Protocolo e Gestão{% else %}Processos em tramitação, sem data de saída registrada{% endif %}{% endblock %}
+{% block page_subtitle %}{% if aba_cgm %}Processos da {{ secretaria_cgm }} e da espécie Contabilidade — só Protocolo e Gestão{% else %}Consulta do que está na CGM. Pendentes aguardam análise; Finalizados já têm registro no Controle.{% endif %}{% endblock %}
 
 {% block topbar_actions %}
     {% if can_export_ativos %}
@@ -26,17 +26,37 @@
     {% if pode_ver_processos_cgm %}
     <section class="filters">
         <div class="filters__chips">
-            <a href="{% url 'listar_processos' %}"
+            <a href="{% url 'listar_processos' %}?fase={{ fase|default:'pendentes' }}"
                class="chip {% if not aba_cgm %}chip--ativo{% endif %}">
                 Processos Ativos
             </a>
-            <a href="{% url 'listar_processos' %}?aba=cgm"
+            <a href="{% url 'listar_processos' %}?aba=cgm&fase={{ fase|default:'pendentes' }}"
                class="chip {% if aba_cgm %}chip--ativo{% endif %}">
                 Processos CGM
             </a>
         </div>
     </section>
     {% endif %}
+
+    <section class="filters">
+        <div class="filters__chips">
+            <a href="?fase=pendentes{% if aba_cgm %}&aba=cgm{% endif %}{% if termo_pesquisa %}&termo={{ termo_pesquisa|urlencode }}{% endif %}{% if genero_filtro and genero_filtro != 'todas' %}&genero={{ genero_filtro }}{% endif %}"
+               class="chip {% if fase == 'pendentes' %}chip--ativo{% endif %}">
+                Pendentes
+                <span class="chip__label">{{ total_pendentes }}</span>
+            </a>
+            <a href="?fase=finalizados{% if aba_cgm %}&aba=cgm{% endif %}{% if termo_pesquisa %}&termo={{ termo_pesquisa|urlencode }}{% endif %}{% if genero_filtro and genero_filtro != 'todas' %}&genero={{ genero_filtro }}{% endif %}"
+               class="chip {% if fase == 'finalizados' %}chip--ativo{% endif %}">
+                Finalizados
+                <span class="chip__label">{{ total_finalizados }}</span>
+            </a>
+            <a href="?fase=todos{% if aba_cgm %}&aba=cgm{% endif %}{% if termo_pesquisa %}&termo={{ termo_pesquisa|urlencode }}{% endif %}{% if genero_filtro and genero_filtro != 'todas' %}&genero={{ genero_filtro }}{% endif %}"
+               class="chip {% if fase == 'todos' %}chip--ativo{% endif %}">
+                Todos
+                <span class="chip__label">{{ total_pendentes|add:total_finalizados }}</span>
+            </a>
+        </div>
+    </section>
 
     <section class="stats">
         <div class="stat stat--primary">
@@ -332,7 +352,9 @@
 
     function editarProcesso(btn) {
         if (editingRow) {
-            alert("Já existe uma linha em edição. Por favor, salve ou cancele a edição atual.");
+            window.appAlert('Já existe uma linha em edição. Salve ou cancele a edição atual.', {
+                titulo: 'Edição em andamento'
+            });
             return;
         }
 
@@ -553,7 +575,7 @@
                         fieldValue = outrosInput.value.trim();
                     } else {
                         isValid = false;
-                        alert('Por favor, preencha o campo "Outros" para Gênero.');
+                        window.appAlert('Preencha o campo "Outros" para Gênero.', { titulo: 'Campo obrigatório' });
                         outrosInput.style.borderColor = '#e74c3c';
                         return;
                     }
@@ -563,7 +585,7 @@
                         fieldValue = outrosInput.value.trim();
                     } else {
                         isValid = false;
-                        alert('Por favor, preencha o campo "Outros" para Espécie.');
+                        window.appAlert('Preencha o campo "Outros" para Espécie.', { titulo: 'Campo obrigatório' });
                         outrosInput.style.borderColor = '#e74c3c';
                         return;
                     }
@@ -571,7 +593,7 @@
 
                 if (fieldValue === '' && ['numero_processo', 'secretaria', 'data_entrada', 'hora_entrada', 'genero', 'especie', 'objeto', 'prioridade'].includes(field)) {
                     isValid = false;
-                    alert(`O campo "${field}" é obrigatório.`);
+                    window.appAlert('O campo "' + field + '" é obrigatório.', { titulo: 'Campo obrigatório' });
                     input.classList.add('is-invalid');
                     return;
                 } else {
@@ -599,13 +621,20 @@
 
             if (result.success) {
                 // item 51: campos fora da whitelist do papel são recusados pelo backend.
-                if (result.aviso) { alert(result.aviso); }
+                if (result.aviso) {
+                    await window.appAlert(result.aviso, { titulo: 'Aviso', tipo: 'info' });
+                }
                 location.reload();
             } else {
-                alert('Erro ao salvar: ' + result.message);
+                await window.appAlert('Erro ao salvar: ' + result.message, {
+                    titulo: 'Erro', icone: 'error'
+                });
             }
         } catch (error) {
-            alert('Erro na comunicação com o servidor: ' + error.message + '. Verifique o console do navegador e os logs do servidor para mais detalhes.');
+            await window.appAlert(
+                'Erro na comunicação com o servidor: ' + error.message + '.',
+                { titulo: 'Erro', icone: 'error' }
+            );
             console.error('Erro de comunicação ou no servidor:', error);
         } finally {
             editingRow = null;
@@ -660,8 +689,14 @@
     // item 35: não há exclusão. O processo é cancelado, com motivo, e o
     // registro é preservado no histórico.
     async function deletarProcesso(id) {
-        const motivo = prompt('Motivo do cancelamento do processo (obrigatório):');
-        if (!motivo || !motivo.trim()) { return; }
+        const motivo = await window.appPrompt('Motivo do cancelamento do processo (obrigatório):', {
+            titulo: 'Cancelar processo',
+            campoLabel: 'Motivo',
+            confirmLabel: 'Cancelar processo',
+            required: true,
+            danger: true
+        });
+        if (!motivo || !String(motivo).trim()) { return; }
         try {
             const response = await fetch(`{% url 'deletar_processo' id=0 %}`.replace('0', id), {
                 method: 'POST',
@@ -669,23 +704,29 @@
                     'X-CSRFToken': csrftoken,
                     'Content-Type': 'application/x-www-form-urlencoded'
                 },
-                body: new URLSearchParams({ motivo: motivo.trim() })
+                body: new URLSearchParams({ motivo: String(motivo).trim() })
             });
             const result = await response.json();
             if (result.success) {
                 location.reload();
             } else {
-                alert('Não foi possível cancelar: ' + result.message);
+                await window.appAlert('Não foi possível cancelar: ' + result.message, {
+                    titulo: 'Erro', icone: 'error'
+                });
             }
         } catch (error) {
-            alert('Erro na comunicação com o servidor: ' + error.message);
+            await window.appAlert('Erro na comunicação com o servidor: ' + error.message, {
+                titulo: 'Erro', icone: 'error'
+            });
         }
     }
 
     async function excluirProcesso(id, numero) {
-        if (!confirm('Excluir o processo ' + numero + '? Ele sai de Processos Ativos, junto com o histórico e os anexos. Essa ação não pode ser desfeita.')) {
-            return;
-        }
+        const ok = await window.appConfirm(
+            'Excluir o processo ' + numero + '? Ele sai de Processos Ativos, junto com o histórico e os anexos. Essa ação não pode ser desfeita.',
+            { titulo: 'Excluir processo', confirmLabel: 'Excluir', danger: true }
+        );
+        if (!ok) return;
         try {
             const response = await fetch(`{% url 'apagar_processo' id=0 %}`.replace('0', id), {
                 method: 'POST',
@@ -698,36 +739,47 @@
             if (result.success) {
                 location.reload();
             } else {
-                alert('Não foi possível excluir: ' + result.message);
+                await window.appAlert('Não foi possível excluir: ' + result.message, {
+                    titulo: 'Erro', icone: 'error'
+                });
             }
         } catch (error) {
-            alert('Erro na comunicação com o servidor: ' + error.message);
+            await window.appAlert('Erro na comunicação com o servidor: ' + error.message, {
+                titulo: 'Erro', icone: 'error'
+            });
         }
     }
 
     async function marcarSaida(processId) {
-        if (confirm('Confirmar a saída física deste processo? Data, hora e usuário são registrados automaticamente.')) {
-            try {
-                const response = await fetch(`{% url 'marcar_saida_processo' process_id=0 %}`.replace('0', processId), {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': csrftoken,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({})
+        const ok = await window.appConfirm(
+            'Confirmar a saída física deste processo? Data, hora e usuário são registrados automaticamente.',
+            { titulo: 'Saída física', confirmLabel: 'Confirmar saída' }
+        );
+        if (!ok) return;
+        try {
+            const response = await fetch(`{% url 'marcar_saida_processo' process_id=0 %}`.replace('0', processId), {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({})
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                location.reload();
+            } else {
+                await window.appAlert('Erro ao marcar saída: ' + result.message, {
+                    titulo: 'Erro', icone: 'error'
                 });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    location.reload();
-                } else {
-                    alert('Erro ao marcar saída: ' + result.message);
-                }
-            } catch (error) {
-                alert('Erro na comunicação com o servidor: ' + error.message);
-                console.error('Erro ao marcar saída:', error);
             }
+        } catch (error) {
+            await window.appAlert('Erro na comunicação com o servidor: ' + error.message, {
+                titulo: 'Erro', icone: 'error'
+            });
+            console.error('Erro ao marcar saída:', error);
         }
     }
 
@@ -757,6 +809,7 @@
         {% if aba_cgm %}
         params.append('aba', 'cgm');
         {% endif %}
+        params.append('fase', '{{ fase|default:"pendentes" }}');
         if (prioridade !== 'todas') {
             params.append('prioridade', prioridade);
         }

@@ -74,6 +74,7 @@ class BaseProcessoTestCase(TestCase):
     def preencher_analise(self, processo, **campos):
         """Preenche direto no banco os campos exigidos para liberar."""
         from django.utils import timezone
+        from processos_app.services import relatorios as svc_relatorios
         valores = {'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
                    'numero_despacho': '10/2026', 'destino': 'Unidade de Teste'}
         valores.update(campos)
@@ -89,6 +90,8 @@ class BaseProcessoTestCase(TestCase):
             valores.setdefault('data_analise', timezone.localdate())
         Processo.objects.filter(id=processo.id).update(**valores)
         processo.refresh_from_db()
+        if (processo.numero_relatorio or '').strip() or processo.sem_relatorio:
+            svc_relatorios.registrar(processo)
         return processo
 
     def anexar_teste(self, processo, usuario=None):

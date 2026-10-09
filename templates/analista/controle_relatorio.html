@@ -72,6 +72,12 @@
                     </div>
                     <button type="submit" class="btn btn--primary">Buscar</button>
                 </form>
+                {% if pode_nova_analise %}
+                <button type="button" class="btn btn--primary" data-modal-open="modalNovaAnalise">
+                    <span class="material-symbols-rounded">add_notes</span>
+                    Nova análise
+                </button>
+                {% endif %}
             </div>
         </section>
 
@@ -193,7 +199,12 @@
                                         <input type="hidden" name="grupo" value="{{ aba }}">
                                         <button type="submit" class="icon-btn"
                                                 title="Desvincular processo deste número"
-                                                onclick="return confirm('Desvincular o processo {{ linha.numero_processo|default:'' }} do nº {{ linha.numero_relatorio }}?\n\nO número permanece na planilha; o processo deixa de ter esse relatório.');">
+                                                data-confirm="Desvincular o processo {{ linha.numero_processo|default:'' }} do nº {{ linha.numero_relatorio }}?
+
+O número permanece na planilha; o processo deixa de ter esse relatório."
+                                                data-confirm-title="Desvincular"
+                                                data-confirm-ok="Desvincular"
+                                                data-confirm-danger>
                                             <span class="material-symbols-rounded">link_off</span>
                                         </button>
                                     </form>
@@ -207,13 +218,17 @@
                                         {% if linha.sem_relatorio %}
                                         <button type="submit" class="icon-btn icon-btn--primary"
                                                 title="Tirar marca de sem relatório"
-                                                onclick="return confirm('Remover a marca de sem relatório do nº {{ linha.numero_relatorio }}?');">
+                                                data-confirm="Remover a marca de sem relatório do nº {{ linha.numero_relatorio }}?"
+                                                data-confirm-title="Sem relatório"
+                                                data-confirm-ok="Remover marca">
                                             <span class="material-symbols-rounded">assignment</span>
                                         </button>
                                         {% else %}
                                         <button type="submit" class="icon-btn"
                                                 title="Marcar como sem relatório (amarelo)"
-                                                onclick="return confirm('Marcar o nº {{ linha.numero_relatorio }} como sem relatório? A linha fica amarela.');">
+                                                data-confirm="Marcar o nº {{ linha.numero_relatorio }} como sem relatório? A linha fica amarela."
+                                                data-confirm-title="Sem relatório"
+                                                data-confirm-ok="Marcar">
                                             <span class="material-symbols-rounded">sticky_note_2</span>
                                         </button>
                                         {% endif %}
@@ -412,7 +427,12 @@
                             </div>
                             <div class="field field--wide">
                                 <label class="field__label" for="editar_secretaria">{{ layout_planilha.rotulos.secretaria }}</label>
-                                <input type="text" id="editar_secretaria" name="secretaria" class="input">
+                                <select id="editar_secretaria" name="secretaria" class="select">
+                                    <option value="">Selecione a secretaria</option>
+                                    {% for nome in secretarias %}
+                                    <option value="{{ nome }}">{{ nome }}</option>
+                                    {% endfor %}
+                                </select>
                             </div>
                             <div class="field field--wide">
                                 <label class="field__label" for="editar_objeto">{{ layout_planilha.rotulos.objeto }}</label>
@@ -424,7 +444,8 @@
                             </div>
                             <div class="field">
                                 <label class="field__label" for="editar_valor">{{ layout_planilha.rotulos.valor }}</label>
-                                <input type="text" id="editar_valor" name="valor" class="input">
+                                <input type="text" id="editar_valor" name="valor" class="input"
+                                       inputmode="decimal" autocomplete="off" placeholder="R$ 0,00">
                             </div>
                             <div class="field">
                                 <label class="field__label" for="editar_periodo">{{ layout_planilha.rotulos.periodo }}</label>
@@ -432,7 +453,12 @@
                             </div>
                             <div class="field">
                                 <label class="field__label" for="editar_destino">{{ layout_planilha.rotulos.destino }}</label>
-                                <input type="text" id="editar_destino" name="destino" class="input">
+                                <select id="editar_destino" name="destino" class="select">
+                                    <option value="">Selecione a secretaria</option>
+                                    {% for nome in secretarias %}
+                                    <option value="{{ nome }}">{{ nome }}</option>
+                                    {% endfor %}
+                                </select>
                             </div>
                             <div class="field field--wide">
                                 <label class="field__label" for="editar_observacao">{{ layout_planilha.rotulos.observacao }}</label>
@@ -463,6 +489,7 @@
             var form = document.getElementById('formEditarLinha');
             if (!form) return;
             var rotulo = document.querySelector('[data-editar-rotulo]');
+            var campoValor = form.querySelector('#editar_valor');
             var mapa = {
                 numero_relatorio: 'data-editar-numero',
                 data_relatorio: 'data-editar-data',
@@ -477,6 +504,40 @@
                 analista: 'data-editar-analista',
                 observacao: 'data-editar-observacao'
             };
+            function formatarMoeda(input) {
+                var digitos = (input.value || '').replace(/\D/g, '');
+                if (!digitos) {
+                    input.value = '';
+                    return;
+                }
+                digitos = digitos.replace(/^0+/, '') || '0';
+                while (digitos.length < 3) digitos = '0' + digitos;
+                var centavos = digitos.slice(-2);
+                var inteiro = digitos.slice(0, -2).replace(/^0+/, '') || '0';
+                inteiro = inteiro.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+                input.value = 'R$ ' + inteiro + ',' + centavos;
+            }
+            function setCampo(campo, valor) {
+                if (!campo) return;
+                var v = valor != null ? String(valor) : '';
+                if (campo.tagName === 'SELECT') {
+                    if (v) {
+                        var existe = false;
+                        for (var i = 0; i < campo.options.length; i++) {
+                            if (campo.options[i].value === v) { existe = true; break; }
+                        }
+                        if (!existe) {
+                            var op = document.createElement('option');
+                            op.value = v;
+                            op.textContent = v;
+                            campo.appendChild(op);
+                        }
+                    }
+                    campo.value = v;
+                    return;
+                }
+                campo.value = v;
+            }
             document.addEventListener('click', function (event) {
                 var botao = event.target.closest('[data-editar-linha]');
                 if (!botao) return;
@@ -486,12 +547,17 @@
                 if (grupo) form.querySelector('[name="grupo"]').value = grupo;
                 if (rotulo) rotulo.textContent = botao.getAttribute('data-editar-numero') || '—';
                 Object.keys(mapa).forEach(function (nome) {
-                    var campo = form.querySelector('[name="' + nome + '"]');
-                    if (campo) campo.value = botao.getAttribute(mapa[nome]) || '';
+                    setCampo(form.querySelector('[name="' + nome + '"]'), botao.getAttribute(mapa[nome]) || '');
                 });
+                if (campoValor && campoValor.value && campoValor.value.indexOf('R$') !== 0) {
+                    formatarMoeda(campoValor);
+                }
                 var sem = form.querySelector('#editar_sem');
                 if (sem) sem.checked = botao.getAttribute('data-editar-sem') === '1';
             });
+            if (campoValor) {
+                campoValor.addEventListener('input', function () { formatarMoeda(campoValor); });
+            }
             var campoNumero = form.querySelector('[name="numero_relatorio"]');
             if (campoNumero && rotulo) {
                 campoNumero.addEventListener('input', function () {
@@ -779,7 +845,10 @@
                             <td>{{ reserva.criado_em|date:"d/m/Y H:i" }}</td>
                             <td class="col-actions col-actions--compact">
                                 <form method="post" action="{% url 'controle_relatorio_cancelar_destino' reserva.id %}"
-                                      onsubmit="return confirm('Cancelar o destino do nº {{ reserva.numero }}?');">
+                                      data-confirm="Cancelar o destino do nº {{ reserva.numero }}?"
+                                      data-confirm-title="Cancelar destino"
+                                      data-confirm-ok="Cancelar destino"
+                                      data-confirm-danger>
                                     {% csrf_token %}
                                     <input type="hidden" name="grupo" value="{{ aba }}">
                                     <button type="submit" class="icon-btn icon-btn--danger" title="Cancelar destino">
@@ -850,7 +919,12 @@
                     </div>
                     <div class="form-actions">
                         <button type="submit" class="btn btn--primary"
-                                onclick="return confirm('Importar e substituir o histórico antigo do(s) grupo(s) selecionado(s)?\n\nAnálises ativas (com processo) não são apagadas.');">
+                                data-confirm="Importar e substituir o histórico antigo do(s) grupo(s) selecionado(s)?
+
+Análises ativas (com processo) não são apagadas."
+                                data-confirm-title="Importar planilha"
+                                data-confirm-ok="Importar"
+                                data-confirm-danger>
                             <span class="material-symbols-rounded">upload_file</span>
                             Importar Excel
                         </button>
@@ -935,4 +1009,5 @@
         </div>
     </div>
 </div>
+{% include "analista/_modal_nova_analise.html" with nova_analise_grupo=aba sequencias_nova_analise=grupos_destino layout_planilha=layout_planilha %}
 {% endblock %}

@@ -2,7 +2,7 @@
 
 {% block title %}Análise de Processos{% endblock %}
 {% block page_title %}Fila de análise{% endblock %}
-{% block page_subtitle %}Aqui aparece o que está disponível, o que um colega já assumiu, o que está com você e o que foi direcionado a você.{% endblock %}
+{% block page_subtitle %}Somente processos com entrada pelo Protocolo. A análise é registrada no Controle (Nova análise).{% endblock %}
 
 {% block content %}
 <div class="stack">
@@ -86,14 +86,14 @@
     {% endif %}
 
     {% if mostra_licitacoes %}
-        {% include "analista/_fila_grupo.html" with titulo="Licitações e Contratos" grupo_css="licitacoes" icone="gavel" processos=licitacoes mostrar_contratada=True modo_gestao=False pode_assumir=pode_assumir %}
+        {% include "analista/_fila_grupo.html" with titulo="Licitações e Contratos" grupo_css="licitacoes" icone="gavel" processos=licitacoes mostrar_contratada=True modo_gestao=False pode_assumir=False fila_somente_leitura=True %}
     {% endif %}
 
     {% if mostra_liquidacoes %}
         {% for grupo in grupos_liquidacoes %}
-            {% include "analista/_fila_grupo.html" with titulo=grupo.nome grupo_css="liquidacoes" icone="payments" processos=grupo.processos mostrar_contratada=True modo_gestao=False pode_assumir=pode_assumir %}
+            {% include "analista/_fila_grupo.html" with titulo=grupo.nome grupo_css="liquidacoes" icone="payments" processos=grupo.processos mostrar_contratada=True modo_gestao=False pode_assumir=False fila_somente_leitura=True %}
         {% empty %}
-            {% include "analista/_fila_grupo.html" with titulo="Liquidações" grupo_css="liquidacoes" icone="payments" processos=lista_vazia mostrar_contratada=True modo_gestao=False pode_assumir=pode_assumir %}
+            {% include "analista/_fila_grupo.html" with titulo="Liquidações" grupo_css="liquidacoes" icone="payments" processos=lista_vazia mostrar_contratada=True modo_gestao=False pode_assumir=False fila_somente_leitura=True %}
         {% endfor %}
     {% endif %}
 
