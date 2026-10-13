@@ -760,8 +760,11 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
 
         self.client.force_login(self.analista_lic)
         resposta = self.client.get(reverse('area_analista'))
-        # Com o Controlador = Finalizados em Ativos — fora da fila (Pendentes).
-        self.assertEqual(resposta.context['total_com_controlador'], 0)
+        # Fora da fila (Pendentes), mas o card conta Com o Controlador do grupo.
+        self.assertEqual(resposta.context['total_com_controlador'], 1)
+        self.assertEqual(
+            resposta.context['url_com_controlador'],
+            reverse('controle_analise') + '?filtro=assinatura')
         self.assertNotContains(resposta, '1004/2026')
         self.assertContains(resposta, '1001/2026')
         self.assertContains(resposta, '1002/2026')
@@ -773,9 +776,31 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         self.assertNotIn('Assumir processo', trecho_outro)
         self.assertNotContains(resposta, '1004/2026')
 
-        # Liberados também fora de Pendentes — some da fila.
+        # Liberados fora de Pendentes — some da fila; aparece no Controle.
         resposta = self.client.get(reverse('area_analista') + '?filtro=liberados')
         self.assertNotContains(resposta, '1004/2026')
+        controle = self.client.get(
+            reverse('controle_analise') + '?filtro=assinatura')
+        self.assertContains(controle, '1004/2026')
+
+    def test_licitacoes_voltar_e_encaminhar_vao_ao_controle_analise(self):
+        processo = self.processo_em_analise()
+        self.client.force_login(self.analista_lic)
+        pagina = self.client.get(
+            reverse('analista_processo', args=[processo.id])
+            + f"?next={reverse('controle_analise')}")
+        self.assertTrue(pagina.context['voltar_controle'])
+        self.assertTrue(pagina.context['voltar_controle_analise'])
+        self.assertContains(pagina, 'Voltar ao Controle de análise')
+
+        encaminhou = self.client.post(
+            reverse('analista_processo', args=[processo.id]),
+            {'acao': 'concluir', 'next': reverse('controle_analise')})
+        self.assertRedirects(
+            encaminhou,
+            reverse('controle_analise') + '?filtro=assinatura')
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'AGUARDANDO_ASSINATURA')
 
     def test_fila_analista_consulta_e_abre_analise_dos_seus(self):
         disponivel = self.novo_processo(numero_processo='fila-disp/2026')

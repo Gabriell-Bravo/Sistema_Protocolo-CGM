@@ -22,8 +22,8 @@
                 <div class="stat__label">Em análise por você</div>
             </div>
         </a>
-        <a class="stat stat--primary stat--link {% if filtro_atual == 'liberados' %}is-active{% endif %}"
-           href="?filtro=liberados{% if termo_pesquisa %}&pesquisa={{ termo_pesquisa|urlencode }}{% endif %}">
+        <a class="stat stat--primary stat--link"
+           href="{{ url_com_controlador }}">
             <span class="stat__icon"><span class="material-symbols-rounded">draw</span></span>
             <div>
                 <div class="stat__value">{{ total_com_controlador }}</div>

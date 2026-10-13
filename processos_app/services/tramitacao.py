@@ -985,21 +985,24 @@ def disponiveis_para_assumir(usuario):
     """Pendentes de Ativos ainda DISPONÍVEIS do grupo do analista.
 
     Já assumidos (EM_ANALISE) ou com o Controlador não entram — o próximo
-    analista não vê o que outro já pegou.
+    analista não vê o que outro já pegou. Processos da CGM ficam de fora.
     """
     from . import permissions as perm
+    from .secretaria_cgm import excluir_processos_cgm
 
     grupo = perm.grupo_do_analista(usuario)
-    if not grupo and not perm.eh_administrador(usuario):
+    if not grupo:
         return Processo.objects.none()
 
-    consulta = (
+    consulta = excluir_processos_cgm(
         pendentes_como_ativos()
-        .filter(situacao_tramite='DISPONIVEL', analista_responsavel__isnull=True)
+        .filter(
+            situacao_tramite='DISPONIVEL',
+            analista_responsavel__isnull=True,
+            genero=grupo,
+        )
         .select_related('prioridade_fk', 'especie_fk', 'analista_responsavel')
     )
-    if grupo:
-        consulta = consulta.filter(genero=grupo)
     return consulta.order_by('data_entrada', 'hora_entrada', 'numero_processo')
 
 

@@ -1354,13 +1354,23 @@ def area_analista(request):
 
     total_disponiveis = sum(1 for p in processos if p.situacao_fila == 'disponivel')
     total_comigo = sum(1 for p in processos if p.situacao_fila == 'voce')
-    total_com_controlador = sum(
-        1 for p in processos if p.situacao_tramite == 'AGUARDANDO_ASSINATURA')
+    # Com o Controlador fica fora de Pendentes; conta no grupo do analista.
+    total_com_controlador = (
+        filter_processes_by_user_level(request.user, tramitacao.ativos())
+        .filter(situacao_tramite='AGUARDANDO_ASSINATURA')
+        .count()
+    )
     total_atrasados = sum(
         1 for p in processos
         if p.prazo_status == 'atrasado' and eh_trabalho_analista(p, request.user.id))
     total_atendimentos = svc_pendencias.total_atendimentos_indicados(request.user)
     total_trabalho = sum(1 for p in processos if eh_trabalho_analista(p, request.user.id))
+    grupo_analista = perm.grupo_do_analista(request.user)
+    url_com_controlador = (
+        reverse('controle_analise') + '?filtro=assinatura'
+        if grupo_analista == perm.GRUPO_LICITACOES
+        else reverse('gestao_liberados_assinatura')
+    )
 
     return render(request, 'analista/lista.html', {
         'total_atendimentos': total_atendimentos,
@@ -1377,6 +1387,7 @@ def area_analista(request):
         'total_disponiveis': total_disponiveis,
         'total_comigo': total_comigo,
         'total_com_controlador': total_com_controlador,
+        'url_com_controlador': url_com_controlador,
         'total_atrasados': total_atrasados,
         'termo_pesquisa': termo_pesquisa,
         'modo_gestao': False,
@@ -1550,10 +1561,16 @@ def analista_processo(request, process_id):
 
     next_controle = ''
     destino_next = request.POST.get('next') or request.GET.get('next') or ''
-    controle_base = reverse('controle_relatorio')
-    if (destino_next == controle_base
-            or destino_next.startswith(controle_base + '?')):
-        next_controle = destino_next
+    destinos_controle = (
+        reverse('controle_relatorio'),
+        reverse('controle_analise'),
+    )
+    for controle_base in destinos_controle:
+        if (destino_next == controle_base
+                or destino_next.startswith(controle_base + '?')):
+            next_controle = destino_next
+            break
+    voltar_controle_analise = next_controle.startswith(reverse('controle_analise'))
 
     if request.method == 'POST':
         acao = request.POST.get('acao', 'salvar')
@@ -1593,7 +1610,12 @@ def analista_processo(request, process_id):
                 return redirect('analista_processo', process_id=processo.id)
             messages.success(
                 request, "Processo encaminhado para o Controlador.")
-            return redirect('area_analista')
+            if processo.genero == perm.GRUPO_LICITACOES:
+                return redirect(
+                    reverse('controle_analise') + '?filtro=assinatura')
+            if next_controle:
+                return redirect(next_controle)
+            return redirect('gestao_liberados_assinatura')
 
         if acao == 'direcionar':
             try:
@@ -1660,7 +1682,7 @@ def analista_processo(request, process_id):
         'valor_exibicao': svc_processos.formatar_valor(processo.valor),
         'pode_editar': pode_editar,
         'eh_liquidacao': processo.genero == 'LIQUIDACOES',
-        'eh_licitacao': processo.grupo == 'LICITACOES_E_CONTRATOS',
+        'eh_licitacao': processo.genero == 'LICITACOES_E_CONTRATOS',
         'anexos': processo.anexos.select_related('enviado_por'),
         'pode_anexar': perm.pode_anexar_arquivo(request.user, processo),
         'pode_direcionar': pode_direcionar,
@@ -1679,6 +1701,7 @@ def analista_processo(request, process_id):
                      if perm.pode_desfazer_tramite(request.user)
                      else None),
         'voltar_controle': bool(next_controle),
+        'voltar_controle_analise': voltar_controle_analise,
         'next_controle': next_controle,
         'pode_editar_numero_relatorio': perm.pode_editar_numero_relatorio(
             request.user, processo),

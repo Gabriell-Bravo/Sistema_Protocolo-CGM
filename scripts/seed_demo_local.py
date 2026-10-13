@@ -211,9 +211,22 @@ def especie_do_grupo(nome, sequencia):
     return esp
 
 
+def especie_licitacoes(nome='Pregão Eletrônico'):
+    esp, _ = EspecieProcesso.objects.get_or_create(
+        nome=nome,
+        grupo='LICITACOES_E_CONTRATOS',
+        defaults={'ativo': True, 'gera_relatorio': False},
+    )
+    if not esp.ativo:
+        esp.ativo = True
+        esp.save(update_fields=['ativo'])
+    return esp
+
+
 def main():
     protocolo = user('protocolo', 'PROTOCOLO')
     analista = user('analista_liq', 'ANALISTA_LIQUIDACOES')
+    analista_lic = user('analista_lic', 'ANALISTA_LICITACOES')
     user('gestao', 'GESTAO')
     admin = User.objects.filter(is_superuser=True).first()
     if admin is None:
@@ -236,8 +249,9 @@ def main():
         unidade = UnidadeAdministrativa.objects.filter(ativo=True).first()
     print('Unidade padrão:', unidade.nome if unidade else '(nenhuma)')
 
-    # Limpa demos anteriores (números simples 1..N).
+    # Limpa demos anteriores (números simples 1..N e LIC-DEMO).
     Processo.objects.filter(numero_processo__regex=r'^\d+$').delete()
+    Processo.objects.filter(numero_processo__startswith='LIC-DEMO').delete()
     LinhaControleRelatorio.objects.filter(
         numero_processo__regex=r'^\d+$').delete()
 
@@ -296,9 +310,27 @@ def main():
             'url': f'/analista/processo/{p.id}/',
         })
 
+    # Licitações: processo DISPONÍVEL para Assumir / Controle de análise.
+    esp_lic = especie_licitacoes()
+    secretaria = unidade.nome if unidade else 'Sec. Teste'
+    lic = svc_processos.criar_processo({
+        'numero_processo': 'LIC-DEMO/2026',
+        'volume': '1',
+        'secretaria': secretaria,
+        'data_entrada': '2026-10-02',
+        'hora_entrada': '11:00',
+        'especie': esp_lic.nome,
+        'especie_id': str(esp_lic.id),
+        'genero': esp_lic.grupo,
+        'objeto': 'DEMO Licitações — disponível para Assumir',
+        'contratada': 'Empresa Demo Licitações LTDA',
+        'recorrente': 'NAO',
+    }, protocolo)
+
     print('=== DEMO LOCAL — 1 processo por grupo ===')
-    print(f'Login analista: analista_liq / {SENHA}')
-    print(f'Login admin:    admin / {SENHA}')
+    print(f'Login analista Liq: {analista.username} / {SENHA}')
+    print(f'Login analista Lic: {analista_lic.username} / {SENHA}')
+    print(f'Login admin:        admin / {SENHA}')
     print('')
     print('Abra cada processo para ver o formulário igual à planilha:')
     for item in criados:
@@ -308,10 +340,16 @@ def main():
         )
         print(f"         -> {item['titulo']}")
     print('')
-    print(f'Total: {len(criados)} processos · '
+    print(
+        f"  {lic.numero_processo}  Licitações e Contratos  "
+        f"(DISPONÍVEL)  /analista/processo/{lic.id}/"
+    )
+    print('')
+    print(f'Total Liquidações: {len(criados)} · '
           f'{LinhaControleRelatorio.objects.count()} linhas no Controle')
     print('Fila: http://127.0.0.1:8000/analista/')
-    print('Controle: http://127.0.0.1:8000/controle-relatorio/?secao=analises')
+    print('Controle Liq: http://127.0.0.1:8000/controle-relatorio/?secao=analises')
+    print('Controle Lic: http://127.0.0.1:8000/analista/controle-analise/')
 
 
 if __name__ == '__main__':

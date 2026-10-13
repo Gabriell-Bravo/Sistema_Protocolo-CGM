@@ -7,9 +7,13 @@
 
 {% block topbar_actions %}
     {% if voltar_controle %}
-    <a href="{% url 'controle_relatorio' %}" class="btn btn--outline">
+    <a href="{{ next_controle }}" class="btn btn--outline">
         <span class="material-symbols-rounded">arrow_back</span>
+        {% if voltar_controle_analise %}
+        Voltar ao Controle de análise
+        {% else %}
         Voltar ao Controle de relatório
+        {% endif %}
     </a>
     {% else %}
     <a href="{% if is_gestao or user.is_superuser %}{% url 'gestao_processos' %}{% else %}{% url 'area_analista' %}{% endif %}" class="btn btn--outline">
@@ -283,9 +287,24 @@
 
     {% if processo.pode_assumir and not somente_leitura %}
         <div class="alert alert--info">
-            <span class="material-symbols-rounded">info</span>
-            <span>Este processo está disponível para análise. Registre pelo botão <strong>Nova análise</strong> no Controle de relatório ou Controle de análise.</span>
+            <span class="material-symbols-rounded">handshake</span>
+            <span>
+                Este processo está disponível para análise.
+                {% if eh_licitacao %}
+                Use <strong>Nova análise</strong> no Controle de análise ou assuma aqui.
+                {% else %}
+                Use <strong>Nova análise</strong> no Controle de relatório ou assuma aqui.
+                {% endif %}
+            </span>
         </div>
+        <form method="post" action="{% url 'assumir_processo' processo.id %}" style="margin:0 0 16px;">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <button type="submit" class="btn btn--primary">
+                <span class="material-symbols-rounded">handshake</span>
+                Assumir processo
+            </button>
+        </form>
     {% elif processo.situacao_tramite == 'EM_ANALISE' and not processo.eh_meu and not somente_leitura %}
         <div class="alert alert--info">
             <span class="material-symbols-rounded">person</span>

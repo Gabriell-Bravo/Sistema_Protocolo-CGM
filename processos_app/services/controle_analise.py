@@ -45,7 +45,9 @@ def listar(usuario, filtro='todos', termo=''):
         pode_consultar(usuario),
         'Somente analista de Licitações e Contratos consulta o Controle de análise.')
 
-    base = (
+    from .secretaria_cgm import excluir_processos_cgm
+
+    base = excluir_processos_cgm(
         tramitacao.ativos()
         .filter(genero=perm.GRUPO_LICITACOES)
         .select_related(

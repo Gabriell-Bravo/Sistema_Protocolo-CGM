@@ -169,7 +169,8 @@ class AnexoProcessoTest(BaseProcessoTestCase):
             reverse('analista_processo', args=[self.processo.id]),
             {'acao': 'concluir'},
         )
-        self.assertRedirects(resposta, reverse('area_analista'))
+        self.assertRedirects(
+            resposta, reverse('controle_analise') + '?filtro=assinatura')
         self.processo.refresh_from_db()
         self.assertEqual(self.processo.situacao_tramite, 'AGUARDANDO_ASSINATURA')
         self.assertEqual(self.processo.status_analise, 'NAO_APLICAVEL')
