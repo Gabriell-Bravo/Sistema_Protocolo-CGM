@@ -343,6 +343,42 @@ class DirecionamentoTest(BaseProcessoTestCase):
         self.assertEqual(processo.situacao_tramite, 'EM_ANALISE')
         self.assertEqual(processo.analista_responsavel, self.analista_liq)
 
+    def test_encaminhar_liquidacao_com_relatorio_aparece_na_fila_do_colega(self):
+        """Com nº de relatório, ao passar ao colega o processo não some da fila."""
+        from django.urls import reverse
+
+        from .base import criar_usuario
+
+        colega = criar_usuario('liq_colega', 'ANALISTA_LIQUIDACOES')
+        processo = self.novo_processo(
+            self.especie_liq, numero_processo='enc-liq-fila/2026')
+        tramitacao.assumir(processo.id, self.analista_liq)
+        self.preencher_analise(processo)
+        processo.refresh_from_db()
+        self.assertTrue((processo.numero_relatorio or '').strip())
+        # Já saiu de Pendentes (tem relatório), mas ainda está EM_ANALISE.
+        self.assertFalse(
+            tramitacao.pendentes_como_ativos().filter(id=processo.id).exists())
+        self.assertEqual(processo.situacao_tramite, 'EM_ANALISE')
+
+        tramitacao.direcionar_assinatura(
+            processo.id, self.analista_liq, colega.id)
+        processo.refresh_from_db()
+        self.assertEqual(processo.analista_responsavel_id, colega.id)
+
+        self.client.force_login(colega)
+        comigo = self.client.get(reverse('area_analista') + '?filtro=comigo')
+        self.assertEqual(comigo.status_code, 200)
+        self.assertContains(comigo, 'enc-liq-fila/2026')
+
+        fila = self.client.get(reverse('area_analista'))
+        self.assertContains(fila, 'enc-liq-fila/2026')
+
+        self.client.force_login(self.analista_liq)
+        comigo_origem = self.client.get(
+            reverse('area_analista') + '?filtro=comigo')
+        self.assertNotContains(comigo_origem, 'enc-liq-fila/2026')
+
 
 class RetiradaESaidaTest(BaseProcessoTestCase):
 

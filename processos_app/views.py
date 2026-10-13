@@ -1410,14 +1410,22 @@ def consultar_fila_grupos(request, opcoes_filtro=FILTROS_ANALISTA,
     if filtro not in conhecidos:
         filtro = padrao
 
-    # Mesmo universo da tela Processos Ativos → Pendentes.
-    base_query = tramitacao.pendentes_como_ativos(
-        tramitacao.ativos().filter(
-            genero__in=['LICITACOES_E_CONTRATOS', 'LIQUIDACOES'],
+    # Pendentes de Ativos + o que ainda está EM_ANALISE / direcionado.
+    # Liquidações exigem nº de relatório para encaminhar ao colega; com o nº
+    # o processo sai de Pendentes, mas precisa continuar na fila de quem
+    # analisa (senão some ao transferir).
+    ativos_base = (
+        tramitacao.ativos()
+        .filter(genero__in=['LICITACOES_E_CONTRATOS', 'LIQUIDACOES'])
+        .annotate(tem_analise_controle=tramitacao.subquery_tem_analise_controle())
+        .select_related(
+            'analista_responsavel', 'assinatura_direcionada_para',
+            'prioridade_fk', 'especie_fk',
         )
-    ).select_related(
-        'analista_responsavel', 'assinatura_direcionada_para',
-        'prioridade_fk', 'especie_fk',
+    )
+    base_query = ativos_base.filter(
+        ~tramitacao.q_analise_feita_ativos()
+        | Q(situacao_tramite__in=('EM_ANALISE', 'ASSINATURA_DIRECIONADA'))
     )
     if so_entrada_protocolo:
         cadastro = EventoProcesso.objects.filter(
