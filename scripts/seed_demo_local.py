@@ -351,6 +351,65 @@ def main():
     print('Controle Liq: http://127.0.0.1:8000/controle-relatorio/?secao=analises')
     print('Controle Lic: http://127.0.0.1:8000/analista/controle-analise/')
 
+    # --- Processos Protocolo: Ativos + Finalizados (saída física) ---
+    Processo.objects.filter(numero_processo__startswith='PROT-').delete()
+    esp_pag = especie_do_grupo('Pagamento Geral', 'LIQUIDACOES')
+    secretaria = unidade.nome if unidade else 'Sec. Teste'
+    ativos_prot = []
+    for i, rotulo in enumerate(
+            ('pendente-busca', 'pendente-alfa', 'em-analise-beta'), start=1):
+        num = f'PROT-ATIVO-{i:02d}/{rotulo}'
+        p = svc_processos.criar_processo({
+            'numero_processo': num,
+            'volume': '1',
+            'secretaria': secretaria,
+            'data_entrada': '2026-10-10',
+            'hora_entrada': f'{9 + i}:00',
+            'especie': esp_pag.nome,
+            'especie_id': str(esp_pag.id),
+            'genero': esp_pag.grupo,
+            'objeto': f'DEMO Protocolo ativo — {rotulo}',
+            'contratada': f'Fornecedor Ativo {i}',
+            'recorrente': 'NAO',
+        }, protocolo)
+        if i == 3:
+            tramitacao.assumir(p.id, analista)
+        ativos_prot.append(p.numero_processo)
+
+    finalizados_prot = []
+    for i, rotulo in enumerate(
+            ('saida-busca', 'saida-gama', 'saida-delta'), start=1):
+        num = f'PROT-FIM-{i:02d}/{rotulo}'
+        p = svc_processos.criar_processo({
+            'numero_processo': num,
+            'volume': '1',
+            'secretaria': secretaria,
+            'data_entrada': '2026-09-20',
+            'hora_entrada': f'{10 + i}:00',
+            'especie': esp_pag.nome,
+            'especie_id': str(esp_pag.id),
+            'genero': esp_pag.grupo,
+            'objeto': f'DEMO Protocolo finalizado — {rotulo}',
+            'contratada': f'Fornecedor Saída {i}',
+            'recorrente': 'NAO',
+        }, protocolo)
+        tramitacao.registrar_saida_direta(p.id, protocolo)
+        p.refresh_from_db()
+        finalizados_prot.append(p.numero_processo)
+
+    print('')
+    print('=== PROCESSOS PROTOCOLO (tela unificada) ===')
+    print(f'Login protocolo: protocolo / {SENHA}')
+    print(f'Login gestao:    gestao / {SENHA}')
+    print('URL: http://127.0.0.1:8000/listar')
+    print('Ativos:')
+    for n in ativos_prot:
+        print(f'  {n}')
+    print('Finalizados (saída):')
+    for n in finalizados_prot:
+        print(f'  {n}')
+    print('Teste de busca cruzada: termo "busca" ou "PROT-FIM" / "PROT-ATIVO"')
+
 
 if __name__ == '__main__':
     main()

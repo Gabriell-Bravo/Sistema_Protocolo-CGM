@@ -1,0 +1,33 @@
+{# Abas Ativos | Finalizados na tela unificada "Processos Protocolo". #}
+{% if processos_protocolo_unificado %}
+<section class="filters" data-abas-protocolo>
+    <div class="filters__chips">
+        <a href="{% url 'listar_processos' %}?fase=pendentes{% if genero_filtro and genero_filtro != 'todas' %}&genero={{ genero_filtro|urlencode }}{% endif %}{% if especie_filtro and especie_filtro != 'todas' %}&especie={{ especie_filtro|urlencode }}{% endif %}{% if prioridade_filtro and prioridade_filtro != 'todas' %}&prioridade={{ prioridade_filtro }}{% endif %}"
+           class="chip {% if escopo_protocolo == 'ativos' and not busca_combinada %}chip--ativo{% endif %}"
+           title="Processos ainda na CGM">
+            Ativos
+            <span class="chip__label">{{ total_aba_ativos }}</span>
+        </a>
+        <a href="{% url 'listar_finalizados' %}{% if genero_filtro and genero_filtro != 'todas' or especie_filtro and especie_filtro != 'todas' or prioridade_filtro and prioridade_filtro != 'todas' %}?{% endif %}{% if genero_filtro and genero_filtro != 'todas' %}genero={{ genero_filtro|urlencode }}&{% endif %}{% if especie_filtro and especie_filtro != 'todas' %}especie={{ especie_filtro|urlencode }}&{% endif %}{% if prioridade_filtro and prioridade_filtro != 'todas' %}prioridade={{ prioridade_filtro }}&{% endif %}"
+           class="chip {% if escopo_protocolo == 'finalizados' and not busca_combinada %}chip--ativo{% endif %}"
+           title="Processos com saída física registrada">
+            Finalizados
+            <span class="chip__label">{{ total_aba_finalizados }}</span>
+        </a>
+        {% if busca_combinada %}
+        <span class="chip chip--ativo" title="Resultados da busca nas duas abas">
+            Busca
+            <span class="chip__label">{{ total_processos }}</span>
+        </span>
+        {% endif %}
+    </div>
+    {% if busca_combinada and termo_pesquisa %}
+    <p class="filters__hint" style="margin:0.5rem 0 0;color:var(--text-muted, #64748b);font-size:0.875rem;">
+        Resultados para “{{ termo_pesquisa }}”:
+        <strong>{{ total_aba_ativos }}</strong> ativo{{ total_aba_ativos|pluralize }}
+        e <strong>{{ total_aba_finalizados }}</strong> finalizado{{ total_aba_finalizados|pluralize }}
+        — listados com ativos primeiro.
+    </p>
+    {% endif %}
+</section>
+{% endif %}

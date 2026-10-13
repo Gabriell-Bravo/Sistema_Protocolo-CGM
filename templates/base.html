@@ -57,10 +57,10 @@
                 {% endif %}
 
                 <a href="{% url 'listar_processos' %}"
-                   class="nav-item {% if nav == 'listar_processos' and request.GET.aba != 'cgm' or nav == 'index' or nav == 'ver_historico_processo' %}is-active{% endif %}"
-                   title="Processos Ativos">
+                   class="nav-item {% if nav == 'listar_finalizados' or nav == 'index' or nav == 'ver_historico_processo' or nav == 'listar_processos' and request.GET.aba != 'cgm' %}is-active{% endif %}"
+                   title="Processos Protocolo — Ativos e Finalizados">
                     <span class="material-symbols-rounded">inbox</span>
-                    <span class="nav-item__label">Processos Ativos</span>
+                    <span class="nav-item__label">Processos Protocolo</span>
                 </a>
 
                 {% if pode_ver_processos_cgm %}
@@ -71,12 +71,6 @@
                     <span class="nav-item__label">Processos CGM</span>
                 </a>
                 {% endif %}
-
-                <a href="{% url 'listar_finalizados' %}"
-                   class="nav-item {% if nav == 'listar_finalizados' %}is-active{% endif %}" title="Finalizados">
-                    <span class="material-symbols-rounded">task_alt</span>
-                    <span class="nav-item__label">Finalizados</span>
-                </a>
             {% endif %}
 
             {% if is_analista %}

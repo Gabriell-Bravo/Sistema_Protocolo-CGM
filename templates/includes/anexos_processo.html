@@ -56,7 +56,7 @@
                     <button type="button" class="icon-btn icon-btn--primary"
                             title="Ampliar preview"
                             data-anexo-preview
-                            data-anexo-tipo="{% if anexo.extensao == '.pdf' %}pdf{% elif anexo.extensao == '.txt' %}texto{% else %}imagem{% endif %}"
+                            data-anexo-tipo="{% if anexo.extensao == '.pdf' or anexo.extensao == '.docx' %}pdf{% elif anexo.extensao == '.txt' %}texto{% else %}imagem{% endif %}"
                             data-anexo-nome="{{ anexo.nome_original|escape }}"
                             data-anexo-url="{% url 'ver_anexo' anexo.id %}"
                             data-anexo-baixar="{% url 'baixar_anexo' anexo.id %}">
@@ -83,7 +83,7 @@
 
             {% if anexo.eh_previsualizavel %}
             <div class="anexo-card__preview">
-                {% if anexo.extensao == '.pdf' %}
+                {% if anexo.extensao == '.pdf' or anexo.extensao == '.docx' %}
                 <iframe class="anexo-embed"
                         src="{% url 'ver_anexo' anexo.id %}"
                         title="Preview de {{ anexo.nome_original }}"></iframe>

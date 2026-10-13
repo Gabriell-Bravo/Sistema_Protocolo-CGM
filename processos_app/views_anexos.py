@@ -5,7 +5,7 @@ import mimetypes
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.http import FileResponse, Http404, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.decorators.clickjacking import xframe_options_sameorigin
@@ -30,6 +30,13 @@ def _abrir_anexo(anexo, usuario, *, inline=False):
         'Você não tem permissão para ver este arquivo.')
     if not anexo.arquivo:
         raise Http404('Arquivo não encontrado.')
+
+    # Preview Word (.docx): HTML no iframe; download continua o arquivo original.
+    if inline and anexo.extensao == '.docx':
+        html = svc.html_preview_docx(anexo)
+        if html:
+            return HttpResponse(html, content_type='text/html; charset=utf-8')
+
     try:
         handle = anexo.arquivo.open('rb')
     except FileNotFoundError as exc:

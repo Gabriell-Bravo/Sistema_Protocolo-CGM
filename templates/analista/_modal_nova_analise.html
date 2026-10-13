@@ -127,7 +127,8 @@
                                 {% if L %}{{ L.rotulos.processo_pagamento|default:'Processo de pagamento' }}{% else %}Processo de pagamento{% endif %}
                             </label>
                             <input type="text" id="nova_processo_pagamento" name="processo_pagamento" class="input"
-                                   autocomplete="off" placeholder="Opcional se igual ao nº processo">
+                                   autocomplete="off"
+                                   placeholder="Informe o processo de origem">
                         </div>
                         <div class="field" data-nova-campo="volume">
                             <label class="field__label" for="nova_volume">Volume / concessão</label>

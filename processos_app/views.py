@@ -146,6 +146,89 @@ def _data_ou_none(texto):
         return None
 
 
+def _usa_tela_processos_protocolo(user):
+    """Gestão, admin e Protocolo: Ativos e Finalizados numa tela só."""
+    return (
+        perm.is_protocolo(user)
+        or perm.is_gestao(user)
+        or perm.eh_administrador(user)
+        or bool(getattr(user, 'is_superuser', False))
+    )
+
+
+def _q_termo_lista(termo):
+    termo = (termo or '').strip()
+    if not termo:
+        return Q()
+    return (
+        Q(numero_processo__icontains=termo)
+        | Q(secretaria__icontains=termo)
+        | Q(objeto__icontains=termo)
+        | Q(contratada__icontains=termo)
+        | Q(tecnico__icontains=termo)
+        | Q(valor__icontains=termo)
+        | Q(periodo__icontains=termo)
+    )
+
+
+def _contagens_processos_protocolo(user, termo=''):
+    """Totais Ativos (na CGM) e Finalizados (com saída) para as abas/busca."""
+    q = _q_termo_lista(termo)
+    ativos = filter_processes_by_user_level(user, tramitacao.ativos())
+    finalizados = filter_processes_by_user_level(user, tramitacao.finalizados())
+    if termo:
+        ativos = ativos.filter(q)
+        finalizados = finalizados.filter(q)
+    return ativos.count(), finalizados.count()
+
+
+def _filtrar_lista_protocolo(queryset, termo, prioridade, genero, especie, user):
+    """Filtros comuns às abas Ativos/Finalizados na tela Protocolo."""
+    if termo:
+        queryset = queryset.filter(_q_termo_lista(termo))
+    if prioridade and prioridade != 'todas':
+        queryset = queryset.filter(prioridade=prioridade)
+    if genero and genero != 'todas':
+        if perm.pode_ver_grupo(user, genero):
+            queryset = queryset.filter(genero=genero)
+        else:
+            queryset = queryset.none()
+    if especie and especie != 'todas':
+        queryset = queryset.filter(especie=especie)
+    return queryset
+
+
+def _montar_busca_combinada_protocolo(
+        user, termo, prioridade='todas', genero='todas', especie='todas'):
+    """Ativos primeiro, depois Finalizados (saída) — mesma busca."""
+    anotacoes = dict(
+        pendencias_abertas=Count('pendencias', filter=Q(
+            pendencias__status__in=Pendencia.STATUS_ABERTOS), distinct=True),
+        tem_evento_cadastro=Exists(EventoProcesso.objects.filter(
+            processo=OuterRef('pk'), tipo='PROCESSO_CADASTRADO')),
+        tem_analise_controle=tramitacao.subquery_tem_analise_controle(),
+    )
+    ativos_qs = _filtrar_lista_protocolo(
+        filter_processes_by_user_level(user, tramitacao.ativos())
+        .select_related('analista_responsavel', 'prioridade_fk')
+        .annotate(**anotacoes),
+        termo, prioridade, genero, especie, user,
+    )
+    finais_qs = _filtrar_lista_protocolo(
+        filter_processes_by_user_level(user, tramitacao.finalizados())
+        .select_related('analista_responsavel', 'prioridade_fk')
+        .annotate(**anotacoes),
+        termo, prioridade, genero, especie, user,
+    )
+    ativos = list(ordem_fila(ativos_qs))
+    finais = list(finais_qs.order_by('-data_saida', '-hora_saida', '-id'))
+    for processo in ativos:
+        processo.escopo_protocolo_item = 'ativo'
+    for processo in finais:
+        processo.escopo_protocolo_item = 'finalizado'
+    return ativos + finais, len(ativos), len(finais)
+
+
 def _erro_json(exc, status=400):
     """Resposta JSON de erro sem expor exceção interna (item 53)."""
     if isinstance(exc, ValidationError):
@@ -385,83 +468,116 @@ def listar_processos(request):
     if fase not in ('pendentes', 'finalizados', 'todos'):
         fase = 'pendentes'
 
-    if aba_cgm:
-        processos_query = (svc_cgm.apenas_processos_cgm(tramitacao.ativos())
-                           .select_related('analista_responsavel', 'prioridade_fk',
-                                           'secretaria_fk'))
-    else:
-        processos_query = filter_processes_by_user_level(
-            request.user, tramitacao.ativos()).select_related(
-                'analista_responsavel', 'prioridade_fk')
+    tela_protocolo = (
+        (not aba_cgm) and _usa_tela_processos_protocolo(request.user))
+    total_aba_ativos = total_aba_finalizados = 0
+    busca_combinada = bool(tela_protocolo and termo_pesquisa)
+    if tela_protocolo:
+        total_aba_ativos, total_aba_finalizados = (
+            _contagens_processos_protocolo(request.user, termo_pesquisa))
 
-    if termo_pesquisa:
-        processos_query = processos_query.filter(
-            Q(numero_processo__icontains=termo_pesquisa) |
-            Q(secretaria__icontains=termo_pesquisa) |
-            Q(objeto__icontains=termo_pesquisa) |
-            Q(contratada__icontains=termo_pesquisa) |
-            Q(tecnico__icontains=termo_pesquisa) |
-            Q(valor__icontains=termo_pesquisa) |
-            Q(periodo__icontains=termo_pesquisa)
-        )
-    if prioridade_filtro != 'todas':
-        processos_query = processos_query.filter(prioridade=prioridade_filtro)
-    if genero_filtro != 'todas':
-        if perm.pode_ver_grupo(request.user, genero_filtro):
-            processos_query = processos_query.filter(genero=genero_filtro)
-        else:
-            processos_query = processos_query.none()
-    if especie_filtro != 'todas':
-        processos_query = processos_query.filter(especie=especie_filtro)
-    if situacao_filtro in dict(Processo.SITUACAO_TRAMITE_CHOICES):
-        processos_query = processos_query.filter(situacao_tramite=situacao_filtro)
-
-    # Pendência + fase: mesmo critério compartilhado com a fila (tramitacao).
-    filtro_analise_feita = tramitacao.q_analise_feita_ativos()
-    processos_query = processos_query.annotate(
-        pendencias_abertas=Count('pendencias', filter=Q(
-            pendencias__status__in=Pendencia.STATUS_ABERTOS), distinct=True),
-        tem_evento_cadastro=Exists(EventoProcesso.objects.filter(
-            processo=OuterRef('pk'), tipo='PROCESSO_CADASTRADO')),
-        tem_analise_controle=tramitacao.subquery_tem_analise_controle(),
-    )
-    total_pendentes = processos_query.filter(~filtro_analise_feita).count()
-    total_finalizados = processos_query.filter(filtro_analise_feita).count()
-    if fase == 'pendentes':
-        processos_query = processos_query.filter(~filtro_analise_feita)
-    elif fase == 'finalizados':
-        processos_query = processos_query.filter(filtro_analise_feita)
-
-    # Mesma ordem da fila / Para assinar: Urgente → Prioritário → Normal,
-    # e dentro de cada faixa a entrada mais antiga.
-    processos_query = ordem_fila(processos_query)
-
-    # Totais sobre o conjunto filtrado (antes da paginação).
-    # select_related(None) evita o FieldError do Django 5.2: um FK não pode
-    # estar em select_related e ser omitido pelo only() ao mesmo tempo.
     hoje = timezone.localdate()
-    total_atrasados = total_vence_hoje = total_prioritarios = 0
-    for processo in processos_query.select_related(None).only(
-            'id', 'data_entrada', 'prioridade'):
-        dias = prazos_service.dias_restantes(processo, hoje)
-        if dias is not None and dias < 0:
-            total_atrasados += 1
-        elif dias == 0:
-            total_vence_hoje += 1
-        if prioridade_eh_destaque(processo.prioridade):
-            total_prioritarios += 1
-    total_processos = processos_query.count()
-
-    pagina = Paginator(processos_query, 50).get_page(request.GET.get('page'))
-    processos = list(pagina)
-    anotar_total_passagens(processos)
     pode_saida = perm.pode_registrar_saida(request.user)
-    for processo in processos:
-        prazos_service.anotar(processo, hoje)
-        processo.pode_registrar_saida = (
-            pode_saida and tramitacao.pode_saida_direta(processo))
-        processo.analise_finalizada = svc_relatorios.processo_tem_analise_registrada(
-            processo)
+    total_pendentes = total_finalizados = 0
+    total_atrasados = total_vence_hoje = total_prioritarios = 0
+
+    if busca_combinada:
+        combinados, total_aba_ativos, total_aba_finalizados = (
+            _montar_busca_combinada_protocolo(
+                request.user, termo_pesquisa,
+                prioridade_filtro, genero_filtro, especie_filtro))
+        total_processos = len(combinados)
+        for processo in combinados:
+            if prioridade_eh_destaque(processo.prioridade):
+                total_prioritarios += 1
+            if processo.escopo_protocolo_item == 'ativo':
+                dias = prazos_service.dias_restantes(processo, hoje)
+                if dias is not None and dias < 0:
+                    total_atrasados += 1
+                elif dias == 0:
+                    total_vence_hoje += 1
+        pagina = Paginator(combinados, 50).get_page(request.GET.get('page'))
+        processos = list(pagina)
+        anotar_total_passagens(processos)
+        for processo in processos:
+            prazos_service.anotar(processo, hoje)
+            processo.pode_registrar_saida = (
+                processo.escopo_protocolo_item == 'ativo'
+                and pode_saida
+                and tramitacao.pode_saida_direta(processo))
+            processo.analise_finalizada = (
+                svc_relatorios.processo_tem_analise_registrada(processo))
+        # Chips internos de fase não se aplicam na busca mista.
+        fase = 'todos'
+    else:
+        if aba_cgm:
+            processos_query = (svc_cgm.apenas_processos_cgm(tramitacao.ativos())
+                               .select_related(
+                                   'analista_responsavel', 'prioridade_fk',
+                                   'secretaria_fk'))
+        else:
+            processos_query = filter_processes_by_user_level(
+                request.user, tramitacao.ativos()).select_related(
+                    'analista_responsavel', 'prioridade_fk')
+
+        if termo_pesquisa:
+            processos_query = processos_query.filter(
+                _q_termo_lista(termo_pesquisa))
+        if prioridade_filtro != 'todas':
+            processos_query = processos_query.filter(
+                prioridade=prioridade_filtro)
+        if genero_filtro != 'todas':
+            if perm.pode_ver_grupo(request.user, genero_filtro):
+                processos_query = processos_query.filter(genero=genero_filtro)
+            else:
+                processos_query = processos_query.none()
+        if especie_filtro != 'todas':
+            processos_query = processos_query.filter(especie=especie_filtro)
+        if situacao_filtro in dict(Processo.SITUACAO_TRAMITE_CHOICES):
+            processos_query = processos_query.filter(
+                situacao_tramite=situacao_filtro)
+
+        filtro_analise_feita = tramitacao.q_analise_feita_ativos()
+        processos_query = processos_query.annotate(
+            pendencias_abertas=Count('pendencias', filter=Q(
+                pendencias__status__in=Pendencia.STATUS_ABERTOS),
+                distinct=True),
+            tem_evento_cadastro=Exists(EventoProcesso.objects.filter(
+                processo=OuterRef('pk'), tipo='PROCESSO_CADASTRADO')),
+            tem_analise_controle=tramitacao.subquery_tem_analise_controle(),
+        )
+        total_pendentes = processos_query.filter(~filtro_analise_feita).count()
+        total_finalizados = processos_query.filter(filtro_analise_feita).count()
+        if fase == 'pendentes':
+            processos_query = processos_query.filter(~filtro_analise_feita)
+        elif fase == 'finalizados':
+            processos_query = processos_query.filter(filtro_analise_feita)
+
+        processos_query = ordem_fila(processos_query)
+
+        # select_related(None) evita FieldError do Django 5.2 com only().
+        for processo in processos_query.select_related(None).only(
+                'id', 'data_entrada', 'prioridade'):
+            dias = prazos_service.dias_restantes(processo, hoje)
+            if dias is not None and dias < 0:
+                total_atrasados += 1
+            elif dias == 0:
+                total_vence_hoje += 1
+            if prioridade_eh_destaque(processo.prioridade):
+                total_prioritarios += 1
+        total_processos = processos_query.count()
+
+        pagina = Paginator(processos_query, 50).get_page(
+            request.GET.get('page'))
+        processos = list(pagina)
+        anotar_total_passagens(processos)
+        for processo in processos:
+            prazos_service.anotar(processo, hoje)
+            processo.pode_registrar_saida = (
+                pode_saida and tramitacao.pode_saida_direta(processo))
+            processo.analise_finalizada = (
+                svc_relatorios.processo_tem_analise_registrada(processo))
+            processo.escopo_protocolo_item = 'ativo'
 
     all_generos = [g for g in Processo.objects.values_list('genero', flat=True)
                    .distinct().order_by('genero') if can_access_genero(request.user, g)]
@@ -505,6 +621,11 @@ def listar_processos(request):
         'aba_cgm': aba_cgm,
         'pode_ver_processos_cgm': svc_cgm.pode_ver_processos_cgm(request.user),
         'secretaria_cgm': svc_cgm.SECRETARIA_CGM,
+        'processos_protocolo_unificado': tela_protocolo,
+        'escopo_protocolo': 'ativos',
+        'total_aba_ativos': total_aba_ativos,
+        'total_aba_finalizados': total_aba_finalizados,
+        'busca_combinada': busca_combinada,
     })
 
 
@@ -743,20 +864,30 @@ def listar_finalizados(request):
     genero_filtro = request.GET.get('genero', 'todas')
     status_analise_filtro = request.GET.get('status_analise', 'todas')
 
+    tela_protocolo = _usa_tela_processos_protocolo(request.user)
+    total_aba_ativos = total_aba_finalizados = 0
+    # Com termo: a busca unificada fica na lista (ativos + finalizados juntos).
+    if tela_protocolo and termo_pesquisa:
+        params = request.GET.copy()
+        params.pop('page', None)
+        for chave in (
+                'data_inicial', 'data_final',
+                'status_monitoramento', 'status_analise', 'fase'):
+            params.pop(chave, None)
+        destino = reverse('listar_processos')
+        qs = params.urlencode()
+        return redirect(f'{destino}?{qs}' if qs else destino)
+
+    if tela_protocolo:
+        total_aba_ativos, total_aba_finalizados = (
+            _contagens_processos_protocolo(request.user, termo_pesquisa))
+
     hoje = timezone.localdate()
     processos_query = filter_processes_by_user_level(
         request.user, tramitacao.finalizados())
 
     if termo_pesquisa:
-        processos_query = processos_query.filter(
-            Q(numero_processo__icontains=termo_pesquisa) |
-            Q(secretaria__icontains=termo_pesquisa) |
-            Q(objeto__icontains=termo_pesquisa) |
-            Q(contratada__icontains=termo_pesquisa) |
-            Q(tecnico__icontains=termo_pesquisa) |
-            Q(valor__icontains=termo_pesquisa) |
-            Q(periodo__icontains=termo_pesquisa)
-        )
+        processos_query = processos_query.filter(_q_termo_lista(termo_pesquisa))
 
     if prioridade_filtro != 'todas':
         processos_query = processos_query.filter(prioridade=prioridade_filtro)
@@ -876,6 +1007,10 @@ def listar_finalizados(request):
         'can_concluir_monitoramento': perm.is_gestao(request.user),
         'pode_desfazer': perm.pode_desfazer_tramite(request.user),
         'dados_formulario': svc_cadastros.dados_para_formulario(),
+        'processos_protocolo_unificado': tela_protocolo,
+        'escopo_protocolo': 'finalizados',
+        'total_aba_ativos': total_aba_ativos,
+        'total_aba_finalizados': total_aba_finalizados,
     })
 
 

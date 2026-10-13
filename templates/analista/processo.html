@@ -450,6 +450,14 @@
                             <input type="text" id="periodo" name="periodo" class="input" value="{{ processo.periodo|default:'' }}" {% if not pode_editar %}readonly{% endif %}>
                             {% if layout_planilha.dicas.periodo %}<span class="field__hint">{{ layout_planilha.dicas.periodo }}</span>{% endif %}
                         </div>
+                        {% elif campo == 'numero_processo' %}
+                        <div class="field">
+                            <label class="field__label" for="processo_pagamento_num">{{ layout_planilha.rotulos.numero_processo }}</label>
+                            <input type="text" id="processo_pagamento_num" class="input"
+                                   value="{{ processo.numero_processo|default:'' }}"
+                                   readonly>
+                            {% if layout_planilha.dicas.numero_processo %}<span class="field__hint">{{ layout_planilha.dicas.numero_processo }}</span>{% endif %}
+                        </div>
                         {% elif campo == 'processo_concessao' and processos_relacionados %}
                         <div class="field">
                             <label class="field__label" for="processo_concessao">{{ layout_planilha.rotulos.processo_concessao }}</label>
@@ -469,9 +477,10 @@
                         </div>
                         {% elif campo == 'processo_pagamento' %}
                         <div class="field">
-                            <label class="field__label" for="processo_pagamento">{{ layout_planilha.rotulos.processo_pagamento }}</label>
-                            <input type="text" id="processo_pagamento" name="processo_pagamento" class="input"
-                                   value="{{ processo.processo_pagamento|default:processo.numero_processo }}"
+                            <label class="field__label" for="processo_origem">{{ layout_planilha.rotulos.processo_pagamento }}</label>
+                            <input type="text" id="processo_origem" name="processo_pagamento" class="input"
+                                   value="{{ processo.processo_pagamento|default:'' }}"
+                                   placeholder="Informe o processo de origem"
                                    autocomplete="off" {% if not pode_editar %}readonly{% endif %}>
                             {% if layout_planilha.dicas.processo_pagamento %}<span class="field__hint">{{ layout_planilha.dicas.processo_pagamento }}</span>{% endif %}
                         </div>

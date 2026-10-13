@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 
-{% block title %}Processos Finalizados{% endblock %}
-{% block page_title %}Processos Finalizados{% endblock %}
-{% block page_subtitle %}Processos com saída registrada e acompanhamento de monitoramento{% endblock %}
+{% block title %}{% if processos_protocolo_unificado %}Processos Protocolo{% else %}Processos Finalizados{% endif %}{% endblock %}
+{% block page_title %}{% if processos_protocolo_unificado %}Processos Protocolo{% else %}Processos Finalizados{% endif %}{% endblock %}
+{% block page_subtitle %}{% if processos_protocolo_unificado %}Ativos (ainda na CGM) e Finalizados (com saída). A busca cobre as duas abas.{% else %}Processos com saída registrada e acompanhamento de monitoramento{% endif %}{% endblock %}
 
 {% block topbar_actions %}
     {% if can_export %}
@@ -17,7 +17,7 @@
         <span class="material-symbols-rounded">arrow_back</span>
         Fila de análise
     </a>
-    {% else %}
+    {% elif not processos_protocolo_unificado %}
     <a href="{% url 'listar_processos' %}" class="btn btn--outline">
         <span class="material-symbols-rounded">arrow_back</span>
         Processos Ativos
@@ -27,6 +27,8 @@
 
 {% block content %}
 <div class="stack">
+
+    {% include "includes/abas_processos_protocolo.html" %}
 
     <section class="stats">
         <div class="stat stat--primary">
@@ -65,7 +67,7 @@
                 <div class="search__field">
                     <span class="material-symbols-rounded search__icon">search</span>
                     <input type="text" id="inputPesquisa" class="input"
-                           placeholder="Buscar por nº, secretaria, objeto, contratada, técnico…"
+                           placeholder="{% if processos_protocolo_unificado %}Buscar em Ativos e Finalizados (nº, secretaria, objeto…){% else %}Buscar por nº, secretaria, objeto, contratada, técnico…{% endif %}"
                            value="{{ termo_pesquisa|default:'' }}">
                 </div>
                 <button type="submit" class="btn btn--primary">Buscar</button>
@@ -824,8 +826,12 @@
         const genero = document.getElementById('filtroGenero').value;
         const especie = document.getElementById('filtroEspecie').value;
         const statusAnalise = document.getElementById('filtroStatusAnalise').value;
+        const buscaUnificada = {% if processos_protocolo_unificado %}true{% else %}false{% endif %};
 
-        let url = '{% url "listar_finalizados" %}';
+        // Com termo na tela unificada: resultados mistos (ativos + finalizados).
+        let url = (buscaUnificada && termo)
+            ? '{% url "listar_processos" %}'
+            : '{% url "listar_finalizados" %}';
         const params = new URLSearchParams();
 
         if (prioridade !== 'todas') {
@@ -834,23 +840,25 @@
         if (termo) {
             params.append('termo', termo);
         }
-        if (dataInicial) {
-            params.append('data_inicial', dataInicial);
-        }
-        if (dataFinal) {
-            params.append('data_final', dataFinal);
-        }
-        if (statusMonitoramento !== 'todas') {
-            params.append('status_monitoramento', statusMonitoramento);
+        if (!(buscaUnificada && termo)) {
+            if (dataInicial) {
+                params.append('data_inicial', dataInicial);
+            }
+            if (dataFinal) {
+                params.append('data_final', dataFinal);
+            }
+            if (statusMonitoramento !== 'todas') {
+                params.append('status_monitoramento', statusMonitoramento);
+            }
+            if (statusAnalise !== 'todas') {
+                params.append('status_analise', statusAnalise);
+            }
         }
         if (genero !== 'todas') {
             params.append('genero', genero);
         }
         if (especie !== 'todas') {
             params.append('especie', especie);
-        }
-        if (statusAnalise !== 'todas') {
-            params.append('status_analise', statusAnalise);
         }
 
         if (params.toString()) {

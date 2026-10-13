@@ -639,6 +639,10 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         fim = self.client.get(reverse('listar_processos') + '?fase=finalizados')
         self.assertContains(fim, finalizado.numero_processo)
         self.assertNotContains(fim, pendente.numero_processo)
+        # Na tela unificada, o chip interno evita o nome "Finalizados" (saída).
+        self.assertContains(fim, 'Com análise')
+        self.assertContains(padrao, 'Processos Protocolo')
+        self.assertContains(padrao, 'data-abas-protocolo')
 
     def test_reentrada_nao_herda_finalizados_da_passagem_anterior(self):
         """Análise antiga do mesmo número não manda a reentrada para Finalizados."""
@@ -1002,3 +1006,62 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         self.assertEqual(conc.processo_prestacao, '')
         self.assertEqual(relatorios._dados_da_linha(conc)['volume'], '22140/2024')
         self.assertEqual(relatorios._dados_da_linha(conc)['numero_processo'], '')
+
+
+@override_settings(**STATIC)
+class ProcessosProtocoloUnificadoTest(BaseProcessoTestCase):
+    """Gestão/Protocolo/Admin: Ativos + Finalizados numa tela com busca cruzada."""
+
+    def test_menu_e_abas_para_protocolo_gestao(self):
+        self.client.force_login(self.protocolo)
+        ativos = self.client.get(reverse('listar_processos'))
+        self.assertContains(ativos, 'Processos Protocolo')
+        self.assertContains(ativos, 'data-abas-protocolo')
+        self.assertTrue(ativos.context['processos_protocolo_unificado'])
+        self.assertEqual(ativos.context['escopo_protocolo'], 'ativos')
+
+        fins = self.client.get(reverse('listar_finalizados'))
+        self.assertContains(fins, 'Processos Protocolo')
+        self.assertContains(fins, 'data-abas-protocolo')
+        self.assertEqual(fins.context['escopo_protocolo'], 'finalizados')
+
+        self.client.force_login(self.gestao)
+        gestao = self.client.get(reverse('listar_processos'))
+        self.assertTrue(gestao.context['processos_protocolo_unificado'])
+
+    def test_analista_finalizados_sem_abas_unificadas(self):
+        self.client.force_login(self.analista_liq)
+        pagina = self.client.get(reverse('listar_finalizados'))
+        self.assertFalse(pagina.context.get('processos_protocolo_unificado'))
+        self.assertNotContains(pagina, 'data-abas-protocolo')
+
+    def test_busca_lista_ativos_depois_finalizados_juntos(self):
+        ativo = self.novo_processo(numero_processo='1243-ativo/2026')
+        saida1 = self.novo_processo(numero_processo='1243-fim-a/2026')
+        saida2 = self.novo_processo(numero_processo='1243-fim-b/2026')
+        tramitacao.registrar_saida_direta(saida1.id, self.protocolo)
+        tramitacao.registrar_saida_direta(saida2.id, self.protocolo)
+
+        self.client.force_login(self.protocolo)
+        pagina = self.client.get(reverse('listar_processos') + '?termo=1243')
+        self.assertEqual(pagina.status_code, 200)
+        self.assertTrue(pagina.context['busca_combinada'])
+        self.assertEqual(pagina.context['total_aba_ativos'], 1)
+        self.assertEqual(pagina.context['total_aba_finalizados'], 2)
+        self.assertEqual(pagina.context['total_processos'], 3)
+        self.assertContains(pagina, 'Resultados da busca')
+        self.assertContains(pagina, ativo.numero_processo)
+        self.assertContains(pagina, saida1.numero_processo)
+        self.assertContains(pagina, saida2.numero_processo)
+
+        numeros = [p.numero_processo for p in pagina.context['processos']]
+        escopos = [p.escopo_protocolo_item for p in pagina.context['processos']]
+        self.assertEqual(numeros[0], ativo.numero_processo)
+        self.assertEqual(escopos[0], 'ativo')
+        self.assertEqual(escopos[1:], ['finalizado', 'finalizado'])
+
+        # Busca a partir da aba Finalizados também cai na lista mista.
+        resp = self.client.get(reverse('listar_finalizados') + '?termo=1243')
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn('/listar', resp['Location'])
+        self.assertIn('termo=1243', resp['Location'])

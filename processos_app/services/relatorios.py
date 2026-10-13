@@ -167,8 +167,9 @@ _LAYOUT_PLANILHA = {
             'analista': 'Relator',
             'numero_relatorio': 'Nº relatório',
             'data_relatorio': 'Data',
-            'numero_processo': 'Nº processo',
-            'processo_pagamento': 'Processo de pagamento',
+            # Nº do cadastro = processo de pagamento; origem o analista informa.
+            'numero_processo': 'Processo de pagamento',
+            'processo_pagamento': 'Processo origem',
             'secretaria': 'Secretaria',
             'objeto': 'Objeto',
             'periodo': 'Período',
@@ -179,18 +180,22 @@ _LAYOUT_PLANILHA = {
             'status_analise': 'Status da análise',
         },
         'colunas': (
-            'numero_relatorio', 'data_relatorio', 'numero_processo',
-            'processo_pagamento', 'analista', 'secretaria', 'objeto', 'valor',
+            # Ordem igual ao Excel: ORIGEM | PAGAMENTO
+            'numero_relatorio', 'data_relatorio', 'processo_pagamento',
+            'numero_processo', 'analista', 'secretaria', 'objeto', 'valor',
             'periodo', 'destino', 'status_analise', 'observacao',
         ),
         'formulario': (
-            'processo_pagamento', 'valor', 'destino', 'periodo',
-            'status_analise', 'observacao',
+            'numero_processo', 'processo_pagamento', 'valor', 'destino',
+            'periodo', 'status_analise', 'observacao',
         ),
         'dicas': {
+            'numero_processo': (
+                'Nº deste processo (coluna PROCESSO PAGAMENTO da planilha).'
+            ),
             'processo_pagamento': (
-                'Nº do processo de pagamento (coluna PROCESSO PAGAMENTO '
-                'da planilha Excel).'
+                'Informe o processo de origem. '
+                'Coluna PROCESSO ORIGEM da planilha Excel.'
             ),
         },
     },
@@ -1985,9 +1990,8 @@ def _dados_da_linha(processo):
             getattr(processo, 'processo_prestacao', None) or ''
         ).strip()
         processo_pagamento = ''
-    elif sequencia == GRUPO_PADRAO and not processo_pagamento:
-        # Liquidação: se vazio, espelha o nº do processo (costuma ser o pagamento).
-        processo_pagamento = (processo.numero_processo or '').strip()
+    # Liquidação: numero_processo = pagamento; processo_pagamento guarda a origem
+    # (vazia até o analista preencher — não espelha o nº).
     return {
         'numero_processo': numero_processo,
         'volume': volume,
@@ -2821,10 +2825,14 @@ def _importar_linhas_aba(
                 # Só concessão: coluna prestação vazia; nº fica em volume.
                 numero_processo, volume_proc = '', origem
         elif grupo == GRUPO_PADRAO:
-            # Liquidação (Excel): PROCESSO ORIGEM → Nº processo;
-            # PROCESSO PAGAMENTO → processo_pagamento. Não usa volume.
-            numero_processo = origem or pagamento
-            processo_pag = pagamento or ''
+            # Liquidação (Excel): PAGAMENTO = nº do processo (identidade);
+            # ORIGEM = campo processo_pagamento (o analista informa).
+            if pagamento:
+                numero_processo = pagamento
+                processo_pag = origem or ''
+            else:
+                numero_processo = origem
+                processo_pag = ''
             volume_proc = ''
         else:
             # Demais grupos: uma coluna de processo.
@@ -3640,11 +3648,8 @@ def salvar_nova_analise(usuario, dados):
         processo.status_analise = campos['status_analise']
     processo.volume = campos['volume'] or processo.volume
     if grupo == GRUPO_PADRAO:
-        processo.processo_pagamento = (
-            campos['processo_pagamento']
-            or processo.processo_pagamento
-            or numero_processo[:255]
-        )
+        # Guarda a origem informada (pode ficar vazio); não espelha o nº.
+        processo.processo_pagamento = campos['processo_pagamento']
     processo.sem_relatorio = sem_relatorio
     if grupo in ('BOLSA_ATLETA', 'AUXILIO_COMPETICAO'):
         processo.processo_prestacao = numero_processo[:255]

@@ -76,10 +76,10 @@ class Processo(models.Model):
     processo_prestacao = models.CharField(
         max_length=255, blank=True, default='',
         verbose_name="Processo de prestação")
-    # Liquidação: PROCESSO PAGAMENTO da planilha (Nº processo = numero_processo).
+    # Liquidação: PAGAMENTO = numero_processo; ORIGEM fica neste campo.
     processo_pagamento = models.CharField(
         max_length=255, blank=True, default='',
-        verbose_name="Processo de pagamento")
+        verbose_name="Processo origem")
     secretaria = models.CharField(max_length=255, verbose_name="Secretaria")
     data_entrada = models.DateField(verbose_name="Data de Entrada")
     hora_entrada = models.TimeField(verbose_name="Hora de Entrada")
@@ -690,9 +690,13 @@ class AnexoProcesso(models.Model):
 
     @property
     def eh_previsualizavel(self):
-        """PDF, imagem e texto abrem no navegador; Office só baixa."""
+        """PDF, imagem, texto e Word (.docx) abrem no navegador.
+
+        .doc antigo e Excel só baixam — o navegador não renderiza nativamente.
+        """
         return self.extensao in {
             '.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.txt',
+            '.docx',
         }
 
     @property

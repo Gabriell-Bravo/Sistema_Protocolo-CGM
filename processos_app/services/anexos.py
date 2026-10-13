@@ -4,9 +4,12 @@ A análise, a pendência e o encaminhamento continuam no sistema e não são
 exigidos para anexar. Quem pode ver o processo baixa o arquivo depois.
 """
 
+import zipfile
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 from django.core.exceptions import ValidationError
+from django.utils.html import escape
 
 from . import permissions as perm
 from .eventos import registrar_evento
@@ -17,6 +20,7 @@ EXTENSOES_PERMITIDAS = {
     '.xls', '.xlsx', '.odt', '.ods', '.txt',
 }
 LIMITE_BYTES = 15 * 1024 * 1024
+_W_NS = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
 
 
 def anexar(processo, usuario, arquivos):
@@ -87,3 +91,48 @@ def _gravar(processo, usuario, arquivo):
 def _nome_original(nome):
     limpo = Path(nome or '').name.replace('\x00', '').strip()
     return (limpo or 'arquivo')[:255]
+
+
+def html_preview_docx(anexo):
+    """Converte .docx em HTML simples para preview no iframe.
+
+    Extrai parágrafos do document.xml (sem dependência externa).
+    .doc antigo (OLE) não é suportado — retorna None.
+    """
+    if anexo.extensao != '.docx' or not anexo.arquivo:
+        return None
+    try:
+        with anexo.arquivo.open('rb') as handle:
+            with zipfile.ZipFile(handle) as zf:
+                with zf.open('word/document.xml') as xml_file:
+                    raiz = ET.parse(xml_file).getroot()
+    except (OSError, KeyError, zipfile.BadZipFile, ET.ParseError):
+        return None
+
+    blocos = []
+    for paragrafo in raiz.iter(f'{_W_NS}p'):
+        partes = []
+        for no in paragrafo.iter(f'{_W_NS}t'):
+            if no.text:
+                partes.append(no.text)
+            if no.tail:
+                partes.append(no.tail)
+        texto = ''.join(partes).strip()
+        if texto:
+            blocos.append(f'<p>{escape(texto)}</p>')
+        else:
+            blocos.append('<p><br></p>')
+
+    corpo = '\n'.join(blocos) if blocos else '<p><em>(Documento sem texto legível)</em></p>'
+    titulo = escape(anexo.nome_original or 'Documento Word')
+    return (
+        '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">'
+        f'<title>{titulo}</title>'
+        '<style>'
+        'body{font-family:Segoe UI,Arial,sans-serif;font-size:15px;'
+        'line-height:1.5;color:#0f172a;margin:16px 20px;max-width:900px;}'
+        'p{margin:0 0 .75em;} em{color:#64748b;}'
+        '</style></head><body>'
+        f'{corpo}'
+        '</body></html>'
+    )

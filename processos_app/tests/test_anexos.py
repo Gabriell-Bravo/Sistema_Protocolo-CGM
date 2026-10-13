@@ -1,7 +1,9 @@
 """Anexos de Licitações e Contratos: quem envia, quem baixa, o que é recusado."""
 
+import io
 import shutil
 import tempfile
+import zipfile
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
@@ -21,6 +23,41 @@ STATIC = {'STORAGES': {
 
 def _pdf(nome='parecer.pdf', conteudo=b'%PDF-1.4 teste'):
     return SimpleUploadedFile(nome, conteudo, content_type='application/pdf')
+
+
+def _docx(nome='parecer.docx', texto='Parecer de teste Word'):
+    """Gera .docx mínimo (ZIP + document.xml) para preview."""
+    document_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        f'<w:body><w:p><w:r><w:t>{texto}</w:t></w:r></w:p></w:body>'
+        '</w:document>'
+    )
+    content_types = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/word/document.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+        '</Types>'
+    )
+    rels = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
+        'Target="word/document.xml"/>'
+        '</Relationships>'
+    )
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w') as zf:
+        zf.writestr('[Content_Types].xml', content_types)
+        zf.writestr('_rels/.rels', rels)
+        zf.writestr('word/document.xml', document_xml)
+    return SimpleUploadedFile(
+        nome, buffer.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    )
 
 
 @override_settings(MEDIA_ROOT=_PASTA_MEDIA, **STATIC)
@@ -53,6 +90,27 @@ class AnexoProcessoTest(BaseProcessoTestCase):
         self.processo.refresh_from_db()
         self.assertEqual(self.processo.situacao_tramite, 'DISPONIVEL')
         self.assertIsNone(self.processo.analista_responsavel)
+
+    def test_docx_tem_preview_html_e_download_original(self):
+        self._post_anexo(self.analista_lic, self.processo, _docx())
+        anexo = AnexoProcesso.objects.get()
+        self.assertTrue(anexo.eh_previsualizavel)
+
+        self.client.force_login(self.analista_lic)
+        pagina = self.client.get(reverse('analista_processo', args=[self.processo.id]))
+        self.assertContains(pagina, 'parecer.docx')
+        self.assertContains(pagina, reverse('ver_anexo', args=[anexo.id]))
+
+        preview = self.client.get(reverse('ver_anexo', args=[anexo.id]))
+        self.assertEqual(preview.status_code, 200)
+        self.assertIn('text/html', preview['Content-Type'])
+        self.assertContains(preview, 'Parecer de teste Word')
+        self.assertEqual(
+            (preview.get('X-Frame-Options') or '').upper(), 'SAMEORIGIN')
+
+        baixa = self.client.get(reverse('baixar_anexo', args=[anexo.id]))
+        self.assertEqual(baixa.status_code, 200)
+        self.assertIn(b'PK', b''.join(baixa.streaming_content)[:4])
 
     def test_tela_mostra_anexo_e_outros_papeis_baixam(self):
         self._post_anexo(self.analista_lic, self.processo, _pdf())

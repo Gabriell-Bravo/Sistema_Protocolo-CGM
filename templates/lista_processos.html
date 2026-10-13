@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 
-{% block title %}{% if aba_cgm %}Processos CGM{% else %}Processos Ativos{% endif %}{% endblock %}
-{% block page_title %}{% if aba_cgm %}Processos CGM{% else %}Processos Ativos{% endif %}{% endblock %}
-{% block page_subtitle %}{% if aba_cgm %}Processos da {{ secretaria_cgm }} e da espécie Contabilidade — só Protocolo e Gestão{% else %}Fonte da verdade do que ainda está na CGM. Pendentes = o que a fila dos analistas e a Gestão veem. Saída física remove daqui e das filas.{% endif %}{% endblock %}
+{% block title %}{% if aba_cgm %}Processos CGM{% elif processos_protocolo_unificado %}Processos Protocolo{% else %}Processos Ativos{% endif %}{% endblock %}
+{% block page_title %}{% if aba_cgm %}Processos CGM{% elif processos_protocolo_unificado %}Processos Protocolo{% else %}Processos Ativos{% endif %}{% endblock %}
+{% block page_subtitle %}{% if aba_cgm %}Processos da {{ secretaria_cgm }} e da espécie Contabilidade — só Protocolo e Gestão{% elif processos_protocolo_unificado %}Ativos (ainda na CGM) e Finalizados (com saída). A busca cobre as duas abas.{% else %}Fonte da verdade do que ainda está na CGM. Pendentes = o que a fila dos analistas e a Gestão veem. Saída física remove daqui e das filas.{% endif %}{% endblock %}
 
 {% block topbar_actions %}
     {% if can_export_ativos %}
@@ -23,40 +23,57 @@
 {% block content %}
 <div class="stack">
 
-    {% if pode_ver_processos_cgm %}
+    {% include "includes/abas_processos_protocolo.html" %}
+
+    {% if aba_cgm %}
     <section class="filters">
         <div class="filters__chips">
             <a href="{% url 'listar_processos' %}?fase={{ fase|default:'pendentes' }}"
-               class="chip {% if not aba_cgm %}chip--ativo{% endif %}">
+               class="chip">
+                Processos Protocolo
+            </a>
+            <a href="{% url 'listar_processos' %}?aba=cgm&fase={{ fase|default:'pendentes' }}"
+               class="chip chip--ativo">
+                Processos CGM
+            </a>
+        </div>
+    </section>
+    {% elif pode_ver_processos_cgm and not processos_protocolo_unificado %}
+    <section class="filters">
+        <div class="filters__chips">
+            <a href="{% url 'listar_processos' %}?fase={{ fase|default:'pendentes' }}"
+               class="chip chip--ativo">
                 Processos Ativos
             </a>
             <a href="{% url 'listar_processos' %}?aba=cgm&fase={{ fase|default:'pendentes' }}"
-               class="chip {% if aba_cgm %}chip--ativo{% endif %}">
+               class="chip">
                 Processos CGM
             </a>
         </div>
     </section>
     {% endif %}
 
+    {% if not busca_combinada %}
     <section class="filters">
         <div class="filters__chips">
-            <a href="?fase=pendentes{% if aba_cgm %}&aba=cgm{% endif %}{% if termo_pesquisa %}&termo={{ termo_pesquisa|urlencode }}{% endif %}{% if genero_filtro and genero_filtro != 'todas' %}&genero={{ genero_filtro }}{% endif %}"
+            <a href="?fase=pendentes{% if aba_cgm %}&aba=cgm{% endif %}{% if genero_filtro and genero_filtro != 'todas' %}&genero={{ genero_filtro }}{% endif %}"
                class="chip {% if fase == 'pendentes' %}chip--ativo{% endif %}">
                 Pendentes
                 <span class="chip__label">{{ total_pendentes }}</span>
             </a>
-            <a href="?fase=finalizados{% if aba_cgm %}&aba=cgm{% endif %}{% if termo_pesquisa %}&termo={{ termo_pesquisa|urlencode }}{% endif %}{% if genero_filtro and genero_filtro != 'todas' %}&genero={{ genero_filtro }}{% endif %}"
+            <a href="?fase=finalizados{% if aba_cgm %}&aba=cgm{% endif %}{% if genero_filtro and genero_filtro != 'todas' %}&genero={{ genero_filtro }}{% endif %}"
                class="chip {% if fase == 'finalizados' %}chip--ativo{% endif %}">
-                Finalizados
+                {% if processos_protocolo_unificado %}Com análise{% else %}Finalizados{% endif %}
                 <span class="chip__label">{{ total_finalizados }}</span>
             </a>
-            <a href="?fase=todos{% if aba_cgm %}&aba=cgm{% endif %}{% if termo_pesquisa %}&termo={{ termo_pesquisa|urlencode }}{% endif %}{% if genero_filtro and genero_filtro != 'todas' %}&genero={{ genero_filtro }}{% endif %}"
+            <a href="?fase=todos{% if aba_cgm %}&aba=cgm{% endif %}{% if genero_filtro and genero_filtro != 'todas' %}&genero={{ genero_filtro }}{% endif %}"
                class="chip {% if fase == 'todos' %}chip--ativo{% endif %}">
                 Todos
                 <span class="chip__label">{{ total_pendentes|add:total_finalizados }}</span>
             </a>
         </div>
     </section>
+    {% endif %}
 
     <section class="stats">
         <div class="stat stat--primary">
@@ -95,7 +112,7 @@
                 <div class="search__field">
                     <span class="material-symbols-rounded search__icon">search</span>
                     <input type="text" id="inputPesquisa" class="input"
-                           placeholder="Buscar por nº, secretaria, objeto, contratada, técnico…"
+                           placeholder="{% if processos_protocolo_unificado %}Buscar em Ativos e Finalizados (nº, secretaria, objeto…){% else %}Buscar por nº, secretaria, objeto, contratada, técnico…{% endif %}"
                            value="{{ termo_pesquisa|default:'' }}">
                 </div>
                 <button type="submit" class="btn btn--primary">Buscar</button>
@@ -188,8 +205,14 @@
 
     <section class="table-card">
         <div class="table-card__header">
-            <span class="table-card__title">Processos</span>
-            <span class="table-card__count">{{ total_processos }} registro{{ total_processos|pluralize:"s" }}</span>
+            <span class="table-card__title">{% if busca_combinada %}Resultados da busca{% else %}Processos{% endif %}</span>
+            <span class="table-card__count">
+                {% if busca_combinada %}
+                    {{ total_processos }} · {{ total_aba_ativos }} ativo{{ total_aba_ativos|pluralize }} + {{ total_aba_finalizados }} finalizado{{ total_aba_finalizados|pluralize }}
+                {% else %}
+                    {{ total_processos }} registro{{ total_processos|pluralize:"s" }}
+                {% endif %}
+            </span>
         </div>
 
         <div class="table-scroll">
@@ -197,6 +220,9 @@
                 <thead>
                     <tr>
                         <th class="col-sticky" data-column-lock="1">N° Processo</th>
+                        {% if busca_combinada %}
+                        <th>Aba</th>
+                        {% endif %}
                         <th>Volume</th>
                         <th>Secretaria</th>
                         <th>Data Entrada</th>
@@ -226,6 +252,15 @@
                     {% for processo in processos %}
                     <tr data-id="{{ processo.id }}" class="{{ processo.prioridade_linha_class }}">
                         <td class="editable col-sticky" data-field="numero_processo">{{ processo.numero_processo }}</td>
+                        {% if busca_combinada %}
+                        <td>
+                            {% if processo.escopo_protocolo_item == 'finalizado' %}
+                                <span class="badge badge--success">Finalizado</span>
+                            {% else %}
+                                <span class="badge badge--primary">Ativo</span>
+                            {% endif %}
+                        </td>
+                        {% endif %}
                         <td class="editable" data-field="volume">{{ processo.volume|default:'' }}</td>
                         <td class="editable" data-field="secretaria">{{ processo.secretaria }}</td>
                         <td class="editable" data-field="data_entrada">{{ processo.data_entrada|date:"Y-m-d" }}</td>

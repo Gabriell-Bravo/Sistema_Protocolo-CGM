@@ -1722,8 +1722,8 @@ class ControleRelatorioTest(BaseProcessoTestCase):
 
         hist = LinhaControleRelatorio.objects.get(numero_relatorio='5')
         self.assertEqual(hist.situacao_linha, 'HISTORICA')
-        self.assertEqual(hist.numero_processo, '100/2025')
-        self.assertEqual(hist.processo_pagamento, '200/2026')
+        self.assertEqual(hist.numero_processo, '200/2026')
+        self.assertEqual(hist.processo_pagamento, '100/2025')
         self.assertEqual(hist.analista, 'Ana Teste')
         self.assertTrue(hist.valor.startswith('R$'))
 
@@ -1868,8 +1868,8 @@ class ControleRelatorioTest(BaseProcessoTestCase):
 
         destacado = LinhaControleRelatorio.objects.get(numero_relatorio='77')
         self.assertEqual(destacado.situacao_linha, 'HISTORICA')
-        self.assertEqual(destacado.numero_processo, '100/2025')
-        self.assertEqual(destacado.processo_pagamento, '200/2026')
+        self.assertEqual(destacado.numero_processo, '200/2026')
+        self.assertEqual(destacado.processo_pagamento, '100/2025')
         self.assertFalse(destacado.sem_relatorio)
         self.assertNotIn('sem análise', (destacado.observacao or '').casefold())
 
@@ -2310,8 +2310,59 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertEqual(dados['secretaria'], 'Unidade de Teste')
         layout = busca.json()['layout']
         self.assertEqual(layout['titulo'], 'Dados do relatório — Liquidação')
+        self.assertIn('numero_processo', layout['formulario'])
+        self.assertIn('processo_pagamento', layout['formulario'])
         self.assertIn('valor', layout['formulario'])
         self.assertIn('destino', layout['formulario'])
+        self.assertEqual(
+            layout['rotulos']['numero_processo'], 'Processo de pagamento')
+        self.assertEqual(
+            layout['rotulos']['processo_pagamento'], 'Processo origem')
+        # Origem vazia até o analista informar (não espelha o nº).
+        self.assertEqual(dados['processo_pagamento'], '')
+
+    def test_analista_processo_mostra_origem_e_pagamento_liquidacao(self):
+        """Liquidação: pagamento = nº (readonly); origem o analista preenche."""
+        processo = self.novo_processo(
+            self.especie_liq, numero_processo='pag-num/2026')
+        self.assertFalse((processo.processo_pagamento or '').strip())
+        tramitacao.assumir(processo.id, self.analista_liq)
+        self.client.force_login(self.analista_liq)
+        pagina = self.client.get(
+            reverse('analista_processo', args=[processo.id]))
+        self.assertEqual(pagina.status_code, 200)
+        self.assertContains(pagina, 'Processo origem')
+        self.assertContains(pagina, 'Processo de pagamento')
+        self.assertContains(pagina, 'id="processo_pagamento_num"')
+        self.assertContains(pagina, 'id="processo_origem"')
+        self.assertContains(pagina, 'name="processo_pagamento"')
+        html = pagina.content.decode()
+        pagamento = html.split('id="processo_pagamento_num"', 1)[1].split(
+            '</div>', 1)[0]
+        self.assertIn('value="pag-num/2026"', pagamento)
+        self.assertIn('readonly', pagamento)
+        origem = html.split('id="processo_origem"', 1)[1].split('</div>', 1)[0]
+        self.assertNotIn('readonly', origem)
+        self.assertIn('name="processo_pagamento"', origem)
+
+        svc_processos.aplicar_analise(processo, {
+            'processo_pagamento': 'origem-editada/2026',
+            'destino': 'Unidade de Teste',
+            'valor': '100',
+            'status_analise': 'PROSSEGUIMENTO_SEM_RESSALVA',
+            'gerar_numero': '1',
+        }, self.analista_liq)
+        processo.refresh_from_db()
+        self.assertEqual(processo.processo_pagamento, 'origem-editada/2026')
+        self.assertEqual(processo.numero_processo, 'pag-num/2026')
+        pagina2 = self.client.get(
+            reverse('analista_processo', args=[processo.id]))
+        html2 = pagina2.content.decode()
+        orig2 = html2.split('id="processo_origem"', 1)[1].split('</div>', 1)[0]
+        self.assertIn('value="origem-editada/2026"', orig2)
+        pag2 = html2.split('id="processo_pagamento_num"', 1)[1].split(
+            '</div>', 1)[0]
+        self.assertIn('value="pag-num/2026"', pag2)
 
     def test_fixture_planilha_importa_e_processos_ativos_pendentes_finalizados(self):
         """Sobe a amostra do Controle 2026, cria ativos e checa Pendentes/Finalizados.
@@ -2358,21 +2409,21 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertEqual(resp.status_code, 302)
 
         # Linhas históricas da planilha (inclui fórmula → valor correto).
-        # Liquidação: PROCESSO ORIGEM → Nº processo; PAGAMENTO → processo_pagamento.
+        # Liquidação: PAGAMENTO → numero_processo; ORIGEM → processo_pagamento.
         saibro = LinhaControleRelatorio.objects.get(numero_relatorio='1319')
-        self.assertEqual(saibro.numero_processo, '6100/2023')
-        self.assertEqual(saibro.processo_pagamento, '13673/2025')
+        self.assertEqual(saibro.numero_processo, '13673/2025')
+        self.assertEqual(saibro.processo_pagamento, '6100/2023')
         self.assertEqual(saibro.valor, 'R$ 3.478.525,50')
         self.assertEqual(saibro.periodo, '01/06/2026')
         self.assertEqual(saibro.situacao_linha, 'HISTORICA')
 
         pagto = LinhaControleRelatorio.objects.get(numero_relatorio='1320')
         self.assertEqual(pagto.numero_processo, '88881/2026')
-        self.assertEqual(pagto.processo_pagamento, '88881/2026')
+        self.assertEqual(pagto.processo_pagamento, '')
 
         med = LinhaControleRelatorio.objects.get(numero_relatorio='1322')
-        self.assertEqual(med.numero_processo, '100/2024')
-        self.assertEqual(med.processo_pagamento, '55551/2026')
+        self.assertEqual(med.numero_processo, '55551/2026')
+        self.assertEqual(med.processo_pagamento, '100/2024')
 
         reservado = LinhaControleRelatorio.objects.get(numero_relatorio='1321')
         self.assertTrue(reservado.sem_relatorio)
