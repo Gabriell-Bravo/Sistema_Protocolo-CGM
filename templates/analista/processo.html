@@ -467,6 +467,14 @@
                                    {% if not pode_editar %}readonly{% endif %}>
                             {% if layout_planilha.dicas.processo_prestacao %}<span class="field__hint">{{ layout_planilha.dicas.processo_prestacao }}</span>{% endif %}
                         </div>
+                        {% elif campo == 'processo_pagamento' %}
+                        <div class="field">
+                            <label class="field__label" for="processo_pagamento">{{ layout_planilha.rotulos.processo_pagamento }}</label>
+                            <input type="text" id="processo_pagamento" name="processo_pagamento" class="input"
+                                   value="{{ processo.processo_pagamento|default:processo.numero_processo }}"
+                                   autocomplete="off" {% if not pode_editar %}readonly{% endif %}>
+                            {% if layout_planilha.dicas.processo_pagamento %}<span class="field__hint">{{ layout_planilha.dicas.processo_pagamento }}</span>{% endif %}
+                        </div>
                         {% elif campo == 'contratada' %}
                         <div class="field">
                             <label class="field__label" for="contratada_analise">{{ layout_planilha.rotulos.contratada }}</label>
@@ -510,8 +518,13 @@
                         {% endif %}
                     {% endfor %}
                     <div class="field">
-                        <label class="field__label" for="tecnico">Analista / relator</label>
-                        <input type="text" id="tecnico" class="input" value="{{ processo.nome_analista|default:'' }}" readonly>
+                        <label class="field__label" for="analista_relator">{% if layout_planilha %}{{ layout_planilha.rotulos.analista }}{% else %}Analista / relator{% endif %}</label>
+                        <select id="analista_relator" name="analista" class="select" {% if not pode_editar %}disabled{% endif %}>
+                            <option value="">Selecione</option>
+                            {% for nome in analistas_relator %}
+                            <option value="{{ nome }}" {% if relator_atual == nome %}selected{% endif %}>{{ nome }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
                 {% else %}
                 <div class="field">
@@ -536,8 +549,13 @@
                     <input type="text" id="periodo" name="periodo" class="input" value="{{ processo.periodo|default:'' }}" {% if not pode_editar %}readonly{% endif %}>
                 </div>
                 <div class="field">
-                    <label class="field__label" for="tecnico">Analista / relator</label>
-                    <input type="text" id="tecnico" class="input" value="{{ processo.nome_analista|default:'' }}" readonly>
+                    <label class="field__label" for="analista_relator">Analista / relator</label>
+                    <select id="analista_relator" name="analista" class="select" {% if not pode_editar %}disabled{% endif %}>
+                        <option value="">Selecione</option>
+                        {% for nome in analistas_relator %}
+                        <option value="{{ nome }}" {% if relator_atual == nome %}selected{% endif %}>{{ nome }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
                 {% if not eh_liquidacao %}
                 <div class="field">

@@ -37,6 +37,25 @@ class AssumirTest(BaseProcessoTestCase):
         self.assertNotIn(comigo.id, ids)
         self.assertNotIn(no_controlador.id, ids)
 
+    def test_disponiveis_para_assumir_ordena_por_prioridade(self):
+        normal = self.novo_processo(
+            numero_processo='assumir-normal/2026',
+            data_entrada='2026-09-01', hora_entrada='08:00')
+        prioritario = self.novo_processo(
+            numero_processo='assumir-prio/2026',
+            data_entrada='2026-09-10', hora_entrada='10:00')
+        urgente = self.novo_processo(
+            numero_processo='assumir-urgente/2026',
+            data_entrada='2026-09-15', hora_entrada='12:00')
+        tramitacao.alterar_prioridade(prioritario.id, self.gestao, 'PRIORITARIO')
+        tramitacao.alterar_prioridade(urgente.id, self.gestao, 'URGENTE')
+
+        ids = list(
+            tramitacao.disponiveis_para_assumir(self.analista_lic)
+            .filter(id__in=[normal.id, prioritario.id, urgente.id])
+            .values_list('id', flat=True))
+        self.assertEqual(ids, [urgente.id, prioritario.id, normal.id])
+
     def test_encaminhar_vai_para_assinar_e_com_controlador_nos_ativos(self):
         processo = self.processo_em_analise()
         processo.numero_processo = 'para-assinar/2026'

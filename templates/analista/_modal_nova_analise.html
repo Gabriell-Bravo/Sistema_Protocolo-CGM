@@ -122,6 +122,13 @@
                             </label>
                             <input type="text" id="nova_numero_processo" name="numero_processo" class="input" required>
                         </div>
+                        <div class="field" data-nova-campo="processo_pagamento" {% if modo == 'licitacao' %}hidden{% endif %}>
+                            <label class="field__label" for="nova_processo_pagamento" id="lblNovaPagamento">
+                                {% if L %}{{ L.rotulos.processo_pagamento|default:'Processo de pagamento' }}{% else %}Processo de pagamento{% endif %}
+                            </label>
+                            <input type="text" id="nova_processo_pagamento" name="processo_pagamento" class="input"
+                                   autocomplete="off" placeholder="Opcional se igual ao nº processo">
+                        </div>
                         <div class="field" data-nova-campo="volume">
                             <label class="field__label" for="nova_volume">Volume / concessão</label>
                             <input type="text" id="nova_volume" name="volume" class="input">
@@ -130,7 +137,12 @@
                             <label class="field__label" for="nova_analista" id="lblNovaAnalista">
                                 {% if L %}{{ L.rotulos.analista }}{% else %}Analista / relator{% endif %}
                             </label>
-                            <input type="text" id="nova_analista" name="analista" class="input">
+                            <select id="nova_analista" name="analista" class="select">
+                                <option value="">Selecione</option>
+                                {% for nome in analistas_relator %}
+                                <option value="{{ nome }}">{{ nome }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
                         <div class="field field--wide" data-nova-campo="secretaria">
                             <label class="field__label" for="nova_secretaria" id="lblNovaSecretaria">
@@ -470,6 +482,7 @@
             lblNovaNumero: 'numero_relatorio',
             lblNovaData: 'data_relatorio',
             lblNovaProcesso: 'numero_processo',
+            lblNovaPagamento: 'processo_pagamento',
             lblNovaAnalista: 'analista',
             lblNovaSecretaria: 'secretaria',
             lblNovaObjeto: 'objeto',
@@ -630,9 +643,9 @@
         aplicarLayout(meta);
         var textos = {
             numero_processo: 'nova_numero_processo',
+            processo_pagamento: 'nova_processo_pagamento',
             volume: 'nova_volume',
             data_relatorio: 'nova_data',
-            analista: 'nova_analista',
             objeto: 'nova_objeto',
             contratada: 'nova_contratada',
             periodo: 'nova_periodo',
@@ -642,6 +655,7 @@
             var el = document.getElementById(textos[chave]);
             if (el) el.value = dados[chave] != null ? dados[chave] : '';
         });
+        setSelect('nova_analista', dados.analista || '');
         setSelect('nova_secretaria', dados.secretaria || '');
         setSelect('nova_destino', dados.destino || '');
         setSelect('nova_status_analise', dados.status_analise || 'NAO_APLICAVEL');

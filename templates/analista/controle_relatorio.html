@@ -116,6 +116,8 @@
                                     {% else %}
                                     {{ linha.numero_processo|default:"—" }}
                                     {% endif %}
+                                {% elif col.campo == 'processo_pagamento' %}
+                                    {{ linha.processo_pagamento|default:"—" }}
                                 {% elif col.campo == 'volume' %}
                                     {{ linha.volume|default:"—" }}
                                 {% elif col.campo == 'analista' %}
@@ -162,6 +164,7 @@
                                             data-editar-numero="{{ linha.numero_relatorio|escape }}"
                                             data-editar-data="{{ linha.data_relatorio|date:'Y-m-d' }}"
                                             data-editar-processo="{{ linha.numero_processo|escape }}"
+                                            data-editar-pagamento="{{ linha.processo_pagamento|escape }}"
                                             data-editar-volume="{{ linha.volume|escape }}"
                                             data-editar-secretaria="{{ linha.secretaria|escape }}"
                                             data-editar-contratada="{{ linha.contratada|escape }}"
@@ -422,8 +425,17 @@ O número permanece na planilha; o processo deixa de ter esse relatório."
                                 <input type="text" id="editar_processo" name="numero_processo" class="input" autocomplete="off">
                             </div>
                             <div class="field">
+                                <label class="field__label" for="editar_pagamento">{{ layout_planilha.rotulos.processo_pagamento|default:"Processo de pagamento" }}</label>
+                                <input type="text" id="editar_pagamento" name="processo_pagamento" class="input" autocomplete="off">
+                            </div>
+                            <div class="field">
                                 <label class="field__label" for="editar_analista">{{ layout_planilha.rotulos.analista }}</label>
-                                <input type="text" id="editar_analista" name="analista" class="input">
+                                <select id="editar_analista" name="analista" class="select">
+                                    <option value="">Selecione</option>
+                                    {% for nome in analistas_relator %}
+                                    <option value="{{ nome }}">{{ nome }}</option>
+                                    {% endfor %}
+                                </select>
                             </div>
                             <div class="field field--wide">
                                 <label class="field__label" for="editar_secretaria">{{ layout_planilha.rotulos.secretaria }}</label>
@@ -494,6 +506,7 @@ O número permanece na planilha; o processo deixa de ter esse relatório."
                 numero_relatorio: 'data-editar-numero',
                 data_relatorio: 'data-editar-data',
                 numero_processo: 'data-editar-processo',
+                processo_pagamento: 'data-editar-pagamento',
                 volume: 'data-editar-volume',
                 secretaria: 'data-editar-secretaria',
                 contratada: 'data-editar-contratada',

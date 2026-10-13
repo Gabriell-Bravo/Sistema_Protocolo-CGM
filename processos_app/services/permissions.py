@@ -143,6 +143,37 @@ def analistas_ativos():
             .order_by('first_name', 'username'))
 
 
+def analistas_do_grupo(grupo):
+    """Analistas ativos do grupo (Relator na planilha / tela de análise)."""
+    from django.contrib.auth.models import User
+    if grupo == GRUPO_LICITACOES:
+        papeis = [ANALISTA_LICITACOES]
+    else:
+        # Liquidações e qualquer sequência do Controle de relatório.
+        papeis = [ANALISTA_LIQUIDACOES]
+    return (User.objects
+            .filter(is_active=True, profile__papel__in=papeis)
+            .select_related('profile')
+            .order_by('first_name', 'username'))
+
+
+def opcoes_relator(grupo, nome_atual=''):
+    """Nomes para o select de Relator; inclui o valor atual se for legado."""
+    nomes = []
+    vistos = set()
+    for usuario in analistas_do_grupo(grupo):
+        nome = (nome_usuario(usuario) or '').strip()
+        chave = nome.casefold()
+        if not nome or chave in vistos:
+            continue
+        nomes.append(nome)
+        vistos.add(chave)
+    atual = (nome_atual or '').strip()
+    if atual and atual.casefold() not in vistos:
+        nomes.insert(0, atual)
+    return nomes
+
+
 def is_analista_ativo(user):
     return bool(user) and user.is_active and is_analista(user)
 

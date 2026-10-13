@@ -45,15 +45,16 @@ CAMPOS_PROTOCOLO = (
 CAMPOS_ANALISTA = (
     'valor', 'destino', 'periodo', 'data_analise', 'numero_despacho',
     'status_analise', 'observacao', 'processo_prestacao',
+    'processo_pagamento',
 )
 
 # Dados cadastrais do processo que analista e administrador também
 # corrigem na tela do processo (resumo: espécie, volume, objeto etc.).
 # Situação, analista e assumido em continuam só pela tramitação.
 CAMPOS_CADASTRO = (
-    'numero_processo', 'volume', 'processo_prestacao', 'secretaria',
-    'data_entrada', 'hora_entrada', 'genero', 'especie', 'objeto',
-    'contratada', 'prioridade', 'observacao_protocolo',
+    'numero_processo', 'volume', 'processo_prestacao', 'processo_pagamento',
+    'secretaria', 'data_entrada', 'hora_entrada', 'genero', 'especie',
+    'objeto', 'contratada', 'prioridade', 'observacao_protocolo',
 )
 
 # A Gestão não pratica ato técnico nem edita dado de protocolo (item 2).
@@ -430,6 +431,11 @@ def aplicar_analise(processo, dados, usuario):
     )
     if alteracoes:
         processo.save()
+
+    # Relator escolhido no select (planilha / análise) — vai para a linha.
+    relator = texto(dados.get('analista')) if dados else ''
+    if relator:
+        processo._analista_relator = relator[:255]
 
     numero_manual = texto(dados.get('numero_relatorio')) if dados else ''
     marcado_sem_relatorio = _marcado_sem_relatorio(dados)

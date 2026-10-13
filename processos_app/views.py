@@ -6,7 +6,7 @@ from django.http import JsonResponse, HttpResponse
 from django.urls import reverse
 from .models import (
     Processo, ProcessHistory, MonitoramentoRecord, Profile, Pendencia,
-    SequenciaRelatorio, EventoProcesso,
+    SequenciaRelatorio, EventoProcesso, LinhaControleRelatorio,
 )
 import json
 from datetime import datetime, date, timedelta, time
@@ -1432,6 +1432,7 @@ def controle_analise(request):
         'pode_assumir_modal': perm.pode_nova_analise(request.user),
         'secretarias': [u.nome for u in svc_cadastros.unidades_ativas()],
         'all_status_analise': Processo.STATUS_ANALISE_CHOICES,
+        'analistas_relator': perm.opcoes_relator(perm.GRUPO_LICITACOES),
         **perm.contexto_de_permissoes(request.user),
     })
 
@@ -1667,8 +1668,23 @@ def analista_processo(request, process_id):
         item.pode_editar_texto = perm.pode_editar_pendencia(request.user, item)
         item.pode_cancelar = perm.pode_cancelar_pendencia(request.user, item)
 
+    linha_rel = (
+        LinhaControleRelatorio.objects
+        .filter(processo=processo)
+        .only('analista')
+        .first()
+    )
+    relator_atual = (
+        (linha_rel.analista if linha_rel else '')
+        or processo.nome_analista
+        or perm.nome_usuario(request.user)
+    ).strip()
+
     return render(request, 'analista/processo.html', {
         'processo': processo,
+        'relator_atual': relator_atual,
+        'analistas_relator': perm.opcoes_relator(
+            processo.genero or perm.GRUPO_LIQUIDACOES, relator_atual),
         'pendencias': pendencias,
         'pendencias_anteriores': svc_pendencias.abertas_de_passagens_anteriores(
             processo),

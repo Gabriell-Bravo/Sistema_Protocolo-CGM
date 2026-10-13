@@ -186,6 +186,11 @@
   .sheet-input--wide { min-width: 220px; }
   .sheet-input--num { min-width: 90px; text-align: right; font-variant-numeric: tabular-nums; }
   .sheet-input--date { min-width: 130px; }
+  .sheet-input--select {
+    min-width: 160px;
+    cursor: pointer;
+    appearance: auto;
+  }
 
   /* Cores por data-* (evita falso positivo de testes em busca de class no CSS) */
   .sheet tr[data-sem-relatorio="1"] td { background: #fef08a; }
@@ -390,6 +395,16 @@
               <input class="sheet-input sheet-input--wide" type="text"
                      name="{{ col.campo }}" data-campo="{{ col.campo }}"
                      value="{% if col.campo == 'objeto' %}{{ linha.objeto|default:'' }}{% else %}{{ linha.observacao|default:'' }}{% endif %}">
+              {% elif col.campo == 'analista' %}
+              <select class="sheet-input sheet-input--select" name="analista" data-campo="analista">
+                <option value="">Selecione</option>
+                {% for nome in analistas_relator %}
+                <option value="{{ nome }}" {% if linha.analista == nome %}selected{% endif %}>{{ nome }}</option>
+                {% endfor %}
+                {% if linha.analista and linha.analista not in analistas_relator %}
+                <option value="{{ linha.analista }}" selected>{{ linha.analista }}</option>
+                {% endif %}
+              </select>
               {% elif col.campo == 'valor' or col.campo == 'numero_relatorio' %}
               <input class="sheet-input sheet-input--num" type="text"
                      name="{{ col.campo }}" data-campo="{{ col.campo }}"
@@ -397,13 +412,14 @@
               {% else %}
               <input class="sheet-input" type="text"
                      name="{{ col.campo }}" data-campo="{{ col.campo }}"
-                     value="{% if col.campo == 'numero_processo' %}{{ linha.numero_processo|default:'' }}{% elif col.campo == 'analista' %}{{ linha.analista|default:'' }}{% elif col.campo == 'secretaria' %}{{ linha.secretaria|default:'' }}{% elif col.campo == 'contratada' %}{{ linha.contratada|default:'' }}{% elif col.campo == 'periodo' %}{{ linha.periodo|default:'' }}{% elif col.campo == 'destino' %}{{ linha.destino|default:'' }}{% elif col.campo == 'volume' %}{{ linha.volume|default:'' }}{% else %}{% endif %}">
+                     value="{% if col.campo == 'numero_processo' %}{{ linha.numero_processo|default:'' }}{% elif col.campo == 'processo_pagamento' %}{{ linha.processo_pagamento|default:'' }}{% elif col.campo == 'secretaria' %}{{ linha.secretaria|default:'' }}{% elif col.campo == 'contratada' %}{{ linha.contratada|default:'' }}{% elif col.campo == 'periodo' %}{{ linha.periodo|default:'' }}{% elif col.campo == 'destino' %}{{ linha.destino|default:'' }}{% elif col.campo == 'volume' %}{{ linha.volume|default:'' }}{% else %}{% endif %}">
               {% endif %}
             {% else %}
               <span class="sheet-ro">
                 {% if col.campo == 'numero_relatorio' %}<strong>{{ linha.numero_relatorio|default:"—" }}</strong>
                 {% elif col.campo == 'data_relatorio' %}{{ linha.data_relatorio|date:"d/m/Y"|default:"—" }}
                 {% elif col.campo == 'numero_processo' %}{{ linha.numero_processo|default:"—" }}
+                {% elif col.campo == 'processo_pagamento' %}{{ linha.processo_pagamento|default:"—" }}
                 {% elif col.campo == 'analista' %}{{ linha.analista|default:"—" }}
                 {% elif col.campo == 'secretaria' %}{{ linha.secretaria|default:"—" }}
                 {% elif col.campo == 'contratada' %}{{ linha.contratada|default:"—" }}

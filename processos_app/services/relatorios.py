@@ -168,6 +168,7 @@ _LAYOUT_PLANILHA = {
             'numero_relatorio': 'Nº relatório',
             'data_relatorio': 'Data',
             'numero_processo': 'Nº processo',
+            'processo_pagamento': 'Processo de pagamento',
             'secretaria': 'Secretaria',
             'objeto': 'Objeto',
             'periodo': 'Período',
@@ -178,13 +179,20 @@ _LAYOUT_PLANILHA = {
             'status_analise': 'Status da análise',
         },
         'colunas': (
-            'numero_relatorio', 'data_relatorio', 'numero_processo', 'analista',
-            'secretaria', 'objeto', 'valor', 'periodo', 'destino',
-            'status_analise', 'observacao',
+            'numero_relatorio', 'data_relatorio', 'numero_processo',
+            'processo_pagamento', 'analista', 'secretaria', 'objeto', 'valor',
+            'periodo', 'destino', 'status_analise', 'observacao',
         ),
         'formulario': (
-            'valor', 'destino', 'periodo', 'status_analise', 'observacao',
+            'processo_pagamento', 'valor', 'destino', 'periodo',
+            'status_analise', 'observacao',
         ),
+        'dicas': {
+            'processo_pagamento': (
+                'Nº do processo de pagamento (coluna PROCESSO PAGAMENTO '
+                'da planilha Excel).'
+            ),
+        },
     },
     'ADIANTAMENTO': {
         'titulo': 'Dados do relatório — Adiantamento',
@@ -416,6 +424,7 @@ def layout_planilha(codigo=None):
     # Campos virtuais do formulário (Bolsa/Auxílio) usam rótulos próprios.
     rotulos.setdefault('processo_concessao', 'Processo de concessão')
     rotulos.setdefault('processo_prestacao', 'Processo de prestação')
+    rotulos.setdefault('processo_pagamento', 'Processo de pagamento')
     return {
         'codigo': codigo,
         'titulo': layout.get('titulo', base['titulo']),
@@ -987,6 +996,7 @@ def _limpar_dados_linha_numero_disponivel(linha):
     """Número disponível: só nº e data ficam; o restante da linha zera."""
     linha.numero_processo = ''
     linha.volume = ''
+    linha.processo_pagamento = ''
     linha.secretaria = ''
     linha.contratada = ''
     linha.objeto = ''
@@ -1002,9 +1012,9 @@ def _limpar_dados_linha_numero_disponivel(linha):
 
 _CAMPOS_LIMPOS_NUMERO_DISPONIVEL = (
     'processo', 'situacao_linha', 'observacao',
-    'numero_processo', 'volume', 'secretaria', 'contratada', 'objeto',
-    'valor', 'periodo', 'destino', 'analista', 'status_analise',
-    'sem_relatorio', 'data_relatorio', 'atualizado_em',
+    'numero_processo', 'volume', 'processo_pagamento', 'secretaria',
+    'contratada', 'objeto', 'valor', 'periodo', 'destino', 'analista',
+    'status_analise', 'sem_relatorio', 'data_relatorio', 'atualizado_em',
 )
 
 
@@ -1308,6 +1318,7 @@ def editar_linha(usuario, linha_id, dados):
             data_relatorio=linha.data_relatorio,
             numero_processo=linha.numero_processo or '',
             volume=linha.volume or '',
+            processo_pagamento=linha.processo_pagamento or '',
             secretaria=linha.secretaria or '',
             contratada=linha.contratada or '',
             objeto=linha.objeto or '',
@@ -1336,9 +1347,18 @@ def editar_linha(usuario, linha_id, dados):
     linha.analista = str(dados.get('analista') or '').strip()[:255]
     linha.observacao = str(dados.get('observacao') or '').strip()
     linha.volume = str(dados.get('volume') or '').strip()[:255]
+    linha.processo_pagamento = str(
+        dados.get('processo_pagamento') or '').strip()[:255]
     linha.sem_relatorio = str(dados.get('sem_relatorio') or '') in (
         '1', 'true', 'True', 'on', 'sim')
     linha.save()
+
+    processo_link = linha.processo
+    if processo_link is not None and 'processo_pagamento' in dados:
+        pag = linha.processo_pagamento
+        if (processo_link.processo_pagamento or '') != pag:
+            processo_link.processo_pagamento = pag
+            processo_link.save(update_fields=['processo_pagamento'])
 
     if novo_numero != anterior_numero:
         numero_int = _inteiro(novo_numero)
@@ -1524,6 +1544,8 @@ def _preencher_linha_pela_passagem(linha, processo):
     """Copia dados da passagem do processo para a linha da planilha."""
     linha.numero_processo = processo.numero_processo or ''
     linha.volume = processo.volume or ''
+    linha.processo_pagamento = getattr(
+        processo, 'processo_pagamento', None) or ''
     linha.secretaria = processo.secretaria or ''
     linha.contratada = processo.contratada or ''
     linha.objeto = processo.objeto or ''
@@ -1552,17 +1574,25 @@ def _sincronizar_processo_pela_importacao(processo, dados):
         ('periodo', 'periodo'),
         ('destino', 'destino'),
         ('volume', 'volume'),
+        ('processo_pagamento', 'processo_pagamento'),
         ('observacao', 'observacao'),
     )
     campos = []
     for campo_proc, campo_dados in pares:
+        if campo_dados not in dados:
+            continue
         novo = dados.get(campo_dados)
         if novo is None:
             continue
         novo = str(novo).strip()
         if campo_proc in ('secretaria', 'contratada', 'valor',
-                          'periodo', 'destino', 'volume'):
+                          'periodo', 'destino', 'volume',
+                          'processo_pagamento'):
             novo = novo[:255]
+        # Volume na planilha de Liquidação fica vazio — não apaga o volume
+        # físico do processo. Bolsa/Auxílio manda concessão preenchida.
+        if campo_proc == 'volume' and not novo:
+            continue
         if (getattr(processo, campo_proc, None) or '') == novo:
             continue
         setattr(processo, campo_proc, novo)
@@ -1834,6 +1864,7 @@ def filtrar_por_termo(consulta, termo):
 
     filtro = (
         Q(numero_processo__icontains=termo) |
+        Q(processo_pagamento__icontains=termo) |
         Q(numero_relatorio__icontains=termo) |
         Q(volume__icontains=termo) |
         Q(secretaria__icontains=termo) |
@@ -1944,15 +1975,23 @@ def _dados_da_linha(processo):
     sequencia = sequencia_do_processo(processo) or GRUPO_PADRAO
     numero_processo = processo.numero_processo or ''
     volume = processo.volume or ''
+    processo_pagamento = (
+        getattr(processo, 'processo_pagamento', None) or ''
+    ).strip()
     # Bolsa/Auxílio na planilha: concessão = nº do processo; prestação = campo opcional.
     if sequencia in ('BOLSA_ATLETA', 'AUXILIO_COMPETICAO'):
         volume = (processo.numero_processo or '').strip()
         numero_processo = (
             getattr(processo, 'processo_prestacao', None) or ''
         ).strip()
+        processo_pagamento = ''
+    elif sequencia == GRUPO_PADRAO and not processo_pagamento:
+        # Liquidação: se vazio, espelha o nº do processo (costuma ser o pagamento).
+        processo_pagamento = (processo.numero_processo or '').strip()
     return {
         'numero_processo': numero_processo,
         'volume': volume,
+        'processo_pagamento': processo_pagamento,
         'numero_relatorio': processo.numero_relatorio or '',
         'sem_relatorio': bool(getattr(processo, 'sem_relatorio', False)),
         'data_relatorio': data,
@@ -1962,7 +2001,11 @@ def _dados_da_linha(processo):
         'valor': processo.valor or '',
         'periodo': processo.periodo or '',
         'destino': processo.destino or '',
-        'analista': processo.nome_analista or '',
+        'analista': (
+            (getattr(processo, '_analista_relator', None) or '').strip()
+            or processo.nome_analista
+            or ''
+        ),
         'status_analise': processo.status_analise or '',
         'observacao': processo.observacao or '',
         'grupo': processo.genero or '',
@@ -2217,7 +2260,7 @@ _ALIAS_COLUNAS = {
     'analista': ('relator', 'analista', 'tecnico'),
     'processo_pagamento': (
         'processo de prestacao', 'processo prestacao',
-        'processo pagamento', 'proc pagamento',
+        'processo de pagamento', 'processo pagamento', 'proc pagamento',
     ),
     'processo_origem': (
         'processo de concessao', 'processo concessao',
@@ -2246,6 +2289,27 @@ _ALIAS_COLUNAS = {
 
 # Mapa por grupo: evita colisões (ex.: Assunto vs Evento/Necessidade).
 _ALIAS_POR_GRUPO = {
+    GRUPO_PADRAO: {
+        'numero_relatorio': (
+            'n relatorio', 'no relatorio', 'numero relatorio',
+            'nº relatorio', 'num relatorio', 'relatorio', 'numero',
+        ),
+        'data_relatorio': ('data', 'data relatorio'),
+        'analista': ('relator', 'analista'),
+        'processo_origem': (
+            'processo origem', 'proc origem',
+            'n do processo', 'n processo', 'numero processo', 'nº processo',
+        ),
+        'processo_pagamento': (
+            'processo de pagamento', 'processo pagamento', 'proc pagamento',
+        ),
+        'secretaria': ('secretaria',),
+        'objeto': ('objeto',),
+        'periodo': ('periodo',),
+        'valor': ('valor',),
+        'destino': ('destino',),
+        'observacao_planilha': ('obs', 'observacao'),
+    },
     'ADIANTAMENTO': {
         'numero_relatorio': ('numero',),
         'contratada': ('servidor',),
@@ -2713,10 +2777,10 @@ def _importar_linhas_aba(
     atualizar_lote = []
     atualizar_ids = set()
     campos_update = [
-        'numero_processo', 'volume', 'data_relatorio', 'secretaria',
-        'contratada', 'objeto', 'valor', 'periodo', 'destino', 'analista',
-        'observacao', 'grupo', 'sequencia', 'situacao_linha', 'sem_relatorio',
-        'status_analise',
+        'numero_processo', 'volume', 'processo_pagamento', 'data_relatorio',
+        'secretaria', 'contratada', 'objeto', 'valor', 'periodo', 'destino',
+        'analista', 'observacao', 'grupo', 'sequencia', 'situacao_linha',
+        'sem_relatorio', 'status_analise',
     ]
 
     for row in planilha.iter_rows(min_row=linha_cabecalho + 1):
@@ -2746,6 +2810,7 @@ def _importar_linhas_aba(
 
         pagamento = _texto_celula(cel('processo_pagamento'))
         origem = _texto_celula(cel('processo_origem'))
+        processo_pag = ''
         # Bolsa/Auxílio: prestação → numero_processo; concessão → volume.
         if grupo in ('BOLSA_ATLETA', 'AUXILIO_COMPETICAO'):
             if pagamento and origem:
@@ -2755,14 +2820,16 @@ def _importar_linhas_aba(
             else:
                 # Só concessão: coluna prestação vazia; nº fica em volume.
                 numero_processo, volume_proc = '', origem
+        elif grupo == GRUPO_PADRAO:
+            # Liquidação (Excel): PROCESSO ORIGEM → Nº processo;
+            # PROCESSO PAGAMENTO → processo_pagamento. Não usa volume.
+            numero_processo = origem or pagamento
+            processo_pag = pagamento or ''
+            volume_proc = ''
         else:
-            # Pagamento = nº na planilha; origem fica em volume.
+            # Demais grupos: uma coluna de processo.
             numero_processo = pagamento or origem
-            volume_proc = (
-                origem
-                if pagamento and origem and pagamento != origem
-                else ''
-            )
+            volume_proc = ''
         # Amarelo = “saiu sem análise” só em Liquidação, sem processo
         # (pagamento/origem vazios) e com nº ≤ 1900. Acima disso o
         # amarelo é só destaque visual na planilha deles.
@@ -2818,8 +2885,9 @@ def _importar_linhas_aba(
         # Amarelo só conta como "saiu sem análise" se tiver algum dado
         # (data, relator, processo…). Só tinta amarela em linha vazia não entra.
         tem_conteudo = any((
-            numero_processo, volume_proc, data, nota_data, analista,
-            secretaria, contratada, objeto, periodo, destino, valor,
+            numero_processo, processo_pag, volume_proc, data, nota_data,
+            analista, secretaria, contratada, objeto, periodo, destino,
+            valor,
         ))
         if not tem_conteudo:
             continue
@@ -2833,11 +2901,6 @@ def _importar_linhas_aba(
             obs.append(nota_data)
         if obs_planilha:
             obs.append(obs_planilha)
-        if (
-            origem and pagamento and origem != pagamento
-            and grupo not in ('BOLSA_ATLETA', 'AUXILIO_COMPETICAO')
-        ):
-            obs.append(f'Processo origem: {origem}')
 
         dados = {
             'numero_processo': numero_processo,
@@ -2858,6 +2921,7 @@ def _importar_linhas_aba(
             'situacao_linha': LinhaControleRelatorio.SITUACAO_HISTORICA,
             'sem_relatorio': amarela,
             'volume': volume_proc,
+            'processo_pagamento': processo_pag,
             'status_analise': '',
         }
 
@@ -2978,6 +3042,7 @@ def _religar_vinculos_ativos(grupo, vinculos):
             'periodo': linha.periodo,
             'destino': linha.destino,
             'volume': linha.volume,
+            'processo_pagamento': linha.processo_pagamento,
             'observacao': linha.observacao,
             'data_relatorio': linha.data_relatorio,
         })
@@ -3359,6 +3424,7 @@ def buscar_para_nova_analise(usuario, numero_processo, grupo=GRUPO_PADRAO):
         'dados': {
             'numero_processo': numero,
             'volume': '',
+            'processo_pagamento': '',
             'numero_relatorio': '',
             'data_relatorio': timezone.localdate().isoformat(),
             'secretaria': '',
@@ -3408,6 +3474,7 @@ def buscar_para_nova_analise(usuario, numero_processo, grupo=GRUPO_PADRAO):
         if anterior is not None:
             base['dados'].update({
                 'volume': anterior.volume or '',
+                'processo_pagamento': anterior.processo_pagamento or '',
                 'secretaria': anterior.secretaria or '',
                 'contratada': anterior.contratada or '',
                 'objeto': anterior.objeto or '',
@@ -3435,6 +3502,11 @@ def buscar_para_nova_analise(usuario, numero_processo, grupo=GRUPO_PADRAO):
         'volume': (
             (dados_proc.get('volume') if dados_proc else None)
             or processo.volume or ''
+        ),
+        'processo_pagamento': (
+            (dados_proc.get('processo_pagamento') if dados_proc else None)
+            or getattr(processo, 'processo_pagamento', None)
+            or ''
         ),
         'secretaria': processo.secretaria or '',
         'contratada': processo.contratada or '',
@@ -3530,8 +3602,11 @@ def salvar_nova_analise(usuario, dados):
 
     analista = str(dados.get('analista') or '').strip()[:255] or _nome_usuario(
         usuario)
+    processo_pagamento = str(
+        dados.get('processo_pagamento') or '').strip()[:255]
     campos = {
         'volume': str(dados.get('volume') or '').strip()[:255],
+        'processo_pagamento': processo_pagamento,
         'secretaria': str(dados.get('secretaria') or '').strip()[:255],
         'contratada': str(dados.get('contratada') or '').strip()[:255],
         'objeto': str(dados.get('objeto') or '').strip(),
@@ -3547,6 +3622,9 @@ def salvar_nova_analise(usuario, dados):
     processo, criado = _garantir_processo_nova_analise(
         usuario, numero_processo, grupo, campos)
 
+    # Relator do select — usado em registrar() / planilha.
+    processo._analista_relator = campos['analista']
+
     # Espelha campos da análise no processo (número só depois, se pedido).
     processo.secretaria = campos['secretaria'] or processo.secretaria
     processo.contratada = campos['contratada'] or processo.contratada
@@ -3561,6 +3639,12 @@ def salvar_nova_analise(usuario, dados):
     if campos['status_analise']:
         processo.status_analise = campos['status_analise']
     processo.volume = campos['volume'] or processo.volume
+    if grupo == GRUPO_PADRAO:
+        processo.processo_pagamento = (
+            campos['processo_pagamento']
+            or processo.processo_pagamento
+            or numero_processo[:255]
+        )
     processo.sem_relatorio = sem_relatorio
     if grupo in ('BOLSA_ATLETA', 'AUXILIO_COMPETICAO'):
         processo.processo_prestacao = numero_processo[:255]

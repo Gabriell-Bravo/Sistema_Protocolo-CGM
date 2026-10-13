@@ -173,6 +173,7 @@ def controle_relatorio(request):
         'processos_para_assumir': list(
             tramitacao.disponiveis_para_assumir(request.user)),
         'pode_assumir_modal': perm.pode_nova_analise(request.user),
+        'analistas_relator': perm.opcoes_relator(perm.GRUPO_LIQUIDACOES),
         **perm.contexto_de_permissoes(request.user),
     })
 

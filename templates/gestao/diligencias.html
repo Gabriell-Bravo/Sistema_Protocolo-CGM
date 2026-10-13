@@ -53,6 +53,7 @@
                 <thead>
                     <tr>
                         <th>Processo</th>
+                        <th>Volume</th>
                         <th>Secretaria</th>
                         <th>Diligência</th>
                         <th>Analista responsável</th>
@@ -64,6 +65,7 @@
                     {% for pendencia in pendencias %}
                     <tr class="{{ pendencia.processo.prioridade_linha_class }}">
                         <td><strong>{{ pendencia.processo.numero_processo }}</strong></td>
+                        <td>{{ pendencia.processo.volume|default:"—" }}</td>
                         <td>{{ pendencia.processo.secretaria }}</td>
                         <td class="cell-wrap">{{ pendencia.descricao }}</td>
                         <td>{{ pendencia.responsavel_tecnico|default:'—' }}</td>
@@ -95,7 +97,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6">
+                        <td colspan="7">
                             <div class="empty empty--compact">
                                 <span class="material-symbols-rounded">inbox</span>
                                 <div class="empty__title">{% if termo %}Nenhuma diligência encontrada{% else %}Nenhuma diligência nesta situação{% endif %}</div>

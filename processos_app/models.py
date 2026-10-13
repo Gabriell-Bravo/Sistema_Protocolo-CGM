@@ -76,6 +76,10 @@ class Processo(models.Model):
     processo_prestacao = models.CharField(
         max_length=255, blank=True, default='',
         verbose_name="Processo de prestação")
+    # Liquidação: PROCESSO PAGAMENTO da planilha (Nº processo = numero_processo).
+    processo_pagamento = models.CharField(
+        max_length=255, blank=True, default='',
+        verbose_name="Processo de pagamento")
     secretaria = models.CharField(max_length=255, verbose_name="Secretaria")
     data_entrada = models.DateField(verbose_name="Data de Entrada")
     hora_entrada = models.TimeField(verbose_name="Hora de Entrada")
@@ -808,6 +812,9 @@ class LinhaControleRelatorio(models.Model):
         related_name='linha_relatorio', verbose_name="Processo")
     numero_processo = models.CharField(max_length=255, verbose_name="Nº do processo")
     volume = models.CharField(max_length=255, blank=True, verbose_name="Volume")
+    processo_pagamento = models.CharField(
+        max_length=255, blank=True, default='',
+        verbose_name="Processo de pagamento")
     numero_relatorio = models.CharField(
         max_length=50, blank=True, default='', verbose_name="Nº do relatório")
     sem_relatorio = models.BooleanField(

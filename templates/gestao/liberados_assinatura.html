@@ -6,61 +6,74 @@
 
 {% block content %}
 <div class="stack">
-    <section class="card">
-        {% if processos %}
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Processo</th>
-                    <th>Secretaria</th>
-                    <th>Espécie</th>
-                    <th>Contratada</th>
-                    <th>Objeto</th>
-                    <th>Volumes</th>
-                    <th>Analisado por</th>
-                    <th>Liberado por</th>
-                    <th>Liberado em</th>
-                    {% if pode_devolver_da_assinatura or pode_desfazer_tramite %}
-                        <th class="col-actions">Ações</th>
-                    {% endif %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for processo in processos %}
-                <tr class="{{ processo.prioridade_linha_class }}">
-                    <td>{{ processo.numero_processo }}</td>
-                    <td>{{ processo.secretaria }}</td>
-                    <td>{{ processo.especie|default:"—" }}</td>
-                    <td>{{ processo.contratada|default:"—" }}</td>
-                    <td class="cell-wrap">{{ processo.objeto|truncatechars:80|default:"—" }}</td>
-                    <td>{{ processo.volume }}</td>
-                    <td>{{ processo.nome_analista|default:"—" }}</td>
-                    <td>{{ processo.liberado_assinatura_por|default:"—" }}</td>
-                    <td>{{ processo.liberado_assinatura_em|date:"d/m/Y H:i"|default:"—" }}</td>
-                    {% if pode_devolver_da_assinatura or pode_desfazer_tramite %}
-                    <td class="col-actions">
-                        <div class="actions">
-                            {% if pode_devolver_da_assinatura %}
-                            <button type="button" class="btn btn--outline btn--sm"
-                                    data-modal-open="modalDevolver"
-                                    data-devolver="{{ processo.id }}"
-                                    data-numero="{{ processo.numero_processo }}"
-                                    data-grupo="{{ processo.genero }}">
-                                <span class="material-symbols-rounded">undo</span>
-                                Devolver
-                            </button>
-                            {% endif %}
-                            {% include "includes/botao_desfazer.html" %}
-                        </div>
-                    </td>
-                    {% endif %}
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="empty">Nenhum processo aguardando assinatura.</p>
-        {% endif %}
+    <section class="table-card">
+        <div class="table-card__header">
+            <span class="table-card__title">Liberados para assinatura</span>
+            <span class="table-card__count">{{ total }} processo{{ total|pluralize:"s" }}</span>
+        </div>
+        <div class="table-scroll">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th class="col-sticky">Processo</th>
+                        <th>Volume</th>
+                        <th>Secretaria</th>
+                        <th>Espécie</th>
+                        <th>Contratada</th>
+                        <th>Objeto</th>
+                        <th>Analisado por</th>
+                        <th>Liberado por</th>
+                        <th>Liberado em</th>
+                        {% if pode_devolver_da_assinatura or pode_desfazer_tramite %}
+                            <th class="col-actions">Ações</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for processo in processos %}
+                    <tr class="{{ processo.prioridade_linha_class }}">
+                        <td class="col-sticky"><strong>{{ processo.numero_processo }}</strong></td>
+                        <td>{{ processo.volume|default:"—" }}</td>
+                        <td>{{ processo.secretaria }}</td>
+                        <td>{{ processo.especie|default:"—" }}</td>
+                        <td>{{ processo.contratada|default:"—" }}</td>
+                        <td class="cell-wrap">
+                            <span class="cell-preview">{{ processo.objeto|truncatechars:80|default:"—" }}</span>
+                        </td>
+                        <td>{{ processo.nome_analista|default:"—" }}</td>
+                        <td>{{ processo.liberado_assinatura_por|default:"—" }}</td>
+                        <td>{{ processo.liberado_assinatura_em|date:"d/m/Y H:i"|default:"—" }}</td>
+                        {% if pode_devolver_da_assinatura or pode_desfazer_tramite %}
+                        <td class="col-actions">
+                            <div class="actions">
+                                {% if pode_devolver_da_assinatura %}
+                                <button type="button" class="btn btn--outline btn--sm"
+                                        data-modal-open="modalDevolver"
+                                        data-devolver="{{ processo.id }}"
+                                        data-numero="{{ processo.numero_processo }}"
+                                        data-grupo="{{ processo.genero }}">
+                                    <span class="material-symbols-rounded">undo</span>
+                                    Devolver
+                                </button>
+                                {% endif %}
+                                {% include "includes/botao_desfazer.html" %}
+                            </div>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="{% if pode_devolver_da_assinatura or pode_desfazer_tramite %}10{% else %}9{% endif %}">
+                            <div class="empty empty--compact">
+                                <span class="material-symbols-rounded">draw</span>
+                                <div class="empty__title">Nenhum processo aguardando assinatura</div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </section>
 </div>
 

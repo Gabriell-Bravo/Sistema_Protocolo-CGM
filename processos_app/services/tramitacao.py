@@ -986,7 +986,10 @@ def disponiveis_para_assumir(usuario):
 
     Já assumidos (EM_ANALISE) ou com o Controlador não entram — o próximo
     analista não vê o que outro já pegou. Processos da CGM ficam de fora.
+    Ordem: Urgente → Prioritário → Normal; depois entrada mais antiga.
     """
+    from django.db.models import Case, IntegerField, When
+
     from . import permissions as perm
     from .secretaria_cgm import excluir_processos_cgm
 
@@ -1003,7 +1006,17 @@ def disponiveis_para_assumir(usuario):
         )
         .select_related('prioridade_fk', 'especie_fk', 'analista_responsavel')
     )
-    return consulta.order_by('data_entrada', 'hora_entrada', 'numero_processo')
+    return consulta.annotate(
+        _prio=Case(
+            When(prioridade_fk__codigo='URGENTE', then=0),
+            When(prioridade='URGENTE', then=0),
+            When(prioridade_fk__codigo='PRIORITARIO', then=1),
+            When(prioridade='PRIORITARIO', then=1),
+            When(prioridade__in=['SIM'], then=1),
+            default=2,
+            output_field=IntegerField(),
+        )
+    ).order_by('_prio', 'data_entrada', 'hora_entrada', 'numero_processo')
 
 
 def finalizados():

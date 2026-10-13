@@ -11,13 +11,24 @@
         <div class="modal__body">
             <p class="field__hint" style="margin:0 0 14px;">
                 Processos da aba <strong>Pendentes</strong> de Processos Ativos, ainda disponíveis.
+                Lista ordenada por prioridade (Urgente → Prioritário → Normal) e data de entrada.
                 Ao clicar em <strong>Assumir</strong>, o processo fica com você e abre a análise.
-                Quem já está em análise ou com o Controlador não aparece aqui.
             </p>
+            {% if processos_para_assumir %}
+            <div class="search" style="margin:0 0 14px;">
+                <div class="search__field" style="flex:1;">
+                    <span class="material-symbols-rounded search__icon">search</span>
+                    <input type="search" id="assumirBusca" class="input"
+                           placeholder="Buscar por nº do processo, secretaria, espécie, prioridade…"
+                           autocomplete="off" aria-label="Pesquisar processo para assumir">
+                </div>
+            </div>
+            {% endif %}
             <div class="table-scroll">
-                <table class="table">
+                <table class="table" id="tabelaAssumir">
                     <thead>
                         <tr>
+                            <th>Prioridade</th>
                             <th class="col-sticky">Processo</th>
                             <th>Volume</th>
                             <th>Espécie</th>
@@ -29,7 +40,9 @@
                     </thead>
                     <tbody>
                         {% for processo in processos_para_assumir %}
-                        <tr class="{{ processo.prioridade_linha_class }}">
+                        <tr class="{{ processo.prioridade_linha_class }}"
+                            data-assumir-busca="{{ processo.numero_processo }} {{ processo.volume }} {{ processo.especie }} {{ processo.secretaria }} {{ processo.prioridade_display }} {{ processo.situacao_exibicao }}">
+                            <td>{% include "includes/badge_prioridade.html" with processo=processo %}</td>
                             <td class="col-sticky"><strong>{{ processo.numero_processo }}</strong></td>
                             <td>{{ processo.volume|default:'—' }}</td>
                             <td>{{ processo.especie|default:'—' }}</td>
@@ -57,8 +70,8 @@
                             </td>
                         </tr>
                         {% empty %}
-                        <tr>
-                            <td colspan="7">
+                        <tr id="assumirVazioLista">
+                            <td colspan="8">
                                 <div class="empty empty--compact">
                                     <span class="material-symbols-rounded">inbox</span>
                                     <div class="empty__title">Nenhum processo disponível para assumir</div>
@@ -67,10 +80,63 @@
                             </td>
                         </tr>
                         {% endfor %}
+                        {% if processos_para_assumir %}
+                        <tr id="assumirVazioBusca" hidden>
+                            <td colspan="8">
+                                <div class="empty empty--compact">
+                                    <span class="material-symbols-rounded">search_off</span>
+                                    <div class="empty__title">Nenhum processo encontrado</div>
+                                    <div>Ajuste o termo da pesquisa ou limpe o campo.</div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endif %}
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
 </div>
+<script>
+(function () {
+    var modal = document.getElementById('modalAssumir');
+    if (!modal) return;
+    var campo = document.getElementById('assumirBusca');
+    var tabela = document.getElementById('tabelaAssumir');
+    if (!campo || !tabela) return;
+    var vazioBusca = document.getElementById('assumirVazioBusca');
+
+    function normalizar(texto) {
+        return String(texto || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .trim();
+    }
+
+    function filtrar() {
+        var termo = normalizar(campo.value);
+        var linhas = tabela.querySelectorAll('tbody tr[data-assumir-busca]');
+        var visiveis = 0;
+        linhas.forEach(function (tr) {
+            var texto = normalizar(tr.getAttribute('data-assumir-busca'));
+            var ok = !termo || texto.indexOf(termo) !== -1;
+            tr.hidden = !ok;
+            if (ok) visiveis += 1;
+        });
+        if (vazioBusca) vazioBusca.hidden = visiveis > 0 || !termo;
+    }
+
+    campo.addEventListener('input', filtrar);
+    campo.addEventListener('search', filtrar);
+
+    document.querySelectorAll('[data-modal-open="modalAssumir"]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            campo.value = '';
+            filtrar();
+            setTimeout(function () { campo.focus(); }, 50);
+        });
+    });
+})();
+</script>
 {% endif %}

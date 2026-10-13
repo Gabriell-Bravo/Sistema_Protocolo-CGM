@@ -1722,8 +1722,8 @@ class ControleRelatorioTest(BaseProcessoTestCase):
 
         hist = LinhaControleRelatorio.objects.get(numero_relatorio='5')
         self.assertEqual(hist.situacao_linha, 'HISTORICA')
-        self.assertEqual(hist.numero_processo, '200/2026')
-        self.assertIn('origem: 100/2025', hist.observacao)
+        self.assertEqual(hist.numero_processo, '100/2025')
+        self.assertEqual(hist.processo_pagamento, '200/2026')
         self.assertEqual(hist.analista, 'Ana Teste')
         self.assertTrue(hist.valor.startswith('R$'))
 
@@ -1759,6 +1759,8 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         planilha = self.client.get(
             reverse('controle_relatorio') + '?aba=LIQUIDACOES&secao=analises')
         self.assertContains(planilha, 'tr-relatorio-historico')
+        self.assertContains(planilha, 'Processo de pagamento')
+        self.assertContains(planilha, '100/2025')
         self.assertContains(planilha, '200/2026')
         self.assertContains(planilha, '56 A')
 
@@ -1866,7 +1868,8 @@ class ControleRelatorioTest(BaseProcessoTestCase):
 
         destacado = LinhaControleRelatorio.objects.get(numero_relatorio='77')
         self.assertEqual(destacado.situacao_linha, 'HISTORICA')
-        self.assertEqual(destacado.numero_processo, '200/2026')
+        self.assertEqual(destacado.numero_processo, '100/2025')
+        self.assertEqual(destacado.processo_pagamento, '200/2026')
         self.assertFalse(destacado.sem_relatorio)
         self.assertNotIn('sem análise', (destacado.observacao or '').casefold())
 
@@ -2355,17 +2358,21 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertEqual(resp.status_code, 302)
 
         # Linhas históricas da planilha (inclui fórmula → valor correto).
+        # Liquidação: PROCESSO ORIGEM → Nº processo; PAGAMENTO → processo_pagamento.
         saibro = LinhaControleRelatorio.objects.get(numero_relatorio='1319')
-        self.assertEqual(saibro.numero_processo, '13673/2025')
+        self.assertEqual(saibro.numero_processo, '6100/2023')
+        self.assertEqual(saibro.processo_pagamento, '13673/2025')
         self.assertEqual(saibro.valor, 'R$ 3.478.525,50')
         self.assertEqual(saibro.periodo, '01/06/2026')
         self.assertEqual(saibro.situacao_linha, 'HISTORICA')
 
         pagto = LinhaControleRelatorio.objects.get(numero_relatorio='1320')
         self.assertEqual(pagto.numero_processo, '88881/2026')
+        self.assertEqual(pagto.processo_pagamento, '88881/2026')
 
         med = LinhaControleRelatorio.objects.get(numero_relatorio='1322')
-        self.assertEqual(med.numero_processo, '55551/2026')
+        self.assertEqual(med.numero_processo, '100/2024')
+        self.assertEqual(med.processo_pagamento, '55551/2026')
 
         reservado = LinhaControleRelatorio.objects.get(numero_relatorio='1321')
         self.assertTrue(reservado.sem_relatorio)
