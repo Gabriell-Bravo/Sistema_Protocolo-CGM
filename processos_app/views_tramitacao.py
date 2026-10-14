@@ -258,11 +258,16 @@ def liberados_para_assinatura(request):
     Protocolo" — essas etapas não são registradas no sistema.
     O analista consulta só o próprio grupo, sem ação.
     """
-    processos = perm.filtrar_por_grupo(
-        request.user, tramitacao.liberados_para_assinatura())
+    processos = list(perm.filtrar_por_grupo(
+        request.user, tramitacao.liberados_para_assinatura()))
+    for processo in processos:
+        processo.pode_editar_analise = (
+            perm.eh_administrador(request.user)
+            or perm.pode_analisar_processo(request.user, processo)
+        )
     return render(request, 'gestao/liberados_assinatura.html', {
         'processos': processos,
-        'total': processos.count(),
+        'total': len(processos),
         'analistas': opcoes_de_analistas(),
         **perm.contexto_de_permissoes(request.user),
     })

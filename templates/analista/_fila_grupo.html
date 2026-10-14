@@ -67,7 +67,7 @@
                                     <span class="material-symbols-rounded">edit_note</span>
                                     Analisar
                                 </a>
-                                {% if not modo_gestao %}
+                                {% if not modo_gestao and processo.pode_declinar %}
                                 <form method="post" action="{% url 'tram_declinar_analise' processo.id %}"
                                       data-confirm="Devolver este processo à fila?
 
@@ -112,7 +112,7 @@ A análise em andamento será limpa (incluindo número de relatório, se houver)
                                     <span class="material-symbols-rounded">edit_note</span>
                                     Analisar
                                 </a>
-                                {% if not modo_gestao %}
+                                {% if not modo_gestao and processo.pode_declinar %}
                                 <form method="post" action="{% url 'tram_declinar_analise' processo.id %}"
                                       data-confirm="Devolver este processo à fila?
 
@@ -135,12 +135,14 @@ A análise em andamento será limpa (incluindo número de relatório, se houver)
                                     {{ processo.nome_analista }}
                                 </span>
                                 {% endif %}
-                                <a href="{% url 'analista_processo' processo.id %}" class="btn btn--outline btn--sm">
+                                <a href="{% url 'analista_processo' processo.id %}{% if modo_gestao %}?next={% url 'gestao_processos' %}{% endif %}"
+                                   class="btn btn--outline btn--sm"
+                                   title="{% if modo_gestao and processo.genero == 'LICITACOES_E_CONTRATOS' %}Ver análise{% else %}Visualizar processo{% endif %}">
                                     <span class="material-symbols-rounded">visibility</span>
-                                    Ver
+                                    {% if modo_gestao and processo.genero == 'LICITACOES_E_CONTRATOS' %}Ver análise{% else %}Ver{% endif %}
                                 </a>
                                 {% if modo_gestao or pode_desfazer_tramite %}
-                                {% if processo.situacao_tramite == 'EM_ANALISE' %}
+                                {% if processo.pode_declinar %}
                                 <form method="post" action="{% url 'tram_declinar_analise' processo.id %}"
                                       data-confirm="Devolver este processo à fila?
 
@@ -156,12 +158,11 @@ A análise em andamento será limpa (incluindo número de relatório, se houver)
                                         Devolver à fila
                                     </button>
                                 </form>
-                                {% elif pode_desfazer_tramite %}
+                                {% elif pode_desfazer_tramite and processo.situacao_tramite != 'EM_ANALISE' %}
                                     {% include "includes/botao_desfazer.html" %}
                                 {% endif %}
                                 {% endif %}
-                            {% endif %}
-                        </div>
+                            {% endif %}                        </div>
                     </td>
                 </tr>
                 {% empty %}

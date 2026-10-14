@@ -39,7 +39,6 @@ def _diligencias_visiveis(usuario, status):
 
 ABAS_DILIGENCIA = (
     ('AGUARDANDO_ATENDIMENTO', 'Aguardando atendimento'),
-    ('ATENDIMENTO_INDICADO', 'Atendimento indicado'),
     ('RESOLVIDA', 'Finalizados'),
 )
 
@@ -48,17 +47,14 @@ ABAS_DILIGENCIA = (
 @perm.exige(perm.pode_consultar_assinatura_e_diligencias,
             'Área da Gestão e consulta dos analistas.')
 def diligencias(request):
-    """Lista prioritariamente as pendências em AGUARDANDO_ATENDIMENTO.
+    """Lista diligências abertas ou finalizadas (todas do processo resolvidas).
 
-    Exibe só o que o documento pede: processo, Secretaria, descrição,
-    analista responsável, tempo decorrido e a ação.
-
-    Não há botão para registrar telefonema, e-mail ou cobrança: esses atos
-    são operacionais e não entram no sistema (item 25).
-    O analista consulta o próprio grupo; indicar atendimento continua da Gestão.
+    Gestão/admin concluem direto. Progresso do processo aparece como N/M.
     """
     status = request.GET.get('status', 'AGUARDANDO_ATENDIMENTO')
-    if status not in dict(Pendencia.STATUS_CHOICES) and status != 'ABERTAS':
+    if status == 'ATENDIMENTO_INDICADO':
+        status = 'AGUARDANDO_ATENDIMENTO'
+    if status not in dict(ABAS_DILIGENCIA) and status != 'ABERTAS':
         status = 'AGUARDANDO_ATENDIMENTO'
     termo = request.GET.get('termo', '').strip()
 
@@ -67,13 +63,15 @@ def diligencias(request):
     if status == 'RESOLVIDA':
         from django.db.models import F
         lista = lista.order_by(F('resolvida_em').desc(nulls_last=True), '-id')
+    pendencias = list(lista)
+    svc.anotar_progresso(pendencias)
     titulos = dict(ABAS_DILIGENCIA)
-    titulo_aba = titulos.get(status) or dict(Pendencia.STATUS_CHOICES).get(status, '')
+    titulo_aba = titulos.get(status) or 'Aguardando atendimento'
     if status == 'ABERTAS':
         titulo_aba = 'Todas as abertas'
     return render(request, 'gestao/diligencias.html', {
-        'pendencias': lista,
-        'total': lista.count(),
+        'pendencias': pendencias,
+        'total': len(pendencias),
         'status_atual': status,
         'titulo_aba': titulo_aba,
         'status_choices': Pendencia.STATUS_CHOICES,
@@ -131,18 +129,52 @@ def imprimir_checklist(request, process_id):
 
 @login_required
 @require_POST
-def indicar_atendimento(request, pendencia_id):
-    """item 29: apenas a Gestão."""
+def importar_planilha_diligencias(request):
+    """Gestão/admin sobe o Excel CONTROLE DE PENDÊNCIAS."""
+    from .services import importar_diligencias as svc_import
+
     try:
-        svc.indicar_atendimento(
-            pendencia_id, request.user,
-            request.POST.getlist('itens_concluidos'))
-        messages.success(
-            request,
-            'Atendimento indicado. A diligência foi para o analista avaliar.')
+        resultado = svc_import.importar_planilha(
+            request.user, request.FILES.get('planilha'))
+        texto = (
+            f'Importação: {resultado["criadas"]} diligência(s) nova(s)'
+            f', {resultado["ignoradas"]} já existente(s) ignorada(s)'
+            f' (de {resultado["lidas"]} linha(s) lida(s)).'
+        )
+        if resultado['processos_novos']:
+            texto += (
+                f' {resultado["processos_novos"]} processo(s) criado(s) '
+                'para vincular pendências sem cadastro.')
+        if resultado['saneadas']:
+            texto += f' {resultado["saneadas"]} já veio(ram) com data de saneamento.'
+        messages.success(request, texto)
     except (PermissionDenied, ValidationError) as exc:
         _erro(request, exc)
     return redirect('gestao_diligencias')
+
+
+@login_required
+@require_POST
+def indicar_atendimento(request, pendencia_id):
+    """Conclui a diligência (Gestão/admin). Mantém o nome da URL legado."""
+    destino = request.POST.get('next') or 'gestao_diligencias'
+    try:
+        svc.concluir(
+            pendencia_id, request.user,
+            request.POST.getlist('itens_concluidos'))
+        messages.success(request, 'Diligência concluída.')
+    except (PermissionDenied, ValidationError) as exc:
+        _erro(request, exc)
+    if destino == 'gestao_diligencias' or not str(destino).startswith('/'):
+        return redirect('gestao_diligencias')
+    return redirect(destino)
+
+
+@login_required
+@require_POST
+def concluir_pendencia(request, pendencia_id):
+    """Gestão/admin marcam a diligência como completa."""
+    return indicar_atendimento(request, pendencia_id)
 
 
 @login_required

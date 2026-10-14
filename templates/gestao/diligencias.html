@@ -2,7 +2,7 @@
 
 {% block title %}Diligências{% endblock %}
 {% block page_title %}Diligências{% endblock %}
-{% block page_subtitle %}{% if is_analista %}Consulta das diligências do seu grupo. A indicação de atendimento é da Gestão.{% elif status_atual == 'RESOLVIDA' %}Diligências que o analista confirmou.{% elif status_atual == 'ATENDIMENTO_INDICADO' %}Atendimento já indicado, aguardando o analista confirmar.{% else %}Diligências levantadas pelos analistas, aguardando atendimento da Secretaria.{% endif %}{% endblock %}
+{% block page_subtitle %}{% if is_analista %}Consulta das diligências do seu grupo. A conclusão é da Gestão ou do administrador.{% elif status_atual == 'RESOLVIDA' %}Processos em que todas as diligências foram concluídas.{% else %}Diligências abertas. Conclua cada uma; o processo vai para Finalizados quando todas estiverem completas.{% endif %}{% endblock %}
 
 {% block content %}
 <div class="stack">
@@ -18,7 +18,7 @@
     </section>
 
     <section class="filters">
-        <div class="filters__bar">
+        <div class="filters__bar" style="flex-wrap:wrap;gap:12px;">
             <form method="get" class="search">
                 <input type="hidden" name="status" value="{{ status_atual }}">
                 <div class="search__field">
@@ -32,6 +32,23 @@
                 <a href="?status={{ status_atual }}" class="btn btn--outline">Limpar</a>
                 {% endif %}
             </form>
+            {% if pode_concluir_pendencia %}
+            <form method="post" action="{% url 'gestao_diligencias_importar' %}"
+                  enctype="multipart/form-data" class="search" style="gap:8px;">
+                {% csrf_token %}
+                <input type="file" name="planilha" class="input" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required
+                       title="Planilha CONTROLE DE PENDÊNCIAS">
+                <button type="submit" class="btn btn--outline"
+                        data-confirm="Importar diligências desta planilha?
+
+Linhas já existentes no mesmo processo (mesmo texto) serão ignoradas."
+                        data-confirm-title="Importar pendências"
+                        data-confirm-ok="Importar">
+                    <span class="material-symbols-rounded">upload_file</span>
+                    Importar Excel
+                </button>
+            </form>
+            {% endif %}
         </div>
     </section>
 
@@ -44,36 +61,43 @@
             <span class="table-card__count">{{ total }} diligência{{ total|pluralize:"s" }}</span>
         </div>
 
-        <div class="table-scroll">
-            <table class="table">
+        <div class="table-scroll table-scroll--fila">
+            <table class="table table--diligencias">
                 <thead>
                     <tr>
-                        <th>Processo</th>
+                        <th class="col-sticky">Processo</th>
                         <th>Volume</th>
                         <th>Secretaria</th>
                         <th>Diligência</th>
-                        <th>Analista responsável</th>
-                        <th>Tempo decorrido</th>
+                        <th>Analista</th>
+                        <th>Tempo</th>
                         <th class="col-actions">Ação</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for pendencia in pendencias %}
                     <tr class="{{ pendencia.processo.prioridade_linha_class }}">
-                        <td><strong>{{ pendencia.processo.numero_processo }}</strong></td>
+                        <td class="col-sticky">
+                            <strong>{{ pendencia.processo.numero_processo }}</strong>
+                            {% if pendencia.progresso_total %}
+                            <div class="cell-muted">{{ pendencia.progresso_rotulo }}</div>
+                            {% endif %}
+                        </td>
                         <td>{{ pendencia.processo.volume|default:"—" }}</td>
-                        <td>{{ pendencia.processo.secretaria }}</td>
+                        <td class="cell-wrap cell-secretaria">{{ pendencia.processo.secretaria }}</td>
                         <td class="cell-wrap cell-diligencia">
-                            <button type="button" class="dil-texto"
-                                    data-checklist-ver="{{ pendencia.id }}"
-                                    data-processo="{{ pendencia.processo.numero_processo }}">
-                                {{ pendencia.descricao }}
-                            </button>
+                            <div class="dil-preview"
+                                 role="button" tabindex="0"
+                                 data-checklist-ver="{{ pendencia.id }}"
+                                 data-processo="{{ pendencia.processo.numero_processo }}"
+                                 title="Ver checklist">
+                                {% include "includes/checklist_diligencia.html" with texto=pendencia.descricao concluidos=pendencia.itens_concluidos %}
+                            </div>
                             {{ pendencia.checklist|json_script:pendencia.checklist_script_id }}
                         </td>
                         <td>{{ pendencia.responsavel_tecnico|default:'—' }}</td>
-                        <td>
-                            {{ pendencia.dias_decorridos }} dia{{ pendencia.dias_decorridos|pluralize:"s" }}
+                        <td class="cell-tempo">
+                            <strong>{{ pendencia.dias_decorridos }} dia{{ pendencia.dias_decorridos|pluralize:"s" }}</strong>
                             <div class="cell-muted">desde {{ pendencia.criada_em|date:"d/m/Y" }}</div>
                         </td>
                         <td class="col-actions">
@@ -83,23 +107,22 @@
                                title="Imprimir checklist">
                                 <span class="material-symbols-rounded">print</span>
                             </a>
-                            {% if pode_indicar_atendimento and pendencia.status == 'AGUARDANDO_ATENDIMENTO' %}
+                            {% if pendencia.progresso_total and status_atual != 'RESOLVIDA' %}
+                            <span class="badge {% if pendencia.processo_todas_completas %}badge--success{% else %}badge--warning{% endif %}">
+                                {{ pendencia.progresso_rotulo }}
+                            </span>
+                            {% endif %}
+                            {% if pode_concluir_pendencia and pendencia.status != 'RESOLVIDA' and pendencia.status != 'CANCELADA' %}
                             <button type="button" class="btn btn--primary btn--sm"
                                     data-checklist-indicar="{{ pendencia.id }}"
                                     data-processo="{{ pendencia.processo.numero_processo }}"
-                                    data-action="{% url 'pend_indicar_atendimento' pendencia.id %}">
-                                <span class="material-symbols-rounded">assignment_turned_in</span>
-                                Indicar atendimento
+                                    data-action="{% url 'pend_concluir' pendencia.id %}">
+                                <span class="material-symbols-rounded">task_alt</span>
+                                Concluir
                             </button>
-                            {% elif pendencia.status == 'ATENDIMENTO_INDICADO' %}
-                            <span class="badge">
-                                Com {{ pendencia.responsavel_tecnico|default:'o analista' }}
-                                desde {{ pendencia.atendimento_indicado_em|date:"d/m/Y" }}
-                            </span>
-                            {% include "includes/botao_desfazer_indicacao.html" %}
                             {% elif pendencia.status == 'RESOLVIDA' %}
                             <span class="badge badge--success">
-                                Confirmada{% if pendencia.resolvida_em %} em {{ pendencia.resolvida_em|date:"d/m/Y" }}{% endif %}
+                                Concluída{% if pendencia.resolvida_em %} em {{ pendencia.resolvida_em|date:"d/m/Y" }}{% endif %}
                             </span>
                             {% else %}
                             <span class="badge">{{ pendencia.get_status_display }}</span>
@@ -123,14 +146,13 @@
         </div>
     </section>
 
-    {% if pode_indicar_atendimento %}
+    {% if pode_concluir_pendencia %}
     <p class="cell-muted">
-        Clique no texto para ver o checklist. Em “Indicar atendimento”,
-        marque os itens que a Secretaria já atendeu. Quem conclui
-        tecnicamente continua sendo o analista.
+        Clique no texto ou em “Concluir” para marcar os itens atendidos.
+        O processo só vai para Finalizados quando todas as diligências dele estiverem completas.
     </p>
     {% else %}
-    <p class="cell-muted">Clique no texto para ver o checklist. A indicação de atendimento é da Gestão.</p>
+    <p class="cell-muted">Clique no texto para ver o checklist. A conclusão é da Gestão ou do administrador.</p>
     {% endif %}
 </div>
 
@@ -147,12 +169,12 @@
             <div class="modal__body">
                 <p class="cell-muted" id="checklistIntro" style="margin-top:0;"></p>
                 <ul class="dil-check" id="checklistLista"></ul>
-                {% if pode_indicar_atendimento %}
+                {% if pode_concluir_pendencia %}
                 <div class="form-actions" id="checklistAcoes" hidden>
                     <button type="button" class="btn btn--outline" data-modal-close="modalChecklist">Cancelar</button>
                     <button type="submit" class="btn btn--primary">
-                        <span class="material-symbols-rounded">assignment_turned_in</span>
-                        Indicar atendimento
+                        <span class="material-symbols-rounded">task_alt</span>
+                        Concluir diligência
                     </button>
                 </div>
                 {% endif %}
@@ -217,11 +239,15 @@
             lista.appendChild(vazio);
         }
         if (modo === 'indicar' && acoes) {
-            titulo.textContent = 'Indicar atendimento';
+            titulo.textContent = 'Concluir diligência';
             intro.textContent = (processo ? 'Processo ' + processo + '. ' : '')
-                + 'Marque as diligências que a Secretaria já atendeu.';
+                + 'Marque os itens atendidos e confirme a conclusão.';
             form.action = action;
             acoes.hidden = false;
+            // Por padrão marca todos — concluir a diligência = completa.
+            lista.querySelectorAll('input[type="checkbox"]').forEach(function (c) {
+                c.checked = true;
+            });
         } else {
             titulo.textContent = 'Checklist';
             intro.textContent = processo ? 'Processo ' + processo : '';
@@ -231,12 +257,16 @@
         modal.classList.add('is-open');
     }
 
+    function abrirVer(el) {
+        abrir(el.getAttribute('data-checklist-ver'), 'ver', '',
+            el.getAttribute('data-processo') || '');
+    }
+
     document.addEventListener('click', function (event) {
         var ver = event.target.closest('[data-checklist-ver]');
         if (ver) {
             event.preventDefault();
-            abrir(ver.getAttribute('data-checklist-ver'), 'ver', '',
-                ver.getAttribute('data-processo') || '');
+            abrirVer(ver);
             return;
         }
         var indicar = event.target.closest('[data-checklist-indicar]');
@@ -246,6 +276,14 @@
                 indicar.getAttribute('data-action') || '',
                 indicar.getAttribute('data-processo') || '');
         }
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        var ver = event.target.closest('[data-checklist-ver]');
+        if (!ver) return;
+        event.preventDefault();
+        abrirVer(ver);
     });
 
     form.addEventListener('submit', function (event) {

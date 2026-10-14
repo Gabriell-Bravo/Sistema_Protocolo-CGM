@@ -24,9 +24,7 @@
                         <th>Analisado por</th>
                         <th>Liberado por</th>
                         <th>Liberado em</th>
-                        {% if pode_devolver_da_assinatura or pode_desfazer_tramite %}
-                            <th class="col-actions">Ações</th>
-                        {% endif %}
+                        <th class="col-actions col-actions--compact">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -43,27 +41,65 @@
                         <td>{{ processo.nome_analista|default:"—" }}</td>
                         <td>{{ processo.liberado_assinatura_por|default:"—" }}</td>
                         <td>{{ processo.liberado_assinatura_em|date:"d/m/Y H:i"|default:"—" }}</td>
-                        {% if pode_devolver_da_assinatura or pode_desfazer_tramite %}
-                        <td class="col-actions">
-                            <div class="actions">
-                                {% if pode_devolver_da_assinatura %}
-                                <button type="button" class="btn btn--outline btn--sm"
-                                        data-modal-open="modalDevolver"
-                                        data-devolver="{{ processo.id }}"
-                                        data-numero="{{ processo.numero_processo }}"
-                                        data-grupo="{{ processo.genero }}">
-                                    <span class="material-symbols-rounded">undo</span>
-                                    Devolver
+                        <td class="col-actions col-actions--compact">
+                            <div class="row-menu">
+                                <button type="button" class="icon-btn" data-row-menu-toggle
+                                        aria-label="Ações do processo {{ processo.numero_processo }}"
+                                        aria-haspopup="menu">
+                                    <span class="material-symbols-rounded">more_vert</span>
                                 </button>
-                                {% endif %}
-                                {% include "includes/botao_desfazer.html" %}
+                                <ul class="row-menu__list" role="menu">
+                                    <li role="none">
+                                        <a role="menuitem"
+                                           href="{% url 'analista_processo' processo.id %}?next={% url 'gestao_liberados_assinatura' %}">
+                                            <span class="material-symbols-rounded">visibility</span>
+                                            Visualizar
+                                        </a>
+                                    </li>
+                                    {% if processo.pode_editar_analise %}
+                                    <li role="none">
+                                        <a role="menuitem"
+                                           href="{% url 'analista_processo' processo.id %}?next={% url 'gestao_liberados_assinatura' %}">
+                                            <span class="material-symbols-rounded">edit</span>
+                                            Editar
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if pode_devolver_da_assinatura %}
+                                    <li role="none">
+                                        <button type="button" role="menuitem"
+                                                data-modal-open="modalDevolver"
+                                                data-devolver="{{ processo.id }}"
+                                                data-numero="{{ processo.numero_processo }}"
+                                                data-grupo="{{ processo.genero }}">
+                                            <span class="material-symbols-rounded">undo</span>
+                                            Devolver
+                                        </button>
+                                    </li>
+                                    {% endif %}
+                                    {% if pode_desfazer_tramite and processo.acao_desfazer %}
+                                    <li role="none">
+                                        <form method="post" action="{% url 'tram_desfazer_tramite' processo.id %}"
+                                              data-confirm="{{ processo.acao_desfazer.confirmacao }}"
+                                              data-confirm-title="Desfazer" data-confirm-ok="Desfazer" data-confirm-danger>
+                                            {% csrf_token %}
+                                            <input type="hidden" name="motivo" value="Desfeito pelo administrador">
+                                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                            <button type="submit" role="menuitem" class="is-danger"
+                                                    title="{{ processo.acao_desfazer.rotulo }}">
+                                                <span class="material-symbols-rounded">history</span>
+                                                {{ processo.acao_desfazer.rotulo }}
+                                            </button>
+                                        </form>
+                                    </li>
+                                    {% endif %}
+                                </ul>
                             </div>
                         </td>
-                        {% endif %}
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="{% if pode_devolver_da_assinatura or pode_desfazer_tramite %}10{% else %}9{% endif %}">
+                        <td colspan="10">
                             <div class="empty empty--compact">
                                 <span class="material-symbols-rounded">draw</span>
                                 <div class="empty__title">Nenhum processo aguardando assinatura</div>

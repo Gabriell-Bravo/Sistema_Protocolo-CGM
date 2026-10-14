@@ -147,6 +147,14 @@
                     <span class="material-symbols-rounded">campaign</span>
                     <span class="nav-item__label">Diligências</span>
                 </a>
+                {% if pode_consultar_controle_analise and is_gestao and not is_analista %}
+                <a href="{% url 'controle_analise' %}"
+                   class="nav-item {% if nav == 'controle_analise' %}is-active{% endif %}"
+                   title="Controle de análise — Licitações e Contratos">
+                    <span class="material-symbols-rounded">fact_check</span>
+                    <span class="nav-item__label">Controle de análise</span>
+                </a>
+                {% endif %}
             {% endif %}
             {% if is_gestao or user.is_superuser %}
                 {% if is_gestao %}
@@ -185,6 +193,14 @@
                     <span class="material-symbols-rounded">table_chart</span>
                     <span class="nav-item__label">Controle de relatório</span>
                 </a>
+                {% if pode_consultar_controle_analise and not is_gestao %}
+                <a href="{% url 'controle_analise' %}"
+                   class="nav-item {% if nav == 'controle_analise' %}is-active{% endif %}"
+                   title="Controle de análise — Licitações e Contratos">
+                    <span class="material-symbols-rounded">fact_check</span>
+                    <span class="nav-item__label">Controle de análise</span>
+                </a>
+                {% endif %}
                 {% endif %}
             {% endif %}
 

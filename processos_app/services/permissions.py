@@ -19,6 +19,7 @@ Substitui os helpers que estavam em views.py:
 from functools import wraps
 
 from django.core.exceptions import PermissionDenied
+from django.utils import timezone
 
 # --------------------------------------------------------------------------
 # Papéis e grupos
@@ -249,9 +250,31 @@ def pode_consultar_processo(user, processo):
     return is_analista(user) and pode_ver_grupo(user, processo.genero)
 
 
+def data_numero_relatorio(processo):
+    """Data do nº de relatório (mesmo critério do Controle: data_analise)."""
+    return getattr(processo, 'data_analise', None)
+
+
+def numero_relatorio_de_outro_dia(processo):
+    """Tem nº gerado cuja data não é hoje — não-admin não devolve à fila."""
+    if not (getattr(processo, 'numero_relatorio', None) or '').strip():
+        return False
+    data = data_numero_relatorio(processo)
+    if data is None:
+        return True
+    return data != timezone.localdate()
+
+
 def pode_declinar_analise(user, processo):
-    """Devolver o processo à fila: quem assumiu, a Gestão ou o administrador."""
-    if eh_administrador(user) or is_gestao(user):
+    """Devolver o processo à fila: quem assumiu, a Gestão ou o administrador.
+
+    Com número de relatório de outro dia, só o administrador devolve.
+    """
+    if eh_administrador(user):
+        return True
+    if numero_relatorio_de_outro_dia(processo):
+        return False
+    if is_gestao(user):
         return True
     return is_analista(user) and processo.analista_responsavel_id == user.id
 
@@ -312,8 +335,13 @@ def pode_alterar_prioridade(user):
 
 
 def pode_indicar_atendimento(user):
-    """item 29: apenas a Gestão."""
-    return is_gestao(user)
+    """Legado: indicação ao analista. Preferir pode_concluir_pendencia."""
+    return is_gestao(user) or eh_administrador(user)
+
+
+def pode_concluir_pendencia(user):
+    """Gestão e admin concluem a diligência direto (sem passar pelo analista)."""
+    return is_gestao(user) or eh_administrador(user)
 
 
 def pode_desfazer_indicacao_atendimento(user):
@@ -344,6 +372,12 @@ def pode_consultar_controle_relatorio(user):
     if eh_administrador(user):
         return True
     return grupo_do_analista(user) == GRUPO_LIQUIDACOES
+
+
+def pode_consultar_controle_analise(user):
+    """Lista de Licitações e Contratos: analista do grupo, Gestão e admin."""
+    from . import controle_analise as svc_controle_analise
+    return svc_controle_analise.pode_consultar(user)
 
 
 def pode_nova_analise(user):
@@ -542,12 +576,14 @@ def contexto_de_permissoes(user):
         'pode_alterar_destino': pode_alterar_destino(user),
         'pode_alterar_prioridade': pode_alterar_prioridade(user),
         'pode_indicar_atendimento': pode_indicar_atendimento(user),
+        'pode_concluir_pendencia': pode_concluir_pendencia(user),
         'pode_desfazer_indicacao_atendimento': pode_desfazer_indicacao_atendimento(user),
         'pode_ver_dashboard': pode_ver_dashboard(user),
         'pode_gerir_pessoas': pode_gerir_pessoas(user),
         'pode_editar_cadastros': pode_editar_cadastros(user),
         'pode_cancelar_processo': pode_cancelar_processo(user),
         'pode_consultar_controle_relatorio': pode_consultar_controle_relatorio(user),
+        'pode_consultar_controle_analise': pode_consultar_controle_analise(user),
         'pode_nova_analise': pode_nova_analise(user),
         'pode_definir_ultimo_relatorio': pode_definir_ultimo_relatorio(user),
         'pode_destinar_numeros_relatorio': pode_destinar_numeros_relatorio(user),
@@ -577,12 +613,14 @@ def contexto_processor(request):
             'pode_alterar_destino': False,
             'pode_alterar_prioridade': False,
             'pode_indicar_atendimento': False,
+            'pode_concluir_pendencia': False,
             'pode_desfazer_indicacao_atendimento': False,
             'pode_ver_dashboard': False,
             'pode_gerir_pessoas': False,
             'pode_editar_cadastros': False,
             'pode_cancelar_processo': False,
             'pode_consultar_controle_relatorio': False,
+            'pode_consultar_controle_analise': False,
             'pode_nova_analise': False,
             'pode_definir_ultimo_relatorio': False,
             'pode_destinar_numeros_relatorio': False,

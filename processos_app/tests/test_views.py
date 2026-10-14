@@ -56,13 +56,17 @@ class TelasPorPapelTest(BaseProcessoTestCase):
         for nome in ('gestao_dashboard', 'gestao_processos', 'gestao_diligencias',
                      'gestao_pessoas', 'gestao_cadastros_inicio',
                      'gestao_liberados_assinatura', 'listar_processos',
-                     'listar_finalizados'):
+                     'listar_finalizados', 'controle_analise'):
             self._get(self.gestao, nome)
         for slug in ('unidades', 'especies', 'prioridades', 'tipos-indisponibilidade'):
             self._get(self.gestao, 'gestao_cadastros', slug)
         self._get(self.gestao, 'gestao_dashboard', query='?inicio=2026-01-01&fim=2026-12-31')
         # item 2: Gestão consulta a tela do processo sem praticar ato.
         self._get(self.gestao, 'analista_processo', self.processo.id)
+        # Menu Gestão expõe Controle de análise (só leitura).
+        menu = self._get(self.gestao, 'gestao_dashboard')
+        self.assertContains(menu, reverse('controle_analise'))
+        self.assertContains(menu, 'Controle de análise')
 
     def test_acessos_negados(self):
         self._get(self.analista_lic, 'gestao_cadastros_inicio', esperado=403)
@@ -112,7 +116,7 @@ class TelasPorPapelTest(BaseProcessoTestCase):
         self.assertContains(dilig, 'Falta documento')
         self.assertContains(dilig, 'data-checklist-ver')
         self.assertNotContains(dilig, 'data-checklist-indicar="')
-        self.assertContains(dilig, 'A indicação de atendimento é da Gestão.')
+        self.assertContains(dilig, 'A conclusão é da Gestão ou do administrador.')
         self.assertContains(dilig, 'name="termo"')
 
         busca = self._get(self.analista_lic, 'gestao_diligencias',
@@ -1159,3 +1163,84 @@ class ProcessosProtocoloUnificadoTest(BaseProcessoTestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertIn('/listar', resp['Location'])
         self.assertIn('termo=1243', resp['Location'])
+
+
+@override_settings(**STATIC)
+class AcessoAnaliseLicitacoesGestaoAdminTest(BaseProcessoTestCase):
+    """Gestão e Admin consultam Controle de análise e Ver em Para assinar."""
+
+    def setUp(self):
+        self.admin = criar_usuario(
+            'admin_lic_acesso', 'PROTOCOLO', is_superuser=True)
+        self.processo = self.processo_em_analise()
+        self.processo.numero_processo = 'lic-ver/2026'
+        self.processo.save(update_fields=['numero_processo'])
+        tramitacao.liberar_assinatura(self.processo.id, self.analista_lic)
+        self.processo.refresh_from_db()
+
+    def test_gestao_abre_controle_analise_sem_nova_analise(self):
+        self.client.force_login(self.gestao)
+        pagina = self.client.get(reverse('controle_analise'))
+        self.assertEqual(pagina.status_code, 200)
+        self.assertContains(pagina, 'Controle de análise')
+        # Botão Nova análise some; o subtítulo da página ainda menciona o fluxo.
+        self.assertNotContains(pagina, 'data-modal-open="modalAssumir"')
+        self.assertFalse(pagina.context.get('pode_nova_analise', True))
+        self.assertContains(pagina, reverse('controle_analise'))
+
+    def test_admin_abre_controle_analise_e_menu(self):
+        self.client.force_login(self.admin)
+        pagina = self.client.get(reverse('controle_analise'))
+        self.assertEqual(pagina.status_code, 200)
+        self.assertContains(pagina, 'Controle de análise')
+        # Admin mantém Nova análise pelas permissões atuais.
+        menu = self.client.get(reverse('manage_users'))
+        self.assertEqual(menu.status_code, 200)
+        self.assertContains(menu, reverse('controle_analise'))
+        self.assertContains(menu, 'Controle de análise')
+
+    def test_gestao_analista_processo_somente_leitura(self):
+        self.client.force_login(self.gestao)
+        pagina = self.client.get(
+            reverse('analista_processo', args=[self.processo.id]))
+        self.assertEqual(pagina.status_code, 200)
+        self.assertTrue(pagina.context['somente_leitura'])
+        self.assertNotContains(pagina, 'Assumir processo')
+        self.assertNotContains(pagina, 'Encaminhar ao Controlador')
+
+    def test_para_assinar_tem_menu_visualizar(self):
+        url_analise = reverse('analista_processo', args=[self.processo.id])
+        self.client.force_login(self.gestao)
+        pagina = self.client.get(reverse('gestao_liberados_assinatura'))
+        self.assertEqual(pagina.status_code, 200)
+        self.assertContains(pagina, 'lic-ver/2026')
+        self.assertContains(pagina, 'more_vert')
+        self.assertContains(pagina, 'Visualizar')
+        self.assertContains(pagina, url_analise)
+        self.assertContains(pagina, reverse('gestao_liberados_assinatura'))
+        # Gestão consulta em leitura — sem Editar no menu.
+        html = pagina.content.decode()
+        trecho = html.split('lic-ver/2026', 1)[1].split('</tr>', 1)[0]
+        self.assertIn('Visualizar', trecho)
+        self.assertNotIn('Editar', trecho)
+
+    def test_gestao_processos_lista_com_controlador_e_ver_analise(self):
+        """Com o Controlador aparece na Gestão de Processos (consulta/Ver)."""
+        url_analise = reverse('analista_processo', args=[self.processo.id])
+        self.client.force_login(self.gestao)
+        pagina = self.client.get(reverse('gestao_processos'))
+        self.assertEqual(pagina.status_code, 200)
+        self.assertContains(pagina, 'lic-ver/2026')
+        self.assertEqual(pagina.context['total_com_controlador'], 1)
+        self.assertContains(pagina, 'Ver análise')
+        self.assertContains(pagina, url_analise)
+
+        filtro = self.client.get(reverse('gestao_processos') + '?filtro=liberados')
+        self.assertEqual(filtro.status_code, 200)
+        self.assertContains(filtro, 'lic-ver/2026')
+
+        self.client.force_login(self.admin)
+        admin_pagina = self.client.get(reverse('gestao_processos'))
+        self.assertEqual(admin_pagina.status_code, 200)
+        self.assertContains(admin_pagina, 'lic-ver/2026')
+        self.assertContains(admin_pagina, url_analise)

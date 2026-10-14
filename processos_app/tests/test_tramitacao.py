@@ -96,6 +96,23 @@ class AssumirTest(BaseProcessoTestCase):
         self.assertEqual(EventoProcesso.objects.filter(
             processo=processo, tipo='PROCESSO_ASSUMIDO').count(), 1)
 
+    def test_historico_assumidos_na_tela_do_processo(self):
+        processo = self.novo_processo(numero_processo='hist-ass/2026')
+        tramitacao.assumir(processo.id, self.analista_lic)
+        tramitacao.declinar_analise(processo.id, self.analista_lic, 'Devolve')
+        tramitacao.assumir(processo.id, self.analista_lic2)
+        historico = tramitacao.historico_assumidos(processo)
+        self.assertEqual(len(historico), 2)
+        self.assertEqual(historico[0]['nome'], 'Beto_lic')
+        self.assertEqual(historico[1]['nome'], 'Ana_lic')
+
+        self.client.force_login(self.analista_lic2)
+        pagina = self.client.get(reverse('analista_processo', args=[processo.id]))
+        self.assertEqual(pagina.status_code, 200)
+        self.assertContains(pagina, 'Histórico de análise')
+        self.assertContains(pagina, 'Beto_lic')
+        self.assertContains(pagina, 'Ana_lic')
+
     def test_outro_grupo_e_gestao_nao_assumem(self):
         processo = self.novo_processo()
         for usuario in (self.analista_liq, self.gestao, self.protocolo):
@@ -182,6 +199,48 @@ class DeclinarAnaliseTest(BaseProcessoTestCase):
         tramitacao.declinar_analise(processo.id, self.analista_lic, 'Desfazer teste')
         p.refresh_from_db()
         self.assertEqual(p.status, 'CANCELADA')
+
+    def test_numero_relatorio_outro_dia_so_admin_devolve(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from .base import criar_usuario
+
+        processo = self.novo_processo(
+            self.especie_liq, numero_processo='declina-ontem/2026')
+        tramitacao.assumir(processo.id, self.analista_liq)
+        processo.refresh_from_db()
+        self.preencher_analise(processo)
+        ontem = timezone.localdate() - timedelta(days=1)
+        Processo.objects.filter(id=processo.id).update(data_analise=ontem)
+        processo.refresh_from_db()
+        self.assertTrue((processo.numero_relatorio or '').strip())
+
+        for usuario in (self.analista_liq, self.gestao):
+            with self.assertRaises(TransicaoInvalida):
+                tramitacao.declinar_analise(
+                    processo.id, usuario, 'Tentar devolver')
+
+        admin = criar_usuario('admin_declina_dia', 'PROTOCOLO', is_superuser=True)
+        tramitacao.declinar_analise(processo.id, admin, 'Admin libera')
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'DISPONIVEL')
+        self.assertFalse((processo.numero_relatorio or '').strip())
+
+    def test_numero_relatorio_mesmo_dia_analista_devolve(self):
+        processo = self.novo_processo(
+            self.especie_liq, numero_processo='declina-hoje/2026')
+        tramitacao.assumir(processo.id, self.analista_liq)
+        processo.refresh_from_db()
+        self.preencher_analise(processo)
+        processo.refresh_from_db()
+        self.assertTrue((processo.numero_relatorio or '').strip())
+
+        tramitacao.declinar_analise(
+            processo.id, self.analista_liq, 'Corrigir no mesmo dia')
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'DISPONIVEL')
 
 
 class DesfazerTramiteAdminTest(BaseProcessoTestCase):

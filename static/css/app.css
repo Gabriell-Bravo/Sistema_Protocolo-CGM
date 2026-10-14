@@ -1499,6 +1499,80 @@ button.encaminhamento__opcao:disabled {
     max-width: 460px;
 }
 
+/* Tabela Diligências: evita texto cortado pela coluna sticky de Ação */
+.table--diligencias {
+    width: 100%;
+    min-width: 960px;
+}
+
+.table--diligencias td,
+.table--diligencias th {
+    vertical-align: top;
+}
+
+.table--diligencias td.cell-secretaria {
+    min-width: 140px;
+    max-width: 200px;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.table--diligencias td.cell-diligencia {
+    min-width: 280px;
+    max-width: 480px;
+    width: 34%;
+    overflow: hidden;
+    text-align: left;
+}
+
+.table--diligencias td.cell-tempo {
+    white-space: nowrap;
+    min-width: 96px;
+}
+
+.table--diligencias .col-actions {
+    width: 210px;
+    min-width: 210px;
+    max-width: 240px;
+    white-space: normal;
+}
+
+.table--diligencias .col-actions .badge {
+    white-space: normal;
+    text-align: left;
+    line-height: 1.35;
+    max-width: 100%;
+}
+
+.dil-preview {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+}
+
+.dil-preview:hover .dil-check__text,
+.dil-preview:focus-visible .dil-check__text {
+    text-decoration: underline;
+}
+
+.dil-preview:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.dil-preview .dil-check {
+    pointer-events: none;
+}
+
 .dil-check {
     list-style: none;
     margin: 0;
@@ -1506,12 +1580,14 @@ button.encaminhamento__opcao:disabled {
     display: flex;
     flex-direction: column;
     gap: 6px;
+    text-align: left;
 }
 
 .dil-check__item {
     display: flex;
     align-items: flex-start;
     gap: 8px;
+    text-align: left;
 }
 
 .dil-check__box {
@@ -1554,6 +1630,7 @@ button.encaminhamento__opcao:disabled {
 .dil-texto {
     display: block;
     width: 100%;
+    max-width: 100%;
     margin: 0;
     padding: 0;
     border: 0;
@@ -1563,6 +1640,8 @@ button.encaminhamento__opcao:disabled {
     line-height: 1.4;
     text-align: left;
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
     cursor: pointer;
 }
 
@@ -1573,7 +1652,12 @@ button.encaminhamento__opcao:disabled {
 
 .dil-check__text {
     min-width: 0;
+    flex: 1;
     line-height: 1.4;
+    text-align: left;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
 }
 
 .table .col-sticky {
@@ -1598,7 +1682,14 @@ button.encaminhamento__opcao:disabled {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 6px;
+    gap: 8px;
+    width: 100%;
+}
+
+.dil-acoes .btn {
+    width: 100%;
+    justify-content: center;
+    white-space: normal;
 }
 
 .table .col-actions {
@@ -2156,6 +2247,82 @@ button.encaminhamento__opcao:disabled {
     cursor: pointer;
 }
 
+/* Menu ⋮ em linhas de tabela (Para assinar, etc.) */
+.row-menu {
+    position: relative;
+    display: inline-flex;
+    justify-content: center;
+}
+
+.row-menu__list {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 60;
+    display: none;
+    min-width: 188px;
+    margin: 0;
+    padding: 6px;
+    list-style: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+}
+
+.row-menu__list.is-floating {
+    position: fixed;
+    display: block;
+    z-index: 120;
+}
+
+.row-menu.is-open .row-menu__list:not(.is-floating) {
+    display: block;
+}
+
+.row-menu__list a,
+.row-menu__list button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    margin: 0;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.row-menu__list a:hover,
+.row-menu__list button:hover {
+    background: var(--surface-3);
+    color: var(--text);
+    text-decoration: none;
+}
+
+.row-menu__list .material-symbols-rounded {
+    font-size: 18px;
+    color: var(--text-muted);
+}
+
+.row-menu__list .is-danger {
+    color: var(--danger);
+}
+
+.row-menu__list .is-danger .material-symbols-rounded {
+    color: inherit;
+}
+
+.row-menu__list form {
+    margin: 0;
+}
+
 /* --------------------------------------------------------------------------
    12. Modal
    -------------------------------------------------------------------------- */
@@ -2598,6 +2765,49 @@ button.encaminhamento__opcao:disabled {
 
 .meta-item--wide {
     grid-column: 1 / -1;
+}
+
+.meta-item--span-2 {
+    grid-column: span 2;
+}
+
+@media (max-width: 640px) {
+    .meta-item--span-2 {
+        grid-column: 1 / -1;
+    }
+}
+
+.meta-historico {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.meta-historico__item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.meta-historico__nome {
+    font-size: 13.5px;
+    color: var(--text);
+    font-weight: 500;
+}
+
+.meta-historico__data {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.meta-historico__mais {
+    margin-top: 8px;
 }
 
 .meta-item__label {

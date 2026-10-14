@@ -101,14 +101,15 @@ class ChecklistNaFilaTest(BaseProcessoTestCase):
         criada = pendencias.criar(processo.id, self.analista_lic, texto)
         self.client.force_login(self.gestao)
         pagina = self.client.get(reverse('gestao_diligencias'))
-        self.assertContains(pagina, texto)
+        # Lista mostra o checklist separado (não o texto corrido cru).
         self.assertContains(pagina, 'data-checklist-ver="%s"' % criada.id)
         self.assertContains(pagina, 'Anexar aos autos tombamento')
         self.assertContains(pagina, '233, 234, 235 e 239')
-        self.assertContains(pagina, 'Indicar atendimento')
+        self.assertContains(pagina, 'dil-preview')
+        self.assertContains(pagina, 'Concluir')
         self.assertContains(pagina, '/diligencias/imprimir/')
 
-    def test_indicar_grava_os_itens_marcados(self):
+    def test_concluir_grava_os_itens_marcados(self):
         processo = self.processo_em_analise()
         criada = pendencias.criar(
             processo.id, self.analista_lic,
@@ -116,11 +117,11 @@ class ChecklistNaFilaTest(BaseProcessoTestCase):
             '2- Regularizar assinatura às fls. 233, 234, 235 e 239.')
         self.client.force_login(self.gestao)
         resposta = self.client.post(
-            reverse('pend_indicar_atendimento', args=[criada.id]),
+            reverse('pend_concluir', args=[criada.id]),
             {'itens_concluidos': ['Anexar aos autos tombamento', 'texto fora da lista']})
         self.assertEqual(resposta.status_code, 302)
         criada.refresh_from_db()
-        self.assertEqual(criada.status, 'ATENDIMENTO_INDICADO')
+        self.assertEqual(criada.status, 'RESOLVIDA')
         self.assertEqual(criada.itens_concluidos, ['Anexar aos autos tombamento'])
 
 

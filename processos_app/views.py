@@ -334,6 +334,10 @@ def anotar_situacao_fila(processos, user):
             processo.pode_assumir = True
             processo.eh_meu = False
             processo.pode_liberar = False
+        processo.pode_declinar = (
+            processo.situacao_tramite == 'EM_ANALISE'
+            and perm.pode_declinar_analise(user, processo)
+        )
 
 
 def proximo_numero_relatorio():
@@ -1427,6 +1431,11 @@ def consultar_fila_grupos(request, opcoes_filtro=FILTROS_ANALISTA,
     # Liquidações exigem nº de relatório para encaminhar ao colega; com o nº
     # o processo sai de Pendentes, mas precisa continuar na fila de quem
     # analisa (senão some ao transferir).
+    # Gestão também lista Com o Controlador (AGUARDANDO_ASSINATURA) para
+    # consulta/Ver análise; na fila do analista isso fica só no Controle.
+    situacoes_extras = ['EM_ANALISE', 'ASSINATURA_DIRECIONADA']
+    if any(chave == 'liberados' for chave, _ in opcoes_filtro):
+        situacoes_extras.append('AGUARDANDO_ASSINATURA')
     ativos_base = (
         tramitacao.ativos()
         .filter(genero__in=['LICITACOES_E_CONTRATOS', 'LIQUIDACOES'])
@@ -1438,7 +1447,7 @@ def consultar_fila_grupos(request, opcoes_filtro=FILTROS_ANALISTA,
     )
     base_query = ativos_base.filter(
         ~tramitacao.q_analise_feita_ativos()
-        | Q(situacao_tramite__in=('EM_ANALISE', 'ASSINATURA_DIRECIONADA'))
+        | Q(situacao_tramite__in=situacoes_extras)
     )
     if so_entrada_protocolo:
         cadastro = EventoProcesso.objects.filter(
@@ -1620,7 +1629,8 @@ def gestao_processos(request):
         'total_com_controlador': total_com_controlador,
         'total_urgentes': total_urgentes,
         'termo_pesquisa': termo_pesquisa,
-        'modo_gestao': perm.is_gestao(request.user),
+        # Gestão e admin consultam nesta tela (incl. Com o Controlador / Ver análise).
+        'modo_gestao': True,
         'pode_assumir': False,
         'prioridades': svc_cadastros.opcoes_prioridade(),
         'filtro_atual': filtro,
@@ -1915,6 +1925,7 @@ def analista_processo(request, process_id):
             svc_relatorios.aviso_numero_reaproveitavel(processo)
             if processo.genero == 'LIQUIDACOES' else None
         ),
+        'historico_assumidos': tramitacao.historico_assumidos(processo),
     })
 
 

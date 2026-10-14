@@ -13,28 +13,25 @@ from .base import BaseProcessoTestCase
 class PendenciasTest(BaseProcessoTestCase):
 
     def test_ciclo_completo(self):
+        from processos_app.tests.base import criar_usuario
+
         processo = self.processo_em_analise()
         p = pendencias.criar(processo.id, self.analista_lic, 'Falta certidão')
         self.assertEqual(p.responsavel_tecnico, self.analista_lic)
         self.assertTrue(processo.tem_pendencia_aberta)
 
         with self.assertRaises(PermissionDenied):
-            pendencias.indicar_atendimento(p.id, self.analista_lic)
-        pendencias.indicar_atendimento(p.id, self.gestao)
-
-        with self.assertRaises(TransicaoInvalida):
-            pendencias.atendimento_insuficiente(p.id, self.analista_lic, '')
-        pendencias.atendimento_insuficiente(p.id, self.analista_lic, 'Certidão vencida')
-        p.refresh_from_db()
-        self.assertEqual(p.status, 'AGUARDANDO_ATENDIMENTO')
-
-        pendencias.indicar_atendimento(p.id, self.gestao)
-        with self.assertRaises(PermissionDenied):
-            pendencias.confirmar_resolucao(p.id, self.analista_lic2)
-        pendencias.confirmar_resolucao(p.id, self.analista_lic)
+            pendencias.concluir(p.id, self.analista_lic)
+        pendencias.concluir(p.id, self.gestao)
         p.refresh_from_db()
         self.assertEqual(p.status, 'RESOLVIDA')
         self.assertFalse(processo.tem_pendencia_aberta)
+
+        outra = pendencias.criar(processo.id, self.analista_lic, 'Falta anexo')
+        admin = criar_usuario('admin_conclui', 'PROTOCOLO', is_superuser=True)
+        pendencias.concluir(outra.id, admin)
+        outra.refresh_from_db()
+        self.assertEqual(outra.status, 'RESOLVIDA')
 
     def test_so_responsavel_cria(self):
         processo = self.processo_em_analise()
@@ -50,12 +47,13 @@ class PendenciasTest(BaseProcessoTestCase):
         pendencias.cancelar(p.id, self.gestao, 'Lançada por engano')
         self.assertEqual(Pendencia.objects.get(id=p.id).status, 'CANCELADA')
 
-    def test_admin_desfaz_indicacao_de_atendimento(self):
+    def test_admin_desfaz_indicacao_legado_e_conclui_direto(self):
         from processos_app.tests.base import criar_usuario
 
         admin = criar_usuario('admin_desfaz_ind', 'GESTAO', is_superuser=True)
         processo = self.processo_em_analise()
         p = pendencias.criar(processo.id, self.analista_lic, 'Falta certidão')
+        # Caminho legado ainda grava ATENDIMENTO_INDICADO no service.
         pendencias.indicar_atendimento(p.id, self.gestao)
         p.refresh_from_db()
         self.assertEqual(p.status, 'ATENDIMENTO_INDICADO')
@@ -65,15 +63,12 @@ class PendenciasTest(BaseProcessoTestCase):
         with self.assertRaises(PermissionDenied):
             pendencias.desfazer_indicacao(p.id, self.analista_lic)
 
-        self.client.force_login(self.gestao)
-        fila_gestao = self.client.get(
-            reverse('gestao_diligencias') + '?status=ATENDIMENTO_INDICADO')
-        self.assertNotContains(fila_gestao, 'Desfazer indicação')
-
+        # Na lista unificada, legado aparece como aberta com Concluir.
         self.client.force_login(admin)
-        fila = self.client.get(
-            reverse('gestao_diligencias') + '?status=ATENDIMENTO_INDICADO')
-        self.assertContains(fila, 'Desfazer indicação')
+        fila = self.client.get(reverse('gestao_diligencias'))
+        self.assertContains(fila, 'Concluir')
+        self.assertContains(fila, 'Falta certidão')
+
         tela = self.client.get(reverse('analista_processo', args=[processo.id]))
         self.assertContains(tela, 'Desfazer indicação')
 
@@ -81,41 +76,42 @@ class PendenciasTest(BaseProcessoTestCase):
         self.assertEqual(resp.status_code, 302)
         p.refresh_from_db()
         self.assertEqual(p.status, 'AGUARDANDO_ATENDIMENTO')
-        self.assertIsNone(p.atendimento_indicado_em)
-        self.assertIsNone(p.atendimento_indicado_por_id)
-        self.assertEqual(p.itens_concluidos, [])
-        self.assertTrue(p.eventos.filter(tipo='INDICACAO_DESFEITA').exists())
 
-        pendencias.indicar_atendimento(p.id, self.gestao)
-        pendencias.confirmar_resolucao(p.id, self.analista_lic)
+        pendencias.concluir(p.id, admin)
+        p.refresh_from_db()
+        self.assertEqual(p.status, 'RESOLVIDA')
         with self.assertRaises(TransicaoInvalida):
             pendencias.desfazer_indicacao(p.id, admin)
 
-    def test_aba_finalizados_mostra_o_que_o_analista_confirmou(self):
+    def test_aba_finalizados_so_quando_todas_completas(self):
         processo = self.processo_em_analise()
         aberta = pendencias.criar(processo.id, self.analista_lic, 'Ainda aberta')
         confirmada = pendencias.criar(processo.id, self.analista_lic, 'Já confirmada')
-        pendencias.indicar_atendimento(confirmada.id, self.gestao)
-        pendencias.confirmar_resolucao(confirmada.id, self.analista_lic)
+        pendencias.concluir(confirmada.id, self.gestao)
 
         self.client.force_login(self.gestao)
         padrao = self.client.get(reverse('gestao_diligencias'))
         self.assertEqual(padrao.context['status_atual'], 'AGUARDANDO_ATENDIMENTO')
         self.assertContains(padrao, 'Aguardando atendimento')
-        self.assertContains(padrao, 'Atendimento indicado')
         self.assertContains(padrao, 'Finalizados')
         self.assertContains(padrao, 'Ainda aberta')
+        self.assertContains(padrao, '1/2 completo')
         self.assertNotContains(padrao, 'Já confirmada')
         rotulos = [rotulo for _, rotulo, _ in padrao.context['abas_diligencia']]
-        self.assertEqual(rotulos, [
-            'Aguardando atendimento', 'Atendimento indicado', 'Finalizados'])
+        self.assertEqual(rotulos, ['Aguardando atendimento', 'Finalizados'])
 
+        # Com parcial, Finalizados ainda não lista o processo.
         fim = self.client.get(reverse('gestao_diligencias') + '?status=RESOLVIDA')
         self.assertEqual(fim.context['titulo_aba'], 'Finalizados')
+        self.assertNotContains(fim, 'Já confirmada')
+        self.assertEqual(fim.context['total'], 0)
+
+        pendencias.concluir(aberta.id, self.gestao)
+        fim = self.client.get(reverse('gestao_diligencias') + '?status=RESOLVIDA')
         self.assertContains(fim, 'Já confirmada')
-        self.assertContains(fim, 'Confirmada em')
-        self.assertNotContains(fim, 'Ainda aberta')
-        self.assertEqual(fim.context['total'], 1)
+        self.assertContains(fim, 'Ainda aberta')
+        self.assertContains(fim, 'Concluída')
+        self.assertEqual(fim.context['total'], 2)
 
     def test_admin_cancela_e_edita_diligencia_de_outro(self):
         from processos_app.tests.base import criar_usuario
@@ -318,3 +314,32 @@ class PrazosTest(BaseProcessoTestCase):
         self.assertEqual(processo.dias_na_cgm, 5)
         self.assertEqual(processo.prazo_formatado, '5 dias Na CGM')
         self.assertIn(processo.prazo_status, {'atrasado', 'hoje', 'atencao', 'ok'})
+
+    def test_dias_na_cgm_congelam_na_saida(self):
+        """Com saída, a contagem para — não segue até hoje."""
+        from datetime import timedelta
+        from django.utils import timezone
+
+        hoje = timezone.localdate()
+        processo = self.novo_processo(
+            self.especie_liq, numero_processo='prazo-saida/2026')
+        processo.data_entrada = hoje - timedelta(days=100)
+        processo.save(update_fields=['data_entrada'])
+
+        # Ainda na CGM: conta até hoje.
+        self.assertEqual(prazos.dias_na_cgm(processo, hoje), 100)
+
+        # Saiu há 90 dias (ficou 10 dias na CGM).
+        processo.data_saida = hoje - timedelta(days=90)
+        processo.hora_saida = timezone.localtime().time().replace(microsecond=0)
+        processo.situacao_tramite = 'SAIDA_CONCLUIDA'
+        processo.save(update_fields=[
+            'data_saida', 'hora_saida', 'situacao_tramite'])
+
+        self.assertEqual(prazos.dias_na_cgm(processo, hoje), 10)
+        prazos.anotar(processo, hoje)
+        self.assertEqual(processo.dias_na_cgm, 10)
+        self.assertEqual(processo.prazo_formatado, '10 dias Na CGM')
+        self.assertEqual(processo.prazo_status, 'saido')
+        # Não marca atraso vermelho depois da saída.
+        self.assertIsNone(processo.dias_restantes)

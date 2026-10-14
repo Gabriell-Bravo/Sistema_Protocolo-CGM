@@ -178,6 +178,30 @@
             {% endif %}
             {% endif %}
         </div>
+        <div class="meta-item meta-item--span-2">
+            <span class="meta-item__label">Histórico de análise</span>
+            {% if historico_assumidos %}
+            <ul class="meta-historico" id="historicoAssumidos">
+                {% for item in historico_assumidos %}
+                <li class="meta-historico__item"{% if forloop.counter > 2 %} hidden data-historico-extra{% endif %}>
+                    <span class="meta-historico__nome">{{ item.nome }}</span>
+                    <span class="meta-historico__data">{{ item.em|date:"d/m/Y H:i" }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% if historico_assumidos|length > 2 %}
+            <button type="button" class="btn btn--ghost btn--sm meta-historico__mais"
+                    id="btnHistoricoAssumidos" aria-expanded="false"
+                    data-mais="Ver mais ({{ historico_assumidos|length|add:'-2' }})"
+                    data-menos="Ver menos">
+                <span class="material-symbols-rounded" aria-hidden="true">visibility</span>
+                <span data-historico-rotulo>Ver mais ({{ historico_assumidos|length|add:"-2" }})</span>
+            </button>
+            {% endif %}
+            {% else %}
+            <span class="meta-item__value">Nenhuma análise assumida ainda</span>
+            {% endif %}
+        </div>
         <div class="meta-item meta-item--wide">
             <span class="meta-item__label">{% if layout_planilha %}{{ layout_planilha.rotulos.objeto }}{% else %}Objeto{% endif %}</span>
             <div class="meta-view">
@@ -992,6 +1016,28 @@ A análise em andamento será limpa (incluindo número de relatório, se houver)
 
 {% block extra_js %}
 <script>
+    (function () {
+        var botao = document.getElementById('btnHistoricoAssumidos');
+        if (!botao) return;
+        var lista = document.getElementById('historicoAssumidos');
+        var rotulo = botao.querySelector('[data-historico-rotulo]');
+        botao.addEventListener('click', function () {
+            var aberto = botao.getAttribute('aria-expanded') === 'true';
+            var extras = lista ? lista.querySelectorAll('[data-historico-extra]') : [];
+            extras.forEach(function (item) {
+                item.hidden = aberto;
+            });
+            botao.setAttribute('aria-expanded', aberto ? 'false' : 'true');
+            if (rotulo) {
+                rotulo.textContent = aberto
+                    ? botao.getAttribute('data-mais')
+                    : botao.getAttribute('data-menos');
+            }
+            var icone = botao.querySelector('.material-symbols-rounded');
+            if (icone) icone.textContent = aberto ? 'visibility' : 'visibility_off';
+        });
+    })();
+
     // item 32: cancelar pendência exige motivo (diálogo do sistema).
     function pedirMotivoCancelamento(form) {
         if (form.dataset.motivoOk === '1') {

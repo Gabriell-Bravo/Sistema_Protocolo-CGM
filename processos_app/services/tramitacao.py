@@ -162,6 +162,31 @@ def assumir(processo_id, usuario):
     return processo
 
 
+def historico_assumidos(processo):
+    """Quem já assumiu o processo, do mais recente ao mais antigo."""
+    from processos_app.models import EventoProcesso
+
+    eventos = (
+        EventoProcesso.objects
+        .filter(processo_id=processo.id, tipo='PROCESSO_ASSUMIDO')
+        .select_related('usuario')
+        .order_by('-criado_em', '-id')
+    )
+    itens = []
+    for evento in eventos:
+        nome = perm.nome_usuario(evento.usuario) if evento.usuario_id else ''
+        if not nome and evento.descricao:
+            # Fallback se o usuário foi apagado: "Análise assumida por X."
+            prefixo = 'Análise assumida por '
+            if evento.descricao.startswith(prefixo):
+                nome = evento.descricao[len(prefixo):].rstrip('.')
+        itens.append({
+            'nome': nome or '—',
+            'em': evento.criado_em,
+        })
+    return itens
+
+
 # --------------------------------------------------------------------------
 # Declinar análise — devolve o processo à fila
 # --------------------------------------------------------------------------
@@ -182,6 +207,14 @@ def declinar_analise(processo_id, usuario, motivo):
     A tentativa de análise é limpa; o histórico do ato permanece.
     """
     processo = _travar(processo_id)
+
+    if (
+        not perm.eh_administrador(usuario)
+        and perm.numero_relatorio_de_outro_dia(processo)
+    ):
+        raise TransicaoInvalida(
+            'Não é possível devolver à fila um processo com número de '
+            'relatório gerado em outro dia. Solicite ao administrador.')
 
     perm.assert_permissao(
         perm.pode_declinar_analise(usuario, processo),

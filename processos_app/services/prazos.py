@@ -150,12 +150,38 @@ def vence_hoje(processo, referencia=None):
     return dias_restantes(processo, referencia) == 0
 
 
+def tem_saida_registrada(processo):
+    """Saída física: data legada, timestamp ou situação concluída."""
+    if getattr(processo, 'data_saida', None):
+        return True
+    if getattr(processo, 'saida_concluida_em', None):
+        return True
+    return getattr(processo, 'situacao_tramite', None) == 'SAIDA_CONCLUIDA'
+
+
+def data_fim_na_cgm(processo, referencia=None):
+    """Fim da permanência na CGM: data da saída, ou hoje se ainda estiver."""
+    data_saida = getattr(processo, 'data_saida', None)
+    if data_saida:
+        return data_saida
+    saida_em = getattr(processo, 'saida_concluida_em', None)
+    if saida_em is not None:
+        if timezone.is_aware(saida_em):
+            return timezone.localtime(saida_em).date()
+        return saida_em.date() if hasattr(saida_em, 'date') else saida_em
+    return referencia or timezone.localdate()
+
+
 def dias_na_cgm(processo, referencia=None):
-    """Dias corridos desde a entrada na CGM (0 no dia da entrada)."""
+    """Dias corridos na CGM (0 no dia da entrada).
+
+    Sem saída: conta até hoje. Com saída: congela na data da saída —
+    a contagem não continua depois que o processo deixou a CGM.
+    """
     if not getattr(processo, 'data_entrada', None):
         return None
-    hoje = referencia or timezone.localdate()
-    return max(0, (hoje - processo.data_entrada).days)
+    fim = data_fim_na_cgm(processo, referencia)
+    return max(0, (fim - processo.data_entrada).days)
 
 
 def formatar_dias_na_cgm(dias):
@@ -188,9 +214,14 @@ def anotar(processo, referencia=None):
     """Grava no objeto (em memória, nada no banco) os atributos de prazo
     que as telas exibem. Substitui os blocos repetidos que existiam em
     cada view."""
-    dias = dias_restantes(processo, referencia)
-    processo.dias_restantes = dias
-    processo.prazo_status = status_do_prazo(dias)
     processo.dias_na_cgm = dias_na_cgm(processo, referencia)
     processo.prazo_formatado = formatar_dias_na_cgm(processo.dias_na_cgm)
+    if tem_saida_registrada(processo):
+        # Já saiu: não marca atraso — a contagem parou na saída.
+        processo.dias_restantes = None
+        processo.prazo_status = 'saido'
+    else:
+        dias = dias_restantes(processo, referencia)
+        processo.dias_restantes = dias
+        processo.prazo_status = status_do_prazo(dias)
     return processo

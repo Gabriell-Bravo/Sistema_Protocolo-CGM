@@ -2,17 +2,16 @@
 """
 Pendências e Diligências (itens 25 a 34, 46).
 
-Divisão de trabalho, conforme o documento:
+Divisão de trabalho:
 
     ANALISTA  identifica tecnicamente a pendência e a registra
               -> nasce AGUARDANDO_ATENDIMENTO
-    GESTÃO    faz as diligências FORA do sistema (telefone, e-mail,
-              ofício) e, quando julga que houve atendimento suficiente
-              para nova análise, usa "Indicar atendimento"
-    ANALISTA  confirma a resolução, ou devolve como insuficiente
+    GESTÃO / ADMIN  concluem a diligência quando a Secretaria atendeu
+              -> RESOLVIDA (sem passar pelo analista)
 
-A Gestão não conclui tecnicamente a pendência (item 25).
-Contatos intermediários não são registrados (itens 25 e 46).
+Contatos intermediários (telefone, e-mail, ofício) não são registrados.
+O fluxo antigo "Indicar atendimento → analista confirma" permanece no
+código só para registros legados ainda em ATENDIMENTO_INDICADO.
 """
 
 from django.db import transaction
@@ -59,16 +58,73 @@ def criar(processo_id, usuario, descricao):
 
 
 # --------------------------------------------------------------------------
-# Gestão: indicar atendimento
+# Gestão / Admin: concluir direto
 # --------------------------------------------------------------------------
+
+def _itens_marcados(pendencia, itens_concluidos):
+    from .diligencia_texto import separar_itens
+
+    validos = separar_itens(pendencia.descricao)
+    if not validos:
+        return [], []
+    # Sem seleção no POST: concluir marca todos os itens.
+    if itens_concluidos is None:
+        return validos, validos
+    escolhidos = []
+    vistos = set()
+    for item in itens_concluidos:
+        item = (item or '').strip()
+        if item in validos and item not in vistos:
+            escolhidos.append(item)
+            vistos.add(item)
+    if not escolhidos:
+        escolhidos = list(validos)
+    return validos, escolhidos
+
+
+@transaction.atomic
+def concluir(pendencia_id, usuario, itens_concluidos=None):
+    """Gestão/admin concluem a diligência → RESOLVIDA.
+
+    Aceita AGUARDANDO_ATENDIMENTO e o legado ATENDIMENTO_INDICADO.
+    """
+    pendencia = _travar(pendencia_id)
+
+    perm.assert_permissao(
+        perm.pode_concluir_pendencia(usuario),
+        'Somente a Gestão ou o administrador podem concluir a diligência.')
+
+    if pendencia.status not in (
+            'AGUARDANDO_ATENDIMENTO', 'ATENDIMENTO_INDICADO'):
+        raise TransicaoInvalida(
+            f'Diligência em "{pendencia.get_status_display()}" não pode '
+            'ser concluída agora.')
+
+    validos, escolhidos = _itens_marcados(pendencia, itens_concluidos)
+    pendencia.status = 'RESOLVIDA'
+    pendencia.resolvida_em = timezone.now()
+    pendencia.resolvida_por = usuario
+    pendencia.itens_concluidos = escolhidos
+    if pendencia.atendimento_indicado_em is None:
+        pendencia.atendimento_indicado_em = pendencia.resolvida_em
+        pendencia.atendimento_indicado_por = usuario
+    pendencia.save(update_fields=[
+        'status', 'resolvida_em', 'resolvida_por', 'itens_concluidos',
+        'atendimento_indicado_em', 'atendimento_indicado_por'])
+
+    detalhe = f'Diligência concluída por {perm.nome_usuario(usuario)}.'
+    if validos:
+        detalhe += (
+            f' {len(escolhidos)} de {len(validos)} item(ns) marcado(s).')
+    registrar_evento_pendencia(pendencia, 'RESOLVIDA', usuario, detalhe)
+    return pendencia
+
 
 @transaction.atomic
 def indicar_atendimento(pendencia_id, usuario, itens_concluidos=None):
-    """AGUARDANDO_ATENDIMENTO -> ATENDIMENTO_INDICADO (item 29).
+    """Legado: AGUARDANDO_ATENDIMENTO -> ATENDIMENTO_INDICADO.
 
-    A Gestão sinaliza que houve atendimento suficiente para nova análise
-    técnica. Não resolve a pendência. Pode marcar quais itens do texto
-    a Secretaria já atendeu.
+    Preferir `concluir`. Mantido para testes e registros antigos.
     """
     from .diligencia_texto import separar_itens
 
@@ -76,7 +132,7 @@ def indicar_atendimento(pendencia_id, usuario, itens_concluidos=None):
 
     perm.assert_permissao(
         perm.pode_indicar_atendimento(usuario),
-        'Somente a Gestão pode indicar atendimento.')
+        'Somente a Gestão ou o administrador podem indicar atendimento.')
 
     if pendencia.status != 'AGUARDANDO_ATENDIMENTO':
         raise TransicaoInvalida(
@@ -269,18 +325,76 @@ def editar_descricao(pendencia_id, usuario, nova_descricao):
 # Consultas
 # --------------------------------------------------------------------------
 
+def progresso_processo(processo_id):
+    """(resolvidas, total) excluindo canceladas — ex.: 3/5 completos."""
+    base = Pendencia.objects.filter(processo_id=processo_id).exclude(
+        status='CANCELADA')
+    total = base.count()
+    resolvidas = base.filter(status='RESOLVIDA').count()
+    return resolvidas, total
+
+
+def anotar_progresso(pendencias):
+    """Coloca progresso_resolvidas/total e rotulo em cada pendência da lista."""
+    ids = {p.processo_id for p in pendencias}
+    if not ids:
+        return pendencias
+    from django.db.models import Count, Q
+    mapa = {
+        row['processo_id']: (row['resolvidas'], row['total'])
+        for row in (
+            Pendencia.objects.filter(processo_id__in=ids)
+            .exclude(status='CANCELADA')
+            .values('processo_id')
+            .annotate(
+                total=Count('id'),
+                resolvidas=Count('id', filter=Q(status='RESOLVIDA')),
+            )
+        )
+    }
+    for pendencia in pendencias:
+        resolvidas, total = mapa.get(pendencia.processo_id, (0, 0))
+        pendencia.progresso_resolvidas = resolvidas
+        pendencia.progresso_total = total
+        pendencia.progresso_rotulo = (
+            f'{resolvidas}/{total} completo{"s" if total != 1 else ""}'
+            if total else ''
+        )
+        pendencia.processo_todas_completas = (
+            total > 0 and resolvidas == total)
+    return pendencias
+
+
 def fila_diligencias(status='AGUARDANDO_ATENDIMENTO'):
     """item 28 e item 33.
 
     A consulta parte da Pendencia, NÃO dos processos ativos: uma pendência
     pode continuar aberta depois de o processo já ter saído da CGM.
+
+    AGUARDANDO_ATENDIMENTO (aba ativa): todas as ainda abertas.
+    RESOLVIDA (Finalizados): só quando o processo não tem mais nenhuma aberta.
     """
+    from django.db.models import Exists, OuterRef
+
     consulta = (Pendencia.objects
                 .select_related('processo', 'responsavel_tecnico',
-                                'atendimento_indicado_por')
+                                'atendimento_indicado_por', 'resolvida_por')
                 .order_by('criada_em'))
-    if status == 'ABERTAS':
+    if status == 'ABERTAS' or status == 'AGUARDANDO_ATENDIMENTO':
         return consulta.filter(status__in=Pendencia.STATUS_ABERTOS)
+    if status == 'RESOLVIDA':
+        ainda_aberta = Pendencia.objects.filter(
+            processo_id=OuterRef('processo_id'),
+            status__in=Pendencia.STATUS_ABERTOS,
+        )
+        return (
+            consulta.filter(status='RESOLVIDA')
+            .annotate(_tem_aberta=Exists(ainda_aberta))
+            .filter(_tem_aberta=False)
+        )
+    if status == 'ATENDIMENTO_INDICADO':
+        # Aba removida da UI; mantém filtro para URLs antigas.
+        return consulta.filter(status='ATENDIMENTO_INDICADO')
     if status:
         return consulta.filter(status=status)
     return consulta
