@@ -831,7 +831,7 @@ A análise em andamento será limpa (incluindo número de relatório, se houver)
                                 </div>
                             </form>
                             {% else %}
-                            <div class="pendencia-item__text">{{ pendencia.descricao }}</div>
+                            {% include "includes/checklist_diligencia.html" with texto=pendencia.descricao concluidos=pendencia.itens_concluidos %}
                             {% endif %}
                             <div class="pendencia-item__meta">
                                 <span class="badge {% if pendencia.status == 'AGUARDANDO_ATENDIMENTO' %}badge--warning{% elif pendencia.status == 'ATENDIMENTO_INDICADO' %}badge--primary{% elif pendencia.status == 'RESOLVIDA' %}badge--success{% endif %}">{{ pendencia.get_status_display }}</span>
@@ -920,7 +920,7 @@ A análise em andamento será limpa (incluindo número de relatório, se houver)
             {% for pendencia in pendencias_anteriores %}
                 <li class="pendencia-item">
                     <div>
-                        <div class="pendencia-item__text">{{ pendencia.descricao }}</div>
+                        {% include "includes/checklist_diligencia.html" with texto=pendencia.descricao concluidos=pendencia.itens_concluidos %}
                         <div class="pendencia-item__meta">
                             <span class="badge badge--warning">{{ pendencia.get_status_display }}</span>
                             · passagem com entrada em {{ pendencia.processo.data_entrada|date:"d/m/Y" }}

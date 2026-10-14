@@ -161,8 +161,8 @@
                         {% for pendencia in pendencias %}
                         <tr>
                             <td>{{ forloop.counter }}</td>
-                            <td class="cell-wrap">
-                                {{ pendencia.descricao }}
+                            <td class="cell-wrap cell-diligencia">
+                                {% include "includes/checklist_diligencia.html" with texto=pendencia.descricao concluidos=pendencia.itens_concluidos %}
                                 {% if pendencia.status == 'CANCELADA' and pendencia.motivo_cancelamento %}<div class="cell-muted">Cancelada: {{ pendencia.motivo_cancelamento }}</div>{% endif %}
                             </td>
                             <td><span class="badge">{{ pendencia.get_status_display }}</span></td>

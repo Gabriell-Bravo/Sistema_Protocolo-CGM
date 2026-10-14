@@ -75,7 +75,9 @@ def diligencias(request):
 def indicar_atendimento(request, pendencia_id):
     """item 29: apenas a Gestão."""
     try:
-        svc.indicar_atendimento(pendencia_id, request.user)
+        svc.indicar_atendimento(
+            pendencia_id, request.user,
+            request.POST.getlist('itens_concluidos'))
         messages.success(
             request,
             'Atendimento indicado. A diligência foi para o analista avaliar.')

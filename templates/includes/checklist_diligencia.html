@@ -1,0 +1,9 @@
+{% load processos_extras %}
+<ul class="dil-check">
+    {% for item in texto|itens_diligencia %}
+    <li class="dil-check__item">
+        <span class="dil-check__box{% if item in concluidos %} is-done{% endif %}" aria-hidden="true">{% if item in concluidos %}✓{% endif %}</span>
+        <span class="dil-check__text">{{ item }}</span>
+    </li>
+    {% endfor %}
+</ul>

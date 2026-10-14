@@ -559,9 +559,20 @@ class Pendencia(models.Model):
     )
     motivo_cancelamento = models.TextField(
         null=True, blank=True, verbose_name="Motivo do cancelamento")
+    itens_concluidos = models.JSONField(
+        default=list, blank=True, verbose_name="Itens concluídos")
 
     def __str__(self):
         return f"Diligência de {self.processo.numero_processo}"
+
+    @property
+    def checklist(self):
+        from .services.diligencia_texto import itens_para_checklist
+        return itens_para_checklist(self.descricao, self.itens_concluidos)
+
+    @property
+    def checklist_script_id(self):
+        return f'checklist-{self.pk}'
 
     @property
     def esta_aberta(self):

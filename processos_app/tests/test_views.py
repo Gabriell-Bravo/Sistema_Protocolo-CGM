@@ -110,8 +110,9 @@ class TelasPorPapelTest(BaseProcessoTestCase):
             processo_pend.id, self.analista_lic, 'Falta documento')
         dilig = self._get(self.analista_lic, 'gestao_diligencias')
         self.assertContains(dilig, 'Falta documento')
-        self.assertNotContains(dilig, 'Indicar atendimento')
-        self.assertContains(dilig, 'Consulta. A indicação de atendimento é da Gestão.')
+        self.assertContains(dilig, 'data-checklist-ver')
+        self.assertNotContains(dilig, 'data-checklist-indicar="')
+        self.assertContains(dilig, 'A indicação de atendimento é da Gestão.')
         self.assertContains(dilig, 'name="termo"')
 
         busca = self._get(self.analista_lic, 'gestao_diligencias',

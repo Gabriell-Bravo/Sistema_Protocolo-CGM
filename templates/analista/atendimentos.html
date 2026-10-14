@@ -17,7 +17,7 @@
             </span>
         </div>
 
-        <p class="pendencia-item__text">{{ pendencia.descricao }}</p>
+        {% include "includes/checklist_diligencia.html" with texto=pendencia.descricao concluidos=pendencia.itens_concluidos %}
 
         <div class="form-actions">
             <form method="post" action="{% url 'pend_confirmar_resolucao' pendencia.id %}">

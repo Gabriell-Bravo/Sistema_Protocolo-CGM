@@ -63,12 +63,15 @@ def criar(processo_id, usuario, descricao):
 # --------------------------------------------------------------------------
 
 @transaction.atomic
-def indicar_atendimento(pendencia_id, usuario):
+def indicar_atendimento(pendencia_id, usuario, itens_concluidos=None):
     """AGUARDANDO_ATENDIMENTO -> ATENDIMENTO_INDICADO (item 29).
 
     A Gestão sinaliza que houve atendimento suficiente para nova análise
-    técnica. Não resolve a pendência.
+    técnica. Não resolve a pendência. Pode marcar quais itens do texto
+    a Secretaria já atendeu.
     """
+    from .diligencia_texto import separar_itens
+
     pendencia = _travar(pendencia_id)
 
     perm.assert_permissao(
@@ -80,15 +83,28 @@ def indicar_atendimento(pendencia_id, usuario):
             f'Diligência em "{pendencia.get_status_display()}" não aguarda '
             'atendimento.')
 
+    validos = separar_itens(pendencia.descricao)
+    escolhidos = []
+    vistos = set()
+    for item in itens_concluidos or []:
+        item = (item or '').strip()
+        if item in validos and item not in vistos:
+            escolhidos.append(item)
+            vistos.add(item)
+
     pendencia.status = 'ATENDIMENTO_INDICADO'
     pendencia.atendimento_indicado_em = timezone.now()
     pendencia.atendimento_indicado_por = usuario
-    pendencia.save(update_fields=['status', 'atendimento_indicado_em',
-                                  'atendimento_indicado_por'])
+    pendencia.itens_concluidos = escolhidos
+    pendencia.save(update_fields=[
+        'status', 'atendimento_indicado_em', 'atendimento_indicado_por',
+        'itens_concluidos'])
 
+    detalhe = f'Atendimento indicado por {perm.nome_usuario(usuario)}.'
+    if validos:
+        detalhe += f' {len(escolhidos)} de {len(validos)} item(ns) marcado(s) como atendido(s).'
     registrar_evento_pendencia(
-        pendencia, 'ATENDIMENTO_INDICADO', usuario,
-        f'Atendimento indicado por {perm.nome_usuario(usuario)}.')
+        pendencia, 'ATENDIMENTO_INDICADO', usuario, detalhe)
     return pendencia
 
 

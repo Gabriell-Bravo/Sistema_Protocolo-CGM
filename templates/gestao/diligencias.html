@@ -67,7 +67,14 @@
                         <td><strong>{{ pendencia.processo.numero_processo }}</strong></td>
                         <td>{{ pendencia.processo.volume|default:"—" }}</td>
                         <td>{{ pendencia.processo.secretaria }}</td>
-                        <td class="cell-wrap">{{ pendencia.descricao }}</td>
+                        <td class="cell-wrap cell-diligencia">
+                            <button type="button" class="dil-texto"
+                                    data-checklist-ver="{{ pendencia.id }}"
+                                    data-processo="{{ pendencia.processo.numero_processo }}">
+                                {{ pendencia.descricao }}
+                            </button>
+                            {{ pendencia.checklist|json_script:pendencia.checklist_script_id }}
+                        </td>
                         <td>{{ pendencia.responsavel_tecnico|default:'—' }}</td>
                         <td>
                             {{ pendencia.dias_decorridos }} dia{{ pendencia.dias_decorridos|pluralize:"s" }}
@@ -75,16 +82,13 @@
                         </td>
                         <td class="col-actions">
                             {% if pode_indicar_atendimento and pendencia.status == 'AGUARDANDO_ATENDIMENTO' %}
-                            <form method="post" action="{% url 'pend_indicar_atendimento' pendencia.id %}">
-                                {% csrf_token %}
-                                <button type="submit" class="btn btn--primary btn--sm"
-                                        data-confirm="Indicar que houve atendimento suficiente para nova análise técnica?"
-                                        data-confirm-title="Indicar atendimento"
-                                        data-confirm-ok="Indicar">
-                                    <span class="material-symbols-rounded">assignment_turned_in</span>
-                                    Indicar atendimento
-                                </button>
-                            </form>
+                            <button type="button" class="btn btn--primary btn--sm"
+                                    data-checklist-indicar="{{ pendencia.id }}"
+                                    data-processo="{{ pendencia.processo.numero_processo }}"
+                                    data-action="{% url 'pend_indicar_atendimento' pendencia.id %}">
+                                <span class="material-symbols-rounded">assignment_turned_in</span>
+                                Indicar atendimento
+                            </button>
                             {% elif pendencia.status == 'ATENDIMENTO_INDICADO' %}
                             <span class="badge">
                                 Com {{ pendencia.responsavel_tecnico|default:'o analista' }}
@@ -113,12 +117,132 @@
 
     {% if pode_indicar_atendimento %}
     <p class="cell-muted">
-        Telefonemas, e-mails e cobranças intermediárias não são registrados
-        aqui. Quando a Secretaria atender o suficiente para nova análise,
-        use “Indicar atendimento” — quem conclui tecnicamente é o analista.
+        Clique no texto para ver o checklist. Em “Indicar atendimento”,
+        marque os itens que a Secretaria já atendeu. Quem conclui
+        tecnicamente continua sendo o analista.
     </p>
     {% else %}
-    <p class="cell-muted">Consulta. A indicação de atendimento é da Gestão.</p>
+    <p class="cell-muted">Clique no texto para ver o checklist. A indicação de atendimento é da Gestão.</p>
     {% endif %}
 </div>
+
+<div class="modal" id="modalChecklist" role="dialog" aria-modal="true" aria-labelledby="tituloChecklist">
+    <div class="modal__dialog modal__dialog--sm">
+        <div class="modal__header">
+            <span class="modal__title" id="tituloChecklist">Checklist</span>
+            <button type="button" class="icon-btn" data-modal-close="modalChecklist" aria-label="Fechar">
+                <span class="material-symbols-rounded">close</span>
+            </button>
+        </div>
+        <form method="post" id="formChecklist">
+            {% csrf_token %}
+            <div class="modal__body">
+                <p class="cell-muted" id="checklistIntro" style="margin-top:0;"></p>
+                <ul class="dil-check" id="checklistLista"></ul>
+                {% if pode_indicar_atendimento %}
+                <div class="form-actions" id="checklistAcoes" hidden>
+                    <button type="button" class="btn btn--outline" data-modal-close="modalChecklist">Cancelar</button>
+                    <button type="submit" class="btn btn--primary">
+                        <span class="material-symbols-rounded">assignment_turned_in</span>
+                        Indicar atendimento
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    var modal = document.getElementById('modalChecklist');
+    var form = document.getElementById('formChecklist');
+    var lista = document.getElementById('checklistLista');
+    var intro = document.getElementById('checklistIntro');
+    var acoes = document.getElementById('checklistAcoes');
+    var titulo = document.getElementById('tituloChecklist');
+    if (!modal || !form || !lista) return;
+
+    function abrir(id, modo, action, processo) {
+        var script = document.getElementById('checklist-' + id);
+        var itens = [];
+        if (script) {
+            try { itens = JSON.parse(script.textContent); } catch (e) { itens = []; }
+        }
+        lista.innerHTML = '';
+        itens.forEach(function (item) {
+            var li = document.createElement('li');
+            li.className = 'dil-check__item';
+            if (modo === 'indicar') {
+                var label = document.createElement('label');
+                label.className = 'dil-check__label';
+                var input = document.createElement('input');
+                input.type = 'checkbox';
+                input.name = 'itens_concluidos';
+                input.value = item.texto;
+                input.checked = !!item.concluido;
+                var span = document.createElement('span');
+                span.className = 'dil-check__text';
+                span.textContent = item.texto;
+                label.appendChild(input);
+                label.appendChild(span);
+                li.appendChild(label);
+            } else {
+                var box = document.createElement('span');
+                box.className = 'dil-check__box' + (item.concluido ? ' is-done' : '');
+                box.setAttribute('aria-hidden', 'true');
+                if (item.concluido) box.textContent = '✓';
+                var texto = document.createElement('span');
+                texto.className = 'dil-check__text';
+                texto.textContent = item.texto;
+                li.appendChild(box);
+                li.appendChild(texto);
+            }
+            lista.appendChild(li);
+        });
+        if (!itens.length) {
+            var vazio = document.createElement('li');
+            vazio.className = 'cell-muted';
+            vazio.textContent = 'Nenhum item identificado neste texto.';
+            lista.appendChild(vazio);
+        }
+        if (modo === 'indicar' && acoes) {
+            titulo.textContent = 'Indicar atendimento';
+            intro.textContent = (processo ? 'Processo ' + processo + '. ' : '')
+                + 'Marque as diligências que a Secretaria já atendeu.';
+            form.action = action;
+            acoes.hidden = false;
+        } else {
+            titulo.textContent = 'Checklist';
+            intro.textContent = processo ? 'Processo ' + processo : '';
+            form.removeAttribute('action');
+            if (acoes) acoes.hidden = true;
+        }
+        modal.classList.add('is-open');
+    }
+
+    document.addEventListener('click', function (event) {
+        var ver = event.target.closest('[data-checklist-ver]');
+        if (ver) {
+            event.preventDefault();
+            abrir(ver.getAttribute('data-checklist-ver'), 'ver', '',
+                ver.getAttribute('data-processo') || '');
+            return;
+        }
+        var indicar = event.target.closest('[data-checklist-indicar]');
+        if (indicar) {
+            event.preventDefault();
+            abrir(indicar.getAttribute('data-checklist-indicar'), 'indicar',
+                indicar.getAttribute('data-action') || '',
+                indicar.getAttribute('data-processo') || '');
+        }
+    });
+
+    form.addEventListener('submit', function (event) {
+        if (!acoes || acoes.hidden) event.preventDefault();
+    });
+})();
+</script>
 {% endblock %}
