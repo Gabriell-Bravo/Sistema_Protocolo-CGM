@@ -1,0 +1,232 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <title>Checklist de diligências · {{ processo.numero_processo }}</title>
+    <style>
+        :root {
+            --azul: #30839A;
+            --texto: #0D0D0D;
+            --linha: #d5e4e9;
+        }
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0;
+            padding: 0;
+            color: var(--texto);
+            font-family: Calibri, "Segoe UI", sans-serif;
+            background: #e8eef0;
+        }
+        .barra {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            padding: 10px 16px;
+            background: #fff;
+            border-bottom: 1px solid #d0d7dc;
+        }
+        .barra button {
+            font: inherit;
+            font-weight: 650;
+            border-radius: 8px;
+            padding: 8px 14px;
+            cursor: pointer;
+        }
+        .barra .primario {
+            background: var(--azul);
+            color: #fff;
+            border: 0;
+        }
+        .barra .secundario {
+            background: #fff;
+            color: var(--texto);
+            border: 1px solid #c5d0d4;
+        }
+        .folha {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 16px auto;
+            padding: 10mm 12mm 34mm;
+            background: #fff;
+            box-shadow: 0 8px 28px rgba(15, 23, 42, .12);
+            position: relative;
+        }
+        .banner {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        .orgao {
+            margin: 10px 0 14px;
+            text-align: center;
+            color: var(--azul);
+            font-weight: 700;
+            font-size: 13px;
+            line-height: 1.35;
+        }
+        .dados {
+            margin: 0 0 14px;
+            font-size: 12.5px;
+            line-height: 1.45;
+        }
+        .dados p { margin: 0 0 3px; }
+        .dados strong { font-weight: 700; }
+        .faixa {
+            margin: 8px 0 12px;
+            padding: 6px 10px;
+            background: var(--azul);
+            color: #fff;
+            font-weight: 700;
+            font-size: 13px;
+            letter-spacing: .04em;
+            text-align: center;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .grupo-titulo {
+            margin: 12px 0 6px;
+            color: var(--azul);
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 7px 2px;
+            border-bottom: 1px solid var(--linha);
+            break-inside: avoid;
+            font-size: 12.5px;
+            line-height: 1.4;
+        }
+        .caixa {
+            flex: 0 0 auto;
+            width: 14px;
+            height: 14px;
+            margin-top: 1px;
+            border: 1.5px solid var(--azul);
+            border-radius: 2px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            line-height: 1;
+            color: var(--azul);
+            font-weight: 700;
+        }
+        .caixa.is-feita {
+            background: var(--azul);
+            color: #fff;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        .vazio {
+            margin: 8px 0 0;
+            font-size: 12.5px;
+        }
+        .legenda, .local {
+            margin-top: 16px;
+            font-size: 11.5px;
+            color: #334155;
+        }
+        .local {
+            text-align: right;
+            font-size: 12.5px;
+            color: var(--texto);
+        }
+        .folha .rodape {
+            position: absolute;
+            left: 12mm;
+            right: auto;
+            bottom: 8mm;
+            width: calc(100% - 24mm);
+            height: auto;
+        }
+        @media print {
+            html, body { background: #fff; }
+            .barra { display: none !important; }
+            .folha {
+                width: auto;
+                min-height: 0;
+                margin: 0;
+                padding: 0 0 32mm;
+                box-shadow: none;
+            }
+            .folha .rodape {
+                position: fixed;
+                left: 12mm;
+                bottom: 6mm;
+                width: calc(100% - 24mm);
+            }
+            @page {
+                size: A4;
+                margin: 10mm 12mm 8mm;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="barra">
+        <button type="button" class="secundario" onclick="window.close()">Fechar</button>
+        <button type="button" class="primario" onclick="window.print()">Imprimir</button>
+    </div>
+
+    <article class="folha">
+        <img class="banner" src="{% static 'img/banner_cgm_cabecalho.jpg' %}" alt="Prefeitura de Saquarema">
+
+        <div class="orgao">
+            Estado do Rio de Janeiro<br>
+            Prefeitura Municipal de Saquarema<br>
+            Controladoria-Geral do Município
+        </div>
+
+        <div class="dados">
+            <p><strong>ORIGEM:</strong> {{ processo.secretaria|default:"—" }}</p>
+            <p><strong>PROCESSO Nº:</strong> {{ processo.numero_processo }}</p>
+            <p><strong>VOLUME:</strong> {{ processo.volume|default:"—" }}</p>
+            {% if processo.processo_pagamento %}
+            <p><strong>PROCESSO PAGAMENTO:</strong> {{ processo.processo_pagamento }}</p>
+            {% endif %}
+            {% if processo.objeto %}
+            <p><strong>OBJETO:</strong> {{ processo.objeto }}</p>
+            {% endif %}
+            {% if processo.contratada %}
+            <p><strong>CONTRATADA:</strong> {{ processo.contratada }}</p>
+            {% endif %}
+        </div>
+
+        <div class="faixa">CHECKLIST DE DILIGÊNCIAS</div>
+
+        {% for grupo in grupos %}
+            {% if varios %}
+            <div class="grupo-titulo">
+                Registrada em {{ grupo.pendencia.criada_em|date:"d/m/Y" }}
+                {% if grupo.pendencia.responsavel_tecnico %}
+                    · {{ grupo.pendencia.responsavel_tecnico.get_full_name|default:grupo.pendencia.responsavel_tecnico.username }}
+                {% endif %}
+                · {{ grupo.pendencia.get_status_display }}
+            </div>
+            {% endif %}
+            {% for item in grupo.itens %}
+            <div class="item">
+                <span class="caixa{% if item.concluido %} is-feita{% endif %}">{% if item.concluido %}✓{% endif %}</span>
+                <span>{{ item.texto }}</span>
+            </div>
+            {% empty %}
+            <p class="vazio">Nenhum item identificado neste texto.</p>
+            {% endfor %}
+        {% empty %}
+        <p class="vazio">Nenhuma diligência registrada neste processo.</p>
+        {% endfor %}
+
+        <p class="legenda">Os itens com a caixa marcada já foram indicados como atendidos no sistema. Os demais seguem em aberto para conferência.</p>
+        <p class="local">Saquarema/RJ, {{ data_extenso }}.</p>
+
+        <img class="banner rodape" src="{% static 'img/banner_cgm_rodape.jpg' %}" alt="Prefeitura Municipal de Saquarema">
+    </article>
+</body>
+</html>

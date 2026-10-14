@@ -28,6 +28,11 @@
                     Confirmar resolução
                 </button>
             </form>
+            <a href="{% url 'imprimir_checklist_diligencias' pendencia.processo_id %}"
+               class="btn btn--outline" target="_blank" rel="noopener">
+                <span class="material-symbols-rounded">print</span>
+                Imprimir checklist
+            </a>
             <a href="{% url 'analista_processo' pendencia.processo_id %}" class="btn btn--outline">
                 <span class="material-symbols-rounded">open_in_new</span>
                 Abrir processo

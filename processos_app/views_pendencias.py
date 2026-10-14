@@ -8,10 +8,11 @@ Views só tratam HTTP. As regras estão em services/pendencias.py.
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .models import Pendencia
+from .models import Pendencia, Processo
 from .services import pendencias as svc
 from .services import permissions as perm
 
@@ -67,6 +68,49 @@ def diligencias(request):
         'total_indicados': _diligencias_visiveis(
             request.user, 'ATENDIMENTO_INDICADO').count(),
         **perm.contexto_de_permissoes(request.user),
+    })
+
+
+_MESES = (
+    'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+    'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+)
+
+
+def _grupos_checklist(processo):
+    """Diligências do processo, cada uma já separada em itens."""
+    from .services.diligencia_texto import itens_para_checklist
+
+    grupos = []
+    pendencias = (processo.pendencias
+                  .exclude(status='CANCELADA')
+                  .select_related('responsavel_tecnico')
+                  .order_by('criada_em'))
+    for pendencia in pendencias:
+        grupos.append({
+            'pendencia': pendencia,
+            'itens': itens_para_checklist(
+                pendencia.descricao, pendencia.itens_concluidos),
+        })
+    return grupos
+
+
+@login_required
+@perm.exige(perm.pode_consultar_assinatura_e_diligencias,
+            'Impressão do checklist é da Gestão, do administrador e dos analistas.')
+def imprimir_checklist(request, process_id):
+    """Folha de checklist das diligências de um processo, no padrão da CGM."""
+    processo = get_object_or_404(Processo, id=process_id)
+    if not perm.pode_consultar_processo(request.user, processo):
+        raise PermissionDenied
+    hoje = timezone.localdate()
+    grupos = _grupos_checklist(processo)
+    return render(request, 'gestao/checklist_impressao.html', {
+        'processo': processo,
+        'grupos': grupos,
+        'varios': len(grupos) > 1,
+        'data_extenso': (
+            f'{hoje.day} de {_MESES[hoje.month - 1]} de {hoje.year}'),
     })
 
 

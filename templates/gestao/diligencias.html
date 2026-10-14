@@ -81,6 +81,12 @@
                             <div class="cell-muted">desde {{ pendencia.criada_em|date:"d/m/Y" }}</div>
                         </td>
                         <td class="col-actions">
+                            <div class="dil-acoes">
+                            <a href="{% url 'imprimir_checklist_diligencias' pendencia.processo_id %}"
+                               class="icon-btn" target="_blank" rel="noopener"
+                               title="Imprimir checklist">
+                                <span class="material-symbols-rounded">print</span>
+                            </a>
                             {% if pode_indicar_atendimento and pendencia.status == 'AGUARDANDO_ATENDIMENTO' %}
                             <button type="button" class="btn btn--primary btn--sm"
                                     data-checklist-indicar="{{ pendencia.id }}"
@@ -97,6 +103,7 @@
                             {% else %}
                             <span class="badge">{{ pendencia.get_status_display }}</span>
                             {% endif %}
+                            </div>
                         </td>
                     </tr>
                     {% empty %}

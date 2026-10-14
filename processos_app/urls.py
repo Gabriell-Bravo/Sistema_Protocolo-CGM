@@ -109,6 +109,8 @@ urlpatterns = [
     # ------------------------------------------------------------------
     path('gestao/diligencias/',
          pend.diligencias, name='gestao_diligencias'),
+    path('processo/<int:process_id>/diligencias/imprimir/',
+         pend.imprimir_checklist, name='imprimir_checklist_diligencias'),
     path('diligencias/<int:pendencia_id>/indicar-atendimento/',
          pend.indicar_atendimento, name='pend_indicar_atendimento'),
     path('analista/atendimentos/',

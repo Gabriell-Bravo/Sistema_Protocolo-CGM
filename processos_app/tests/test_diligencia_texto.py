@@ -1,3 +1,4 @@
+from django.contrib.auth.models import User
 from django.test import SimpleTestCase
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -105,6 +106,7 @@ class ChecklistNaFilaTest(BaseProcessoTestCase):
         self.assertContains(pagina, 'Anexar aos autos tombamento')
         self.assertContains(pagina, '233, 234, 235 e 239')
         self.assertContains(pagina, 'Indicar atendimento')
+        self.assertContains(pagina, '/diligencias/imprimir/')
 
     def test_indicar_grava_os_itens_marcados(self):
         processo = self.processo_em_analise()
@@ -131,3 +133,56 @@ class ChecklistTemplateTest(SimpleTestCase):
         self.assertIn('Juntar certidão.', html)
         self.assertIn('Corrigir a autuação.', html)
         self.assertEqual(html.count('dil-check__item'), 2)
+
+
+class ImpressaoChecklistTest(BaseProcessoTestCase):
+
+    def _criar(self):
+        processo = self.processo_em_analise()
+        pendencias.criar(
+            processo.id, self.analista_lic,
+            '1- Anexar aos autos tombamento; '
+            '2- Regularizar assinatura às fls. 233.')
+        pendencias.criar(processo.id, self.analista_lic, 'Diligência cancelada na folha')
+        ultima = processo.pendencias.order_by('-id').first()
+        pendencias.cancelar(ultima.id, self.analista_lic, 'Cadastrada por engano')
+        return processo
+
+    def test_gestao_imprime_o_checklist_no_padrao_da_cgm(self):
+        processo = self._criar()
+        self.client.force_login(self.gestao)
+        pagina = self.client.get(
+            reverse('imprimir_checklist_diligencias', args=[processo.id]))
+        self.assertEqual(pagina.status_code, 200)
+        self.assertContains(pagina, 'CHECKLIST DE DILIGÊNCIAS')
+        self.assertContains(pagina, 'Controladoria-Geral do Município')
+        self.assertContains(pagina, 'banner_cgm_cabecalho.jpg')
+        self.assertContains(pagina, 'banner_cgm_rodape.jpg')
+        self.assertContains(pagina, processo.numero_processo)
+        self.assertContains(pagina, 'Anexar aos autos tombamento')
+        self.assertContains(pagina, 'Regularizar assinatura às fls. 233.')
+        self.assertNotContains(pagina, 'Diligência cancelada na folha')
+
+    def test_analista_do_grupo_imprime_e_outro_grupo_nao(self):
+        processo = self._criar()
+        self.client.force_login(self.analista_lic)
+        ok = self.client.get(
+            reverse('imprimir_checklist_diligencias', args=[processo.id]))
+        self.assertEqual(ok.status_code, 200)
+        self.client.force_login(self.analista_liq)
+        negado = self.client.get(
+            reverse('imprimir_checklist_diligencias', args=[processo.id]))
+        self.assertEqual(negado.status_code, 403)
+
+    def test_administrador_imprime_e_protocolo_nao(self):
+        processo = self._criar()
+        admin = User.objects.create_superuser(
+            'admin_teste', 'admin@example.com', 'senha-teste-123')
+        self.client.force_login(admin)
+        ok = self.client.get(
+            reverse('imprimir_checklist_diligencias', args=[processo.id]))
+        self.assertEqual(ok.status_code, 200)
+        self.client.force_login(self.protocolo)
+        negado = self.client.get(
+            reverse('imprimir_checklist_diligencias', args=[processo.id]))
+        self.assertEqual(negado.status_code, 403)

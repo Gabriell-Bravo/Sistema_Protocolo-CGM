@@ -810,6 +810,13 @@ A análise em andamento será limpa (incluindo número de relatório, se houver)
     <section class="card" id="blocoPendencias">
         <div class="card__header">
             <span class="card__title">Lista de diligências</span>
+            {% if is_gestao or is_analista or user.is_superuser %}
+            <a href="{% url 'imprimir_checklist_diligencias' processo.id %}"
+               class="btn btn--outline btn--sm" target="_blank" rel="noopener">
+                <span class="material-symbols-rounded">print</span>
+                Imprimir
+            </a>
+            {% endif %}
             <span class="card__hint">{{ pendencias|length }} {{ pendencias|length|pluralize:"item,itens" }}</span>
         </div>
 

@@ -1594,6 +1594,13 @@ button.encaminhamento__opcao:disabled {
     background: var(--primary-soft);
 }
 
+.dil-acoes {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+}
+
 .table .col-actions {
     position: sticky;
     right: 0;
