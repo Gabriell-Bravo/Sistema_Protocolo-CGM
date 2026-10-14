@@ -63,10 +63,10 @@ class PendenciasTest(BaseProcessoTestCase):
         with self.assertRaises(PermissionDenied):
             pendencias.desfazer_indicacao(p.id, self.analista_lic)
 
-        # Na lista unificada, legado aparece como aberta com Concluir.
+        # Na lista unificada, legado aparece como aberta com Concluir diligência.
         self.client.force_login(admin)
         fila = self.client.get(reverse('gestao_diligencias'))
-        self.assertContains(fila, 'Concluir')
+        self.assertContains(fila, 'Concluir diligência')
         self.assertContains(fila, 'Falta certidão')
 
         tela = self.client.get(reverse('analista_processo', args=[processo.id]))
@@ -95,7 +95,7 @@ class PendenciasTest(BaseProcessoTestCase):
         self.assertContains(padrao, 'Aguardando atendimento')
         self.assertContains(padrao, 'Finalizados')
         self.assertContains(padrao, 'Ainda aberta')
-        self.assertContains(padrao, '1/2 completo')
+        self.assertContains(padrao, '1/2 diligências')
         self.assertNotContains(padrao, 'Já confirmada')
         rotulos = [rotulo for _, rotulo, _ in padrao.context['abas_diligencia']]
         self.assertEqual(rotulos, ['Aguardando atendimento', 'Finalizados'])

@@ -106,7 +106,8 @@ class ChecklistNaFilaTest(BaseProcessoTestCase):
         self.assertContains(pagina, 'Anexar aos autos tombamento')
         self.assertContains(pagina, '233, 234, 235 e 239')
         self.assertContains(pagina, 'dil-preview')
-        self.assertContains(pagina, 'Concluir')
+        self.assertContains(pagina, 'Concluir diligência')
+        self.assertContains(pagina, '0/2 itens')
         self.assertContains(pagina, '/diligencias/imprimir/')
 
     def test_concluir_grava_os_itens_marcados(self):

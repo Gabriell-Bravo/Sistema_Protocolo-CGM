@@ -79,8 +79,11 @@ Linhas já existentes no mesmo processo (mesmo texto) serão ignoradas."
                     <tr class="{{ pendencia.processo.prioridade_linha_class }}">
                         <td class="col-sticky">
                             <strong>{{ pendencia.processo.numero_processo }}</strong>
-                            {% if pendencia.progresso_total %}
+                            {% if pendencia.progresso_rotulo %}
                             <div class="cell-muted">{{ pendencia.progresso_rotulo }}</div>
+                            {% endif %}
+                            {% if pendencia.itens_rotulo %}
+                            <div class="cell-muted">{{ pendencia.itens_rotulo }}</div>
                             {% endif %}
                         </td>
                         <td>{{ pendencia.processo.volume|default:"—" }}</td>
@@ -107,7 +110,11 @@ Linhas já existentes no mesmo processo (mesmo texto) serão ignoradas."
                                title="Imprimir checklist">
                                 <span class="material-symbols-rounded">print</span>
                             </a>
-                            {% if pendencia.progresso_total and status_atual != 'RESOLVIDA' %}
+                            {% if pendencia.itens_rotulo and status_atual != 'RESOLVIDA' %}
+                            <span class="badge {% if pendencia.itens_feitos == pendencia.itens_total %}badge--success{% else %}badge--warning{% endif %}">
+                                {{ pendencia.itens_rotulo }}
+                            </span>
+                            {% elif pendencia.progresso_rotulo and status_atual != 'RESOLVIDA' %}
                             <span class="badge {% if pendencia.processo_todas_completas %}badge--success{% else %}badge--warning{% endif %}">
                                 {{ pendencia.progresso_rotulo }}
                             </span>
@@ -116,9 +123,10 @@ Linhas já existentes no mesmo processo (mesmo texto) serão ignoradas."
                             <button type="button" class="btn btn--primary btn--sm"
                                     data-checklist-indicar="{{ pendencia.id }}"
                                     data-processo="{{ pendencia.processo.numero_processo }}"
-                                    data-action="{% url 'pend_concluir' pendencia.id %}">
+                                    data-action="{% url 'pend_concluir' pendencia.id %}"
+                                    title="Concluir só esta diligência">
                                 <span class="material-symbols-rounded">task_alt</span>
-                                Concluir
+                                Concluir diligência
                             </button>
                             {% elif pendencia.status == 'RESOLVIDA' %}
                             <span class="badge badge--success">
@@ -148,8 +156,8 @@ Linhas já existentes no mesmo processo (mesmo texto) serão ignoradas."
 
     {% if pode_concluir_pendencia %}
     <p class="cell-muted">
-        Clique no texto ou em “Concluir” para marcar os itens atendidos.
-        O processo só vai para Finalizados quando todas as diligências dele estiverem completas.
+        Cada linha é uma diligência. Em “Concluir diligência”, marque só os itens atendidos desta linha.
+        O processo vai para Finalizados quando todas as diligências dele estiverem concluídas.
     </p>
     {% else %}
     <p class="cell-muted">Clique no texto para ver o checklist. A conclusão é da Gestão ou do administrador.</p>
@@ -239,15 +247,11 @@ Linhas já existentes no mesmo processo (mesmo texto) serão ignoradas."
             lista.appendChild(vazio);
         }
         if (modo === 'indicar' && acoes) {
-            titulo.textContent = 'Concluir diligência';
+            titulo.textContent = 'Concluir esta diligência';
             intro.textContent = (processo ? 'Processo ' + processo + '. ' : '')
-                + 'Marque os itens atendidos e confirme a conclusão.';
+                + 'Marque apenas os itens desta diligência que foram atendidos. Isso não conclui outras diligências do processo.';
             form.action = action;
             acoes.hidden = false;
-            // Por padrão marca todos — concluir a diligência = completa.
-            lista.querySelectorAll('input[type="checkbox"]').forEach(function (c) {
-                c.checked = true;
-            });
         } else {
             titulo.textContent = 'Checklist';
             intro.textContent = processo ? 'Processo ' + processo : '';

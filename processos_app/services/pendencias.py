@@ -67,7 +67,7 @@ def _itens_marcados(pendencia, itens_concluidos):
     validos = separar_itens(pendencia.descricao)
     if not validos:
         return [], []
-    # Sem seleção no POST: concluir marca todos os itens.
+    # None = conclusão programática (marca todos). Lista vazia = nenhum marcado.
     if itens_concluidos is None:
         return validos, validos
     escolhidos = []
@@ -77,8 +77,6 @@ def _itens_marcados(pendencia, itens_concluidos):
         if item in validos and item not in vistos:
             escolhidos.append(item)
             vistos.add(item)
-    if not escolhidos:
-        escolhidos = list(validos)
     return validos, escolhidos
 
 
@@ -335,7 +333,9 @@ def progresso_processo(processo_id):
 
 
 def anotar_progresso(pendencias):
-    """Coloca progresso_resolvidas/total e rotulo em cada pendência da lista."""
+    """Anota progresso do processo (diligências) e dos itens do checklist."""
+    from .diligencia_texto import separar_itens
+
     ids = {p.processo_id for p in pendencias}
     if not ids:
         return pendencias
@@ -356,12 +356,24 @@ def anotar_progresso(pendencias):
         resolvidas, total = mapa.get(pendencia.processo_id, (0, 0))
         pendencia.progresso_resolvidas = resolvidas
         pendencia.progresso_total = total
+        # Só exibe quando o processo tem mais de uma diligência —
+        # "0/1 completo" ao lado de vários itens do checklist confundia.
         pendencia.progresso_rotulo = (
-            f'{resolvidas}/{total} completo{"s" if total != 1 else ""}'
-            if total else ''
+            f'{resolvidas}/{total} diligência{"s" if total != 1 else ""}'
+            if total > 1 else ''
         )
         pendencia.processo_todas_completas = (
             total > 0 and resolvidas == total)
+
+        itens = separar_itens(pendencia.descricao)
+        feitos = set(pendencia.itens_concluidos or [])
+        marcados = sum(1 for item in itens if item in feitos)
+        pendencia.itens_total = len(itens)
+        pendencia.itens_feitos = marcados
+        pendencia.itens_rotulo = (
+            f'{marcados}/{len(itens)} itens'
+            if len(itens) > 1 else ''
+        )
     return pendencias
 
 
