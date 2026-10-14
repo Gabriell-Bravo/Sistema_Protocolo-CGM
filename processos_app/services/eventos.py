@@ -27,7 +27,7 @@ def registrar_evento(processo, tipo, usuario=None, descricao='', **dados):
 def registrar_evento_pendencia(pendencia, tipo, usuario=None, descricao=''):
     """Grava um EventoPendencia (item 46).
 
-    Apenas os cinco atos formais. Telefonema, e-mail, WhatsApp e cobrança
+    Atos formais da diligência. Telefonema, e-mail, WhatsApp e cobrança
     intermediária não são registrados (item 25).
     """
     return EventoPendencia.objects.create(

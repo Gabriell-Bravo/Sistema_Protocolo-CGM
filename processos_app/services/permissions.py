@@ -316,6 +316,16 @@ def pode_indicar_atendimento(user):
     return is_gestao(user)
 
 
+def pode_desfazer_indicacao_atendimento(user):
+    """O administrador desfaz uma indicação feita por engano.
+
+    A Gestão indica; quem avalia de verdade continua sendo o analista.
+    Sem a conta do analista, só o administrador volta a diligência
+    para aguardar atendimento.
+    """
+    return eh_administrador(user)
+
+
 def pode_consultar_finalizados(user):
     """Protocolo, Gestão e analista consultam. Só o Protocolo edita."""
     return is_protocolo(user) or is_gestao(user) or is_analista(user) or eh_administrador(user)
@@ -532,6 +542,7 @@ def contexto_de_permissoes(user):
         'pode_alterar_destino': pode_alterar_destino(user),
         'pode_alterar_prioridade': pode_alterar_prioridade(user),
         'pode_indicar_atendimento': pode_indicar_atendimento(user),
+        'pode_desfazer_indicacao_atendimento': pode_desfazer_indicacao_atendimento(user),
         'pode_ver_dashboard': pode_ver_dashboard(user),
         'pode_gerir_pessoas': pode_gerir_pessoas(user),
         'pode_editar_cadastros': pode_editar_cadastros(user),
@@ -566,6 +577,7 @@ def contexto_processor(request):
             'pode_alterar_destino': False,
             'pode_alterar_prioridade': False,
             'pode_indicar_atendimento': False,
+            'pode_desfazer_indicacao_atendimento': False,
             'pode_ver_dashboard': False,
             'pode_gerir_pessoas': False,
             'pode_editar_cadastros': False,

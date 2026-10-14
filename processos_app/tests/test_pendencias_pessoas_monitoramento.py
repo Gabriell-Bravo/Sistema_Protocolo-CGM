@@ -50,6 +50,73 @@ class PendenciasTest(BaseProcessoTestCase):
         pendencias.cancelar(p.id, self.gestao, 'Lançada por engano')
         self.assertEqual(Pendencia.objects.get(id=p.id).status, 'CANCELADA')
 
+    def test_admin_desfaz_indicacao_de_atendimento(self):
+        from processos_app.tests.base import criar_usuario
+
+        admin = criar_usuario('admin_desfaz_ind', 'GESTAO', is_superuser=True)
+        processo = self.processo_em_analise()
+        p = pendencias.criar(processo.id, self.analista_lic, 'Falta certidão')
+        pendencias.indicar_atendimento(p.id, self.gestao)
+        p.refresh_from_db()
+        self.assertEqual(p.status, 'ATENDIMENTO_INDICADO')
+
+        with self.assertRaises(PermissionDenied):
+            pendencias.desfazer_indicacao(p.id, self.gestao)
+        with self.assertRaises(PermissionDenied):
+            pendencias.desfazer_indicacao(p.id, self.analista_lic)
+
+        self.client.force_login(self.gestao)
+        fila_gestao = self.client.get(
+            reverse('gestao_diligencias') + '?status=ATENDIMENTO_INDICADO')
+        self.assertNotContains(fila_gestao, 'Desfazer indicação')
+
+        self.client.force_login(admin)
+        fila = self.client.get(
+            reverse('gestao_diligencias') + '?status=ATENDIMENTO_INDICADO')
+        self.assertContains(fila, 'Desfazer indicação')
+        tela = self.client.get(reverse('analista_processo', args=[processo.id]))
+        self.assertContains(tela, 'Desfazer indicação')
+
+        resp = self.client.post(reverse('pend_desfazer_indicacao', args=[p.id]))
+        self.assertEqual(resp.status_code, 302)
+        p.refresh_from_db()
+        self.assertEqual(p.status, 'AGUARDANDO_ATENDIMENTO')
+        self.assertIsNone(p.atendimento_indicado_em)
+        self.assertIsNone(p.atendimento_indicado_por_id)
+        self.assertEqual(p.itens_concluidos, [])
+        self.assertTrue(p.eventos.filter(tipo='INDICACAO_DESFEITA').exists())
+
+        pendencias.indicar_atendimento(p.id, self.gestao)
+        pendencias.confirmar_resolucao(p.id, self.analista_lic)
+        with self.assertRaises(TransicaoInvalida):
+            pendencias.desfazer_indicacao(p.id, admin)
+
+    def test_aba_finalizados_mostra_o_que_o_analista_confirmou(self):
+        processo = self.processo_em_analise()
+        aberta = pendencias.criar(processo.id, self.analista_lic, 'Ainda aberta')
+        confirmada = pendencias.criar(processo.id, self.analista_lic, 'Já confirmada')
+        pendencias.indicar_atendimento(confirmada.id, self.gestao)
+        pendencias.confirmar_resolucao(confirmada.id, self.analista_lic)
+
+        self.client.force_login(self.gestao)
+        padrao = self.client.get(reverse('gestao_diligencias'))
+        self.assertEqual(padrao.context['status_atual'], 'AGUARDANDO_ATENDIMENTO')
+        self.assertContains(padrao, 'Aguardando atendimento')
+        self.assertContains(padrao, 'Atendimento indicado')
+        self.assertContains(padrao, 'Finalizados')
+        self.assertContains(padrao, 'Ainda aberta')
+        self.assertNotContains(padrao, 'Já confirmada')
+        rotulos = [rotulo for _, rotulo, _ in padrao.context['abas_diligencia']]
+        self.assertEqual(rotulos, [
+            'Aguardando atendimento', 'Atendimento indicado', 'Finalizados'])
+
+        fim = self.client.get(reverse('gestao_diligencias') + '?status=RESOLVIDA')
+        self.assertEqual(fim.context['titulo_aba'], 'Finalizados')
+        self.assertContains(fim, 'Já confirmada')
+        self.assertContains(fim, 'Confirmada em')
+        self.assertNotContains(fim, 'Ainda aberta')
+        self.assertEqual(fim.context['total'], 1)
+
     def test_admin_cancela_e_edita_diligencia_de_outro(self):
         from processos_app.tests.base import criar_usuario
 

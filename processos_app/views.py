@@ -156,6 +156,16 @@ def _usa_tela_processos_protocolo(user):
     )
 
 
+def _fase_padrao_lista(user):
+    """Protocolo abre em Todos, para ver quem já foi analisado e dar saída.
+
+    Gestão e administrador continuam em Pendentes, o mesmo recorte da fila.
+    """
+    if perm.is_protocolo(user):
+        return 'todos'
+    return 'pendentes'
+
+
 def _q_termo_lista(termo):
     termo = (termo or '').strip()
     if not termo:
@@ -464,9 +474,10 @@ def listar_processos(request):
     genero_filtro = request.GET.get('genero', 'todas')
     especie_filtro = request.GET.get('especie', 'todas')
     situacao_filtro = request.GET.get('situacao', 'todas')
-    fase = (request.GET.get('fase') or 'pendentes').strip()
+    fase_padrao = _fase_padrao_lista(request.user)
+    fase = (request.GET.get('fase') or fase_padrao).strip()
     if fase not in ('pendentes', 'finalizados', 'todos'):
-        fase = 'pendentes'
+        fase = fase_padrao
 
     tela_protocolo = (
         (not aba_cgm) and _usa_tela_processos_protocolo(request.user))
@@ -602,6 +613,7 @@ def listar_processos(request):
         'genero_filtro': genero_filtro,
         'especie_filtro': especie_filtro,
         'situacao_filtro': situacao_filtro,
+        'fase_padrao': fase_padrao,
         'situacoes': [c for c in Processo.SITUACAO_TRAMITE_CHOICES if c[0] in Processo.SITUACOES_ATIVAS],
         'prioridades': svc_cadastros.opcoes_prioridade(),
         'all_generos': all_generos,
@@ -1008,6 +1020,7 @@ def listar_finalizados(request):
         'pode_desfazer': perm.pode_desfazer_tramite(request.user),
         'dados_formulario': svc_cadastros.dados_para_formulario(),
         'processos_protocolo_unificado': tela_protocolo,
+        'fase_padrao': _fase_padrao_lista(request.user),
         'escopo_protocolo': 'finalizados',
         'total_aba_ativos': total_aba_ativos,
         'total_aba_finalizados': total_aba_finalizados,

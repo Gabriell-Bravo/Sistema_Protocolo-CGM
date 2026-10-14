@@ -108,6 +108,38 @@ def indicar_atendimento(pendencia_id, usuario, itens_concluidos=None):
     return pendencia
 
 
+@transaction.atomic
+def desfazer_indicacao(pendencia_id, usuario):
+    """ATENDIMENTO_INDICADO -> AGUARDANDO_ATENDIMENTO, só o administrador.
+
+    Desfaz uma indicação lançada por engano, sem a conta do analista.
+    As marcações do checklist saem junto: a Gestão indica de novo.
+    """
+    pendencia = _travar(pendencia_id)
+
+    perm.assert_permissao(
+        perm.pode_desfazer_indicacao_atendimento(usuario),
+        'Somente o administrador pode desfazer a indicação de atendimento.')
+
+    if pendencia.status != 'ATENDIMENTO_INDICADO':
+        raise TransicaoInvalida(
+            f'Diligência em "{pendencia.get_status_display()}" não tem '
+            'indicação para desfazer.')
+
+    pendencia.status = 'AGUARDANDO_ATENDIMENTO'
+    pendencia.atendimento_indicado_em = None
+    pendencia.atendimento_indicado_por = None
+    pendencia.itens_concluidos = []
+    pendencia.save(update_fields=[
+        'status', 'atendimento_indicado_em', 'atendimento_indicado_por',
+        'itens_concluidos'])
+
+    registrar_evento_pendencia(
+        pendencia, 'INDICACAO_DESFEITA', usuario,
+        f'Indicação de atendimento desfeita por {perm.nome_usuario(usuario)}.')
+    return pendencia
+
+
 # --------------------------------------------------------------------------
 # Analista: confirmar ou devolver
 # --------------------------------------------------------------------------

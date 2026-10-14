@@ -37,6 +37,13 @@ def _diligencias_visiveis(usuario, status):
         usuario, svc.fila_diligencias(status), campo='processo__genero')
 
 
+ABAS_DILIGENCIA = (
+    ('AGUARDANDO_ATENDIMENTO', 'Aguardando atendimento'),
+    ('ATENDIMENTO_INDICADO', 'Atendimento indicado'),
+    ('RESOLVIDA', 'Finalizados'),
+)
+
+
 @login_required
 @perm.exige(perm.pode_consultar_assinatura_e_diligencias,
             'Área da Gestão e consulta dos analistas.')
@@ -57,16 +64,24 @@ def diligencias(request):
 
     lista = svc.filtrar_por_termo(
         _diligencias_visiveis(request.user, status), termo)
+    if status == 'RESOLVIDA':
+        from django.db.models import F
+        lista = lista.order_by(F('resolvida_em').desc(nulls_last=True), '-id')
+    titulos = dict(ABAS_DILIGENCIA)
+    titulo_aba = titulos.get(status) or dict(Pendencia.STATUS_CHOICES).get(status, '')
+    if status == 'ABERTAS':
+        titulo_aba = 'Todas as abertas'
     return render(request, 'gestao/diligencias.html', {
         'pendencias': lista,
         'total': lista.count(),
         'status_atual': status,
+        'titulo_aba': titulo_aba,
         'status_choices': Pendencia.STATUS_CHOICES,
         'termo': termo,
-        'total_aguardando': _diligencias_visiveis(
-            request.user, 'AGUARDANDO_ATENDIMENTO').count(),
-        'total_indicados': _diligencias_visiveis(
-            request.user, 'ATENDIMENTO_INDICADO').count(),
+        'abas_diligencia': [
+            (chave, rotulo, _diligencias_visiveis(request.user, chave).count())
+            for chave, rotulo in ABAS_DILIGENCIA
+        ],
         **perm.contexto_de_permissoes(request.user),
     })
 
@@ -127,6 +142,23 @@ def indicar_atendimento(request, pendencia_id):
             'Atendimento indicado. A diligência foi para o analista avaliar.')
     except (PermissionDenied, ValidationError) as exc:
         _erro(request, exc)
+    return redirect('gestao_diligencias')
+
+
+@login_required
+@require_POST
+def desfazer_indicacao(request, pendencia_id):
+    """O administrador volta uma indicação feita por engano."""
+    destino = request.POST.get('next')
+    try:
+        svc.desfazer_indicacao(pendencia_id, request.user)
+        messages.success(
+            request,
+            'Indicação desfeita. A diligência voltou a aguardar atendimento.')
+    except (PermissionDenied, ValidationError) as exc:
+        _erro(request, exc)
+    if destino:
+        return redirect(destino)
     return redirect('gestao_diligencias')
 
 

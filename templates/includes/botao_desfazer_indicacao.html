@@ -1,0 +1,12 @@
+{% if pode_desfazer_indicacao_atendimento and pendencia.status == 'ATENDIMENTO_INDICADO' %}
+<form method="post" action="{% url 'pend_desfazer_indicacao' pendencia.id %}"
+      data-confirm="Desfazer a indicação de atendimento? A diligência volta a aguardar atendimento e as marcações do checklist são limpas."
+      data-confirm-title="Desfazer indicação" data-confirm-ok="Desfazer" data-confirm-danger>
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <button type="submit" class="btn btn--outline btn--sm" title="Desfazer a indicação de atendimento">
+        <span class="material-symbols-rounded">undo</span>
+        Desfazer indicação
+    </button>
+</form>
+{% endif %}

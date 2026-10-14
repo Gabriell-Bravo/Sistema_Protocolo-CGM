@@ -2,7 +2,7 @@
 {% if processos_protocolo_unificado %}
 <section class="filters" data-abas-protocolo>
     <div class="filters__chips">
-        <a href="{% url 'listar_processos' %}?fase=pendentes{% if genero_filtro and genero_filtro != 'todas' %}&genero={{ genero_filtro|urlencode }}{% endif %}{% if especie_filtro and especie_filtro != 'todas' %}&especie={{ especie_filtro|urlencode }}{% endif %}{% if prioridade_filtro and prioridade_filtro != 'todas' %}&prioridade={{ prioridade_filtro }}{% endif %}"
+        <a href="{% url 'listar_processos' %}?fase={{ fase_padrao|default:'pendentes' }}{% if genero_filtro and genero_filtro != 'todas' %}&genero={{ genero_filtro|urlencode }}{% endif %}{% if especie_filtro and especie_filtro != 'todas' %}&especie={{ especie_filtro|urlencode }}{% endif %}{% if prioridade_filtro and prioridade_filtro != 'todas' %}&prioridade={{ prioridade_filtro }}{% endif %}"
            class="chip {% if escopo_protocolo == 'ativos' and not busca_combinada %}chip--ativo{% endif %}"
            title="Processos ainda na CGM">
             Ativos

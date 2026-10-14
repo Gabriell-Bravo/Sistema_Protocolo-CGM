@@ -626,12 +626,19 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         finalizado.save(update_fields=['numero_relatorio'])
 
         self.client.force_login(self.protocolo)
-        # Padrão Pendentes: o que ainda aguarda análise (não é saída física).
+        # Protocolo abre em Todos: pendente e já analisado, para poder dar saída.
         padrao = self.client.get(reverse('listar_processos'))
-        self.assertEqual(padrao.context['fase'], 'pendentes')
+        self.assertEqual(padrao.context['fase'], 'todos')
         self.assertContains(padrao, pendente.numero_processo)
-        self.assertNotContains(padrao, finalizado.numero_processo)
+        self.assertContains(padrao, finalizado.numero_processo)
+        self.assertContains(padrao, 'fase=todos')
 
+        self.client.force_login(self.gestao)
+        gestao = self.client.get(reverse('listar_processos'))
+        self.assertEqual(gestao.context['fase'], 'pendentes')
+        self.assertNotContains(gestao, finalizado.numero_processo)
+
+        self.client.force_login(self.protocolo)
         pend = self.client.get(reverse('listar_processos') + '?fase=pendentes')
         self.assertContains(pend, 'Pendentes')
         self.assertContains(pend, pendente.numero_processo)
@@ -644,6 +651,92 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         self.assertContains(fim, 'Com análise')
         self.assertContains(padrao, 'Processos Protocolo')
         self.assertContains(padrao, 'data-abas-protocolo')
+
+    def _linha_do_processo(self, resposta, numero):
+        html = resposta.content.decode()
+        marca = f'data-field="numero_processo">{numero}'
+        self.assertIn(marca, html)
+        return html.split(marca, 1)[1].split('</tr>', 1)[0]
+
+    def test_protocolo_enxerga_processo_analisado_para_dar_saida(self):
+        """Entrada, análise, controlador e saída, na tela do Protocolo.
+
+        O Protocolo abre em Todos. Pendentes continua escondendo quem já
+        foi analisado; a lista padrão mostra o processo, com o botão de saída.
+        """
+        numero = 'fluxo-saida/2026'
+        processo = self.novo_processo(
+            self.especie_liq, numero_processo=numero)
+
+        self.client.force_login(self.protocolo)
+        entrada = self.client.get(reverse('listar_processos'))
+        self.assertEqual(entrada.context['fase'], 'todos')
+        self.assertContains(entrada, 'Processos Protocolo')
+        linha = self._linha_do_processo(entrada, numero)
+        self.assertIn('Disponível para análise', linha)
+        self.assertIn('Registrar saída', linha)
+
+        tramitacao.assumir(processo.id, self.analista_liq)
+        self.preencher_analise(processo)
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'EM_ANALISE')
+        self.assertTrue((processo.numero_relatorio or '').strip())
+
+        self.client.force_login(self.protocolo)
+        padrao = self.client.get(reverse('listar_processos'))
+        self.assertEqual(padrao.context['fase'], 'todos')
+        linha = self._linha_do_processo(padrao, numero)
+        self.assertIn('Em análise por', linha)
+        self.assertIn('Registrar saída', linha)
+        pendentes = self.client.get(reverse('listar_processos') + '?fase=pendentes')
+        self.assertNotContains(pendentes, numero)
+        com_analise = self.client.get(
+            reverse('listar_processos') + '?fase=finalizados')
+        self.assertContains(com_analise, 'Com análise')
+        linha = self._linha_do_processo(com_analise, numero)
+        self.assertIn('Registrar saída', linha)
+        busca = self.client.get(
+            reverse('listar_processos') + f'?termo={numero}')
+        linha = self._linha_do_processo(busca, numero)
+        self.assertIn('Registrar saída', linha)
+
+        tramitacao.liberar_assinatura(processo.id, self.analista_liq)
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'AGUARDANDO_ASSINATURA')
+
+        self.client.force_login(self.protocolo)
+        padrao = self.client.get(reverse('listar_processos'))
+        linha = self._linha_do_processo(padrao, numero)
+        self.assertIn('Com o Controlador', linha)
+        self.assertIn('Registrar saída', linha)
+        pendentes = self.client.get(reverse('listar_processos') + '?fase=pendentes')
+        self.assertNotContains(pendentes, numero)
+
+        tramitacao.disponibilizar_retirada(processo.id, self.protocolo)
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'DISPONIVEL_RETIRADA')
+
+        self.client.force_login(self.protocolo)
+        padrao = self.client.get(reverse('listar_processos'))
+        linha = self._linha_do_processo(padrao, numero)
+        self.assertIn('Disponível para retirada', linha)
+        self.assertIn('Registrar saída', linha)
+        pendentes = self.client.get(reverse('listar_processos') + '?fase=pendentes')
+        self.assertNotContains(pendentes, numero)
+
+        saida = self.client.post(
+            reverse('marcar_saida_processo', args=[processo.id]))
+        self.assertEqual(saida.status_code, 200, saida.content)
+        self.assertTrue(saida.json()['success'])
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'SAIDA_CONCLUIDA')
+        self.assertIsNotNone(processo.data_saida)
+
+        ativos = self.client.get(reverse('listar_processos') + '?fase=todos')
+        self.assertNotContains(ativos, numero)
+        finalizados = self.client.get(reverse('listar_finalizados'))
+        self.assertContains(finalizados, numero)
+        self.assertContains(finalizados, 'Processos Protocolo')
 
     def test_reentrada_nao_herda_finalizados_da_passagem_anterior(self):
         """Análise antiga do mesmo número não manda a reentrada para Finalizados."""

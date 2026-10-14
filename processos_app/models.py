@@ -738,6 +738,7 @@ class EventoPendencia(models.Model):
         ('CRIADA', 'Criada'),
         ('ATENDIMENTO_INDICADO', 'Atendimento indicado'),
         ('ATENDIMENTO_INSUFICIENTE', 'Atendimento insuficiente'),
+        ('INDICACAO_DESFEITA', 'Indicação desfeita'),
         ('RESOLVIDA', 'Resolvida'),
         ('CANCELADA', 'Cancelada'),
     ]

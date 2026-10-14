@@ -113,6 +113,8 @@ urlpatterns = [
          pend.imprimir_checklist, name='imprimir_checklist_diligencias'),
     path('diligencias/<int:pendencia_id>/indicar-atendimento/',
          pend.indicar_atendimento, name='pend_indicar_atendimento'),
+    path('diligencias/<int:pendencia_id>/desfazer-indicacao/',
+         pend.desfazer_indicacao, name='pend_desfazer_indicacao'),
     path('analista/atendimentos/',
          pend.meus_atendimentos, name='meus_atendimentos'),
     path('pendencias/<int:pendencia_id>/resolver/',

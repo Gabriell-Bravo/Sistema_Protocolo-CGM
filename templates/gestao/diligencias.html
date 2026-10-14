@@ -2,20 +2,19 @@
 
 {% block title %}Diligências{% endblock %}
 {% block page_title %}Diligências{% endblock %}
-{% block page_subtitle %}{% if is_analista %}Consulta das diligências do seu grupo. A indicação de atendimento é da Gestão.{% else %}Diligências levantadas pelos analistas, aguardando atendimento da Secretaria.{% endif %}{% endblock %}
+{% block page_subtitle %}{% if is_analista %}Consulta das diligências do seu grupo. A indicação de atendimento é da Gestão.{% elif status_atual == 'RESOLVIDA' %}Diligências que o analista confirmou.{% elif status_atual == 'ATENDIMENTO_INDICADO' %}Atendimento já indicado, aguardando o analista confirmar.{% else %}Diligências levantadas pelos analistas, aguardando atendimento da Secretaria.{% endif %}{% endblock %}
 
 {% block content %}
 <div class="stack">
 
     <section class="stats">
-        <a class="stat" href="?status=AGUARDANDO_ATENDIMENTO{% if termo %}&termo={{ termo|urlencode }}{% endif %}">
-            <div class="stat__value">{{ total_aguardando }}</div>
-            <div class="stat__label">Aguardando atendimento</div>
+        {% for chave, rotulo, quantidade in abas_diligencia %}
+        <a class="stat stat--link {% if status_atual == chave %}is-active{% endif %}"
+           href="?status={{ chave }}{% if termo %}&termo={{ termo|urlencode }}{% endif %}">
+            <div class="stat__value">{{ quantidade }}</div>
+            <div class="stat__label">{{ rotulo }}</div>
         </a>
-        <a class="stat" href="?status=ATENDIMENTO_INDICADO{% if termo %}&termo={{ termo|urlencode }}{% endif %}">
-            <div class="stat__value">{{ total_indicados }}</div>
-            <div class="stat__label">Atendimento indicado</div>
-        </a>
+        {% endfor %}
     </section>
 
     <section class="filters">
@@ -39,10 +38,7 @@
     <section class="table-card">
         <div class="table-card__header">
             <span class="table-card__title">
-                {% for valor, rotulo in status_choices %}
-                    {% if valor == status_atual %}{{ rotulo }}{% endif %}
-                {% endfor %}
-                {% if status_atual == 'ABERTAS' %}Todas as abertas{% endif %}
+                {{ titulo_aba }}
                 {% if termo %} · busca: “{{ termo }}”{% endif %}
             </span>
             <span class="table-card__count">{{ total }} diligência{{ total|pluralize:"s" }}</span>
@@ -99,6 +95,11 @@
                             <span class="badge">
                                 Com {{ pendencia.responsavel_tecnico|default:'o analista' }}
                                 desde {{ pendencia.atendimento_indicado_em|date:"d/m/Y" }}
+                            </span>
+                            {% include "includes/botao_desfazer_indicacao.html" %}
+                            {% elif pendencia.status == 'RESOLVIDA' %}
+                            <span class="badge badge--success">
+                                Confirmada{% if pendencia.resolvida_em %} em {{ pendencia.resolvida_em|date:"d/m/Y" }}{% endif %}
                             </span>
                             {% else %}
                             <span class="badge">{{ pendencia.get_status_display }}</span>
