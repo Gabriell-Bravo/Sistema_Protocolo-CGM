@@ -109,22 +109,20 @@ Processos criados por engano em importação antiga serão removidos."
                                  data-checklist-ver="{{ pendencia.id }}"
                                  data-processo="{{ pendencia.processo.numero_processo }}"
                                  title="Ver checklist">
-                                {% include "includes/checklist_diligencia.html" with texto=pendencia.descricao concluidos=pendencia.itens_concluidos %}
+                                {% include "includes/checklist_diligencia.html" with texto=pendencia.descricao concluidos=pendencia.itens_concluidos um_botao=1 %}
                             </div>
                             {{ pendencia.checklist|json_script:pendencia.checklist_script_id }}
-                            {% if pendencia.eventos.all %}
+                            {% if pendencia.historico_linhas %}
                             <details class="dil-historico">
                                 <summary>Histórico</summary>
                                 <ul class="dil-historico__lista">
-                                    {% for evento in pendencia.eventos.all %}
+                                    {% for linha in pendencia.historico_linhas %}
                                     <li>
-                                        <strong>{{ evento.get_tipo_display }}</strong>
-                                        · {{ evento.criado_em|date:"d/m/Y H:i" }}
-                                        {% if evento.usuario %}
-                                        · {{ evento.usuario.get_full_name|default:evento.usuario.username }}
-                                        {% endif %}
-                                        {% if evento.descricao %}
-                                        <div class="cell-muted">{{ evento.descricao }}</div>
+                                        <strong>{{ linha.titulo }}</strong>
+                                        {% if linha.quando %}· {{ linha.quando|date:"d/m/Y H:i" }}{% endif %}
+                                        {% if linha.quem %}· {{ linha.quem }}{% endif %}
+                                        {% if linha.detalhe %}
+                                        <div class="cell-muted">{{ linha.detalhe }}</div>
                                         {% endif %}
                                     </li>
                                     {% endfor %}

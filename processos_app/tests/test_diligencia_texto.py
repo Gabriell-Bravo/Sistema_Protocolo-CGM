@@ -9,6 +9,28 @@ from processos_app.services import pendencias
 from .base import BaseProcessoTestCase
 
 
+class DetalheHistoricoTest(SimpleTestCase):
+
+    def test_nao_repete_a_pendencia_e_encurta_a_importacao(self):
+        from processos_app.services.pendencias import detalhe_historico
+
+        self.assertEqual(
+            detalhe_historico(
+                'Importada da planilha: Regularizar assinaturas às fls. 24.',
+                'Regularizar assinaturas às fls. 24.'),
+            'Importada da planilha.')
+        self.assertEqual(
+            detalhe_historico(
+                'Regularizar assinaturas às fls. 24, 26 a 32; 54 a 63.',
+                'Regularizar assinaturas às fls. 24, 26 a 32; 54 a 63.'),
+            '')
+        self.assertEqual(
+            detalhe_historico(
+                'Concluída por Ana.',
+                'Regularizar assinaturas às fls. 24.'),
+            'Concluída por Ana.')
+
+
 class SepararItensTest(SimpleTestCase):
 
     def test_uma_providencia_continua_inteira(self):
@@ -106,8 +128,20 @@ class ChecklistNaFilaTest(BaseProcessoTestCase):
         self.assertContains(pagina, 'Anexar aos autos tombamento')
         self.assertContains(pagina, '233, 234, 235 e 239')
         self.assertContains(pagina, 'dil-preview')
+        self.assertContains(pagina, 'data-dil-resumo')
+        self.assertNotContains(pagina, 'data-dil-mais')
         self.assertContains(pagina, 'Concluir diligência')
         self.assertContains(pagina, '0/2 itens')
+
+    def test_historico_nao_repete_o_texto_da_diligencia(self):
+        texto = 'Regularizar assinaturas às fls. 24, 26 a 32; 54 a 63.'
+        processo = self.processo_em_analise()
+        pendencias.criar(processo.id, self.analista_lic, texto)
+        self.client.force_login(self.gestao)
+        pagina = self.client.get(reverse('gestao_diligencias'))
+        html = pagina.content.decode()
+        self.assertEqual(html.count(texto), 1)
+        self.assertContains(pagina, 'Criada')
         self.assertContains(pagina, '/diligencias/imprimir/')
 
     def test_concluir_grava_os_itens_marcados(self):

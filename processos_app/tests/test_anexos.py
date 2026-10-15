@@ -95,22 +95,31 @@ class AnexoProcessoTest(BaseProcessoTestCase):
         self._post_anexo(self.analista_lic, self.processo, _docx())
         anexo = AnexoProcesso.objects.get()
         self.assertTrue(anexo.eh_previsualizavel)
+        self.assertTrue(anexo.arquivo_pdf)
 
         self.client.force_login(self.analista_lic)
         pagina = self.client.get(reverse('analista_processo', args=[self.processo.id]))
         self.assertContains(pagina, 'parecer.docx')
         self.assertContains(pagina, reverse('ver_anexo', args=[anexo.id]))
+        self.assertContains(pagina, 'formato=docx')
+        self.assertContains(pagina, 'formato=pdf')
 
         preview = self.client.get(reverse('ver_anexo', args=[anexo.id]))
         self.assertEqual(preview.status_code, 200)
-        self.assertIn('text/html', preview['Content-Type'])
-        self.assertContains(preview, 'Parecer de teste Word')
+        self.assertIn('pdf', preview['Content-Type'])
+        corpo = b''.join(preview.streaming_content)
+        self.assertTrue(corpo.startswith(b'%PDF'))
+        self.assertIn(b'Parecer de teste Word', corpo)
         self.assertEqual(
             (preview.get('X-Frame-Options') or '').upper(), 'SAMEORIGIN')
 
         baixa = self.client.get(reverse('baixar_anexo', args=[anexo.id]))
         self.assertEqual(baixa.status_code, 200)
         self.assertIn(b'PK', b''.join(baixa.streaming_content)[:4])
+
+        pdf = self.client.get(reverse('baixar_anexo', args=[anexo.id]) + '?formato=pdf')
+        self.assertEqual(pdf.status_code, 200)
+        self.assertTrue(b''.join(pdf.streaming_content).startswith(b'%PDF'))
 
     def test_tela_mostra_anexo_e_outros_papeis_baixam(self):
         self._post_anexo(self.analista_lic, self.processo, _pdf())

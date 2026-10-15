@@ -5,8 +5,13 @@
         <span class="dil-check__box{% if item in concluidos %} is-done{% endif %}" aria-hidden="true">{% if item in concluidos %}✓{% endif %}</span>
         <div class="dil-check__body">
             <span class="dil-check__text dil-check__text--clamp">{{ item }}</span>
+            {% if not um_botao %}
             <button type="button" class="dil-check__mais" hidden data-dil-mais>Ver mais</button>
+            {% endif %}
         </div>
     </li>
     {% endfor %}
 </ul>
+{% if um_botao %}
+<button type="button" class="dil-check__mais" hidden data-dil-resumo>Ver texto completo</button>
+{% endif %}

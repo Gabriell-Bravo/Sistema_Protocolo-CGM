@@ -38,21 +38,22 @@
                 <div class="stat__label">Finalizados</div>
             </div>
         </div>
-        <div class="stat stat--warning">
+        {# Oculto por enquanto. Remover o monitoramento de vez depois. #}
+        <div class="stat stat--warning" hidden>
             <span class="stat__icon"><span class="material-symbols-rounded">pending_actions</span></span>
             <div>
                 <div class="stat__value">{{ total_monitoramento_pendente }}</div>
                 <div class="stat__label">Monitoramento pendente</div>
             </div>
         </div>
-        <div class="stat stat--danger">
+        <div class="stat stat--danger" hidden>
             <span class="stat__icon"><span class="material-symbols-rounded">running_with_errors</span></span>
             <div>
                 <div class="stat__value">{{ total_monitoramento_atrasado }}</div>
                 <div class="stat__label">Monitoramento atrasado</div>
             </div>
         </div>
-        <div class="stat stat--success">
+        <div class="stat stat--success" hidden>
             <span class="stat__icon"><span class="material-symbols-rounded">verified</span></span>
             <div>
                 <div class="stat__value">{{ total_monitoramento_concluido }}</div>

@@ -348,6 +348,62 @@ def progresso_processo(processo_id):
     return resolvidas, total
 
 
+def _normalizar_texto(valor):
+    return ' '.join((valor or '').split()).casefold()
+
+
+def detalhe_historico(descricao, texto_pendencia):
+    """Texto do histórico sem repetir o corpo da diligência.
+
+    Importação fica só como 'Importada da planilha.'. Conclusão, cancelamento
+    e o que ainda falta continuam. Cópia do texto da pendência some.
+    """
+    desc = (descricao or '').strip()
+    if not desc:
+        return ''
+    if desc.casefold().startswith('importada da planilha'):
+        return 'Importada da planilha.'
+    pend = _normalizar_texto(texto_pendencia)
+    norm = _normalizar_texto(desc)
+    if pend and norm and (
+            norm == pend
+            or (len(norm) >= 40 and (norm in pend or pend.startswith(norm)))
+            or (len(pend) >= 40 and norm.startswith(pend[:80]))):
+        return ''
+    return desc
+
+
+def montar_historico(pendencia):
+    """Linhas do histórico: ato, data, pessoa e detalhe curto."""
+    linhas = []
+    tem_resolvida = False
+    for evento in pendencia.eventos.all():
+        if evento.tipo == 'RESOLVIDA':
+            tem_resolvida = True
+        quem = ''
+        if evento.usuario_id:
+            quem = (
+                evento.usuario.get_full_name() or evento.usuario.username)
+        linhas.append({
+            'titulo': evento.get_tipo_display(),
+            'quando': evento.criado_em,
+            'quem': quem,
+            'detalhe': detalhe_historico(evento.descricao, pendencia.descricao),
+        })
+    if (pendencia.status == 'RESOLVIDA' and not tem_resolvida
+            and getattr(pendencia, 'resolvida_por_id', None)):
+        quem = (
+            pendencia.resolvida_por.get_full_name()
+            or pendencia.resolvida_por.username)
+        linhas.append({
+            'titulo': 'Resolvida',
+            'quando': pendencia.resolvida_em,
+            'quem': quem,
+            'detalhe': f'Concluída por {quem}.',
+        })
+    return linhas
+
+
 def anotar_progresso(pendencias):
     """Anota progresso do processo (diligências) e dos itens do checklist."""
     from .diligencia_texto import separar_itens
@@ -390,6 +446,7 @@ def anotar_progresso(pendencias):
             f'{marcados}/{len(itens)} itens'
             if len(itens) > 1 else ''
         )
+        pendencia.historico_linhas = montar_historico(pendencia)
     return pendencias
 
 

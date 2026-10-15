@@ -149,6 +149,12 @@ class ImportarDiligenciasTest(BaseProcessoTestCase):
             processo=processo, descricao='Já sanada na planilha')
         self.assertEqual(p.status, 'RESOLVIDA')
         self.assertIsNotNone(p.resolvida_em)
+        textos = list(p.eventos.order_by('id').values_list('descricao', flat=True))
+        self.assertEqual(textos, [
+            'Importada da planilha.',
+            f'Concluída por {self.gestao.get_full_name() or self.gestao.username}.',
+        ])
+        self.assertNotIn('Já sanada na planilha', ' '.join(textos))
 
     def test_analista_nao_importa(self):
         arquivo = _xlsx([CABECALHO, ['1/2024', '2/2025', 'X', 'Y', 'Z', None, None, None]])

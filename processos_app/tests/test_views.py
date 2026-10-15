@@ -1009,6 +1009,22 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
             reverse('ver_historico_processo', args=[processo.id]))
         self.assertContains(historico, 'Entrada por')
         self.assertContains(historico, 'Saída por')
+        html = historico.content.decode()
+        ordem = [
+            'Informações do processo',
+            'Informações da análise',
+            'Eventos da tramitação',
+            'Diligências',
+            'Passagens pela CGM',
+        ]
+        posicoes = [html.find(titulo) for titulo in ordem]
+        self.assertTrue(all(pos >= 0 for pos in posicoes), posicoes)
+        self.assertEqual(posicoes, sorted(posicoes))
+        self.assertContains(historico, 'Linha do tempo')
+        self.assertContains(historico, 'data-hist-vista="tabela"')
+        self.assertNotContains(historico, 'Tempos do fluxo')
+        self.assertNotContains(historico, 'Histórico de edições')
+        self.assertNotContains(historico, 'Histórico de monitoramento')
         self.assertContains(historico, self.protocolo.get_full_name()
                             or self.protocolo.username)
         passagem = historico.context['passagens'][0]

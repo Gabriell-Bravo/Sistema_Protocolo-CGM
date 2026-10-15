@@ -638,6 +638,10 @@
     }
 
     function initDilVerMais() {
+        function estourou(el) {
+            return el.scrollHeight > el.clientHeight + 2;
+        }
+
         function medir() {
             document.querySelectorAll('.dil-check__text--clamp').forEach(function (el) {
                 var body = el.closest('.dil-check__body');
@@ -647,7 +651,16 @@
                     btn.hidden = false;
                     return;
                 }
-                btn.hidden = el.scrollHeight <= el.clientHeight + 2;
+                btn.hidden = !estourou(el);
+            });
+            document.querySelectorAll('[data-dil-resumo]').forEach(function (btn) {
+                var caixa = btn.parentElement;
+                if (!caixa) return;
+                var algum = false;
+                caixa.querySelectorAll('.dil-check__text--clamp').forEach(function (el) {
+                    if (estourou(el)) algum = true;
+                });
+                btn.hidden = !algum;
             });
         }
 

@@ -673,6 +673,9 @@ class AnexoProcesso(models.Model):
         verbose_name="Processo")
     arquivo = models.FileField(
         upload_to=_caminho_anexo, verbose_name="Arquivo")
+    arquivo_pdf = models.FileField(
+        upload_to=_caminho_anexo, blank=True, null=True,
+        verbose_name="Cópia em PDF para visualização")
     nome_original = models.CharField(
         max_length=255, verbose_name="Nome original")
     tamanho = models.PositiveIntegerField(default=0, verbose_name="Tamanho (bytes)")

@@ -5,7 +5,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponse
 from django.urls import reverse
 from .models import (
-    Processo, ProcessHistory, MonitoramentoRecord, Profile, Pendencia,
+    Processo, Profile, Pendencia,
     SequenciaRelatorio, EventoProcesso, LinhaControleRelatorio,
 )
 import json
@@ -19,7 +19,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from .forms import AdminResetPasswordForm, CustomUserCreationForm
 from django.contrib.auth.models import User
 from .forms import ProcessoForm
-from django.utils import timezone, dateformat
+from django.utils import timezone
 from django.contrib.auth.forms import AuthenticationForm
 from django.views.decorators.http import require_POST
 import logging
@@ -29,7 +29,6 @@ logger = logging.getLogger(__name__)
 
 from . import views_tramitacao
 from .services import cadastros as svc_cadastros
-from .services import indicadores
 from .services import monitoramento as svc_monitoramento
 from .services import controle_analise as svc_controle_analise
 from .services import pendencias as svc_pendencias
@@ -786,54 +785,45 @@ def formatar_data_hora(data, hora):
     return f"{data.strftime('%d/%m/%Y')} às {hora.strftime('%H:%M')}"
 
 
+def _processo_foi_analisado(processo):
+    """Há análise quando alguém assumiu ou gravou peça, status, valor ou nota."""
+    if processo.analista_responsavel_id or processo.data_hora_assumido:
+        return True
+    if (processo.numero_relatorio or '').strip() or processo.sem_relatorio:
+        return True
+    if processo.data_analise:
+        return True
+    if processo.status_analise and processo.status_analise != 'NAO_APLICAVEL':
+        return True
+    if (processo.tecnico or '').strip():
+        return True
+    return any(
+        (getattr(processo, campo) or '').strip()
+        for campo in ('valor', 'periodo', 'observacao', 'numero_despacho')
+    )
+
+
 @login_required
 def ver_historico_processo(request, process_id):
-    processo = get_object_or_404(Processo, id=process_id)
+    processo = get_object_or_404(
+        Processo.objects.select_related('analista_responsavel', 'especie_fk'),
+        id=process_id)
     if not can_access_genero(request.user, processo.genero):
         return HttpResponse("Você não tem permissão para visualizar o histórico deste processo.", status=403)
-
-    history_records = ProcessHistory.objects.filter(
-        process=processo).order_by('-changed_at')
-    monitoramento_records = MonitoramentoRecord.objects.filter(
-        processo=processo).order_by('-data_registro')
-
-    formatted_history = []
-    for record in history_records:
-        rec_dict = {
-            'field_name': record.field_name,
-            'old_value': record.old_value,
-            'new_value': record.new_value,
-            'changed_at_formatted': dateformat.format(timezone.localtime(record.changed_at), 'd/m/Y H:i:s',),
-            'changed_by_user': record.changed_by.username if record.changed_by else 'N/A'
-        }
-        formatted_history.append(rec_dict)
-
-    formatted_monitoramento_records = []
-    for record in monitoramento_records:
-        mon_dict = {
-            'data_registro': record.data_registro.strftime('%d/%m/%Y %H:%M:%S'),
-            'observacao': record.observacao,
-            'registrado_por': record.registrado_por.username if record.registrado_por else 'N/A'
-        }
-        formatted_monitoramento_records.append(mon_dict)
 
     passagens = montar_passagens(processo)
 
     return render(request, 'historico_processo.html', {
-        'history': formatted_history,
-        'monitoramento_records': formatted_monitoramento_records,
         'process_id': process_id,
         'process_number': processo.numero_processo,
         'passagens': passagens,
         'total_passagens': len(passagens),
         'pendencias': processo.pendencias.select_related(
             'criada_por', 'responsavel_tecnico').all(),
-        # item 31: calculado dos registros reais, não do campo legado
         'tem_pendencia_aberta': processo.tem_pendencia_aberta,
         'eventos': processo.eventos.select_related('usuario').all(),
-        # item 50: tempos do fluxo deste processo, calculados dos carimbos
-        'tempos': indicadores.tempos_do_processo(processo),
         'processo': processo,
+        'foi_analisado': _processo_foi_analisado(processo),
         'anexos': processo.anexos.select_related('enviado_por'),
         'eh_licitacao': processo.grupo == 'LICITACOES_E_CONTRATOS',
         'pode_anexar': False,

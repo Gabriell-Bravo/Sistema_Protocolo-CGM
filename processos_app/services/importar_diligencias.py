@@ -232,8 +232,11 @@ def importar_planilha(usuario, arquivo):
                 criada_em=registro['data_pendencia'])
 
         registrar_evento_pendencia(
-            pendencia, 'CRIADA', usuario,
-            f'Importada da planilha: {registro["descricao"][:200]}')
+            pendencia, 'CRIADA', usuario, 'Importada da planilha.')
+        if registro['data_saneamento']:
+            registrar_evento_pendencia(
+                pendencia, 'RESOLVIDA', usuario,
+                f'Concluída por {perm.nome_usuario(usuario)}.')
         existentes.setdefault(processo.id, set()).add(chave_dup[1])
         criadas += 1
 

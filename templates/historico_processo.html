@@ -1,8 +1,9 @@
 {% extends "base.html" %}
+{% load processos_extras %}
 
 {% block title %}Histórico do Processo{% endblock %}
 {% block page_title %}Histórico do processo {{ process_number }}{% endblock %}
-{% block page_subtitle %}Passagens pela CGM, alterações registradas e monitoramento{% endblock %}
+{% block page_subtitle %}Dados do processo, análise, tramitação, diligências e passagens pela CGM{% endblock %}
 
 {% block topbar_actions %}
     <a href="{% url 'listar_processos' %}" class="btn btn--outline">
@@ -14,7 +15,338 @@
 {% block content %}
 <div class="stack">
 
-    {% include "includes/anexos_processo.html" %}
+    <section class="table-card">
+        <div class="table-card__header">
+            <span class="table-card__title">Informações do processo</span>
+            <span class="badge badge--primary">{{ processo.situacao_exibicao }}</span>
+        </div>
+        <div class="hist-fatos">
+            <article class="fato" tabindex="0">
+                <span class="material-symbols-rounded fato__icone">tag</span>
+                <div>
+                    <span class="fato__rotulo">Número</span>
+                    <strong class="fato__valor">{{ processo.numero_processo }}</strong>
+                </div>
+                <span class="fato__dica" role="tooltip">Número de controle deste processo.</span>
+            </article>
+            <article class="fato" tabindex="0">
+                <span class="material-symbols-rounded fato__icone">library_books</span>
+                <div>
+                    <span class="fato__rotulo">Volume</span>
+                    <strong class="fato__valor">{{ processo.volume|default:"—" }}</strong>
+                </div>
+                <span class="fato__dica" role="tooltip">Volume físico informado no cadastro.</span>
+            </article>
+            <article class="fato" tabindex="0">
+                <span class="material-symbols-rounded fato__icone">account_balance</span>
+                <div>
+                    <span class="fato__rotulo">Secretaria</span>
+                    <strong class="fato__valor">{{ processo.secretaria|default:"—" }}</strong>
+                </div>
+                <span class="fato__dica" role="tooltip">Secretaria de onde o processo veio.</span>
+            </article>
+            <article class="fato" tabindex="0">
+                <span class="material-symbols-rounded fato__icone">category</span>
+                <div>
+                    <span class="fato__rotulo">Gênero</span>
+                    <strong class="fato__valor">{{ processo.genero_display|default:"—" }}</strong>
+                </div>
+                <span class="fato__dica" role="tooltip">Grupo do processo: licitação, liquidação ou outro.</span>
+            </article>
+            <article class="fato" tabindex="0">
+                <span class="material-symbols-rounded fato__icone">description</span>
+                <div>
+                    <span class="fato__rotulo">Espécie</span>
+                    <strong class="fato__valor">{{ processo.especie|default:"—" }}</strong>
+                </div>
+                <span class="fato__dica" role="tooltip">Espécie cadastrada para este processo.</span>
+            </article>
+            <article class="fato" tabindex="0">
+                <span class="material-symbols-rounded fato__icone">flag</span>
+                <div>
+                    <span class="fato__rotulo">Prioridade</span>
+                    <strong class="fato__valor">{{ processo.prioridade_display }}</strong>
+                </div>
+                <span class="fato__dica" role="tooltip">Prioridade definida no protocolo.</span>
+            </article>
+            <article class="fato" tabindex="0">
+                <span class="material-symbols-rounded fato__icone">login</span>
+                <div>
+                    <span class="fato__rotulo">Entrada</span>
+                    <strong class="fato__valor">{{ processo.data_entrada|date:"d/m/Y" }}{% if processo.hora_entrada %} · {{ processo.hora_entrada|time:"H:i" }}{% endif %}</strong>
+                </div>
+                <span class="fato__dica" role="tooltip">Data e hora em que entrou na CGM.</span>
+            </article>
+            <article class="fato" tabindex="0">
+                <span class="material-symbols-rounded fato__icone">logout</span>
+                <div>
+                    <span class="fato__rotulo">Saída</span>
+                    <strong class="fato__valor">{% if processo.data_saida %}{{ processo.data_saida|date:"d/m/Y" }}{% if processo.hora_saida %} · {{ processo.hora_saida|time:"H:i" }}{% endif %}{% else %}Ainda na CGM{% endif %}</strong>
+                </div>
+                <span class="fato__dica" role="tooltip">Saída física, quando já registrada.</span>
+            </article>
+            <article class="fato" tabindex="0">
+                <span class="material-symbols-rounded fato__icone">pin_drop</span>
+                <div>
+                    <span class="fato__rotulo">Destino</span>
+                    <strong class="fato__valor">{{ processo.destino|default:"—" }}</strong>
+                </div>
+                <span class="fato__dica" role="tooltip">Para onde o processo segue na saída.</span>
+            </article>
+            <article class="fato" tabindex="0">
+                <span class="material-symbols-rounded fato__icone">apartment</span>
+                <div>
+                    <span class="fato__rotulo">Contratada / interessado</span>
+                    <strong class="fato__valor">{{ processo.contratada|default:"—" }}</strong>
+                </div>
+                <span class="fato__dica" role="tooltip">Contratada, favorecido ou interessado.</span>
+            </article>
+            <article class="fato fato--largo" tabindex="0">
+                <span class="material-symbols-rounded fato__icone">subject</span>
+                <div>
+                    <span class="fato__rotulo">Objeto</span>
+                    <strong class="fato__valor">{{ processo.objeto|default:"—" }}</strong>
+                </div>
+                <span class="fato__dica" role="tooltip">Descrição do objeto do processo.</span>
+            </article>
+            {% if processo.observacao_protocolo %}
+            <article class="fato fato--largo" tabindex="0">
+                <span class="material-symbols-rounded fato__icone">sticky_note_2</span>
+                <div>
+                    <span class="fato__rotulo">Observação do protocolo</span>
+                    <strong class="fato__valor">{{ processo.observacao_protocolo }}</strong>
+                </div>
+                <span class="fato__dica" role="tooltip">Nota lançada pelo protocolo no cadastro.</span>
+            </article>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="table-card">
+        <div class="table-card__header">
+            <span class="table-card__title">Informações da análise</span>
+            {% if foi_analisado %}
+            <span class="badge {% if processo.status_analise == 'PROSSEGUIMENTO_SEM_RESSALVA' %}badge--success{% elif processo.status_analise == 'PROSSEGUIMENTO_COM_RESSALVA' %}badge--warning{% elif processo.status_analise == 'NAO_PROSSEGUIMENTO' or processo.status_analise == 'DEVOLUCAO_PARA_SANEAMENTO' %}badge--danger{% endif %}">
+                {{ processo.get_status_analise_display }}
+            </span>
+            {% else %}
+            <span class="badge">Sem análise</span>
+            {% endif %}
+        </div>
+        {% if foi_analisado %}
+        <div class="analise-hero">
+            <span class="material-symbols-rounded">person</span>
+            <div>
+                <span class="fato__rotulo">Quem analisou</span>
+                <strong>{{ processo.nome_analista|default:"Analista não identificado" }}</strong>
+                {% if processo.data_hora_assumido %}
+                <div class="cell-muted">Assumido em {{ processo.data_hora_assumido|date:"d/m/Y H:i" }}</div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="hist-fatos">
+            <article class="fato" tabindex="0">
+                <span class="material-symbols-rounded fato__icone">numbers</span>
+                <div>
+                    <span class="fato__rotulo">Nº do relatório</span>
+                    <strong class="fato__valor">
+                        {% if processo.numero_relatorio %}Relatório {{ processo.numero_relatorio }}{% elif processo.sem_relatorio %}Sem peça de relatório{% else %}Ainda sem número{% endif %}
+                    </strong>
+                </div>
+                <span class="fato__dica" role="tooltip">Número gravado no controle de relatórios.</span>
+            </article>
+            <article class="fato" tabindex="0">
+                <span class="material-symbols-rounded fato__icone">calendar_month</span>
+                <div>
+                    <span class="fato__rotulo">Data do relatório</span>
+                    <strong class="fato__valor">{% if processo.data_analise %}{{ processo.data_analise|date:"d/m/Y" }}{% else %}—{% endif %}</strong>
+                </div>
+                <span class="fato__dica" role="tooltip">Data que entrou no controle junto com o número.</span>
+            </article>
+            <article class="fato" tabindex="0">
+                <span class="material-symbols-rounded fato__icone">payments</span>
+                <div>
+                    <span class="fato__rotulo">Valor</span>
+                    <strong class="fato__valor">{{ processo.valor|default:"—" }}</strong>
+                </div>
+                <span class="fato__dica" role="tooltip">Valor informado pelo analista.</span>
+            </article>
+            <article class="fato" tabindex="0">
+                <span class="material-symbols-rounded fato__icone">date_range</span>
+                <div>
+                    <span class="fato__rotulo">Período</span>
+                    <strong class="fato__valor">{{ processo.periodo|default:"—" }}</strong>
+                </div>
+                <span class="fato__dica" role="tooltip">Período lançado na análise.</span>
+            </article>
+            {% if processo.processo_pagamento %}
+            <article class="fato" tabindex="0">
+                <span class="material-symbols-rounded fato__icone">account_tree</span>
+                <div>
+                    <span class="fato__rotulo">Processo origem</span>
+                    <strong class="fato__valor">{{ processo.processo_pagamento }}</strong>
+                </div>
+                <span class="fato__dica" role="tooltip">Processo de origem informado na liquidação.</span>
+            </article>
+            {% endif %}
+            {% if processo.numero_despacho %}
+            <article class="fato" tabindex="0">
+                <span class="material-symbols-rounded fato__icone">pin</span>
+                <div>
+                    <span class="fato__rotulo">Nº do despacho</span>
+                    <strong class="fato__valor">{{ processo.numero_despacho }}</strong>
+                </div>
+                <span class="fato__dica" role="tooltip">Controle do número de despacho.</span>
+            </article>
+            {% endif %}
+            <article class="fato fato--largo" tabindex="0">
+                <span class="material-symbols-rounded fato__icone">rate_review</span>
+                <div>
+                    <span class="fato__rotulo">Observação da análise</span>
+                    <strong class="fato__valor">{{ processo.observacao|default:"Sem observação." }}</strong>
+                </div>
+                <span class="fato__dica" role="tooltip">Texto que o analista deixou na peça.</span>
+            </article>
+        </div>
+        {% else %}
+        <div class="empty empty--compact">
+            <span class="material-symbols-rounded">pending</span>
+            <div class="empty__title">Este processo ainda não foi analisado</div>
+            <div>Quando um analista assumir e gravar a peça, os dados aparecem aqui.</div>
+        </div>
+        {% endif %}
+    </section>
+
+    <section class="table-card" id="eventosTramitacao">
+        <div class="table-card__header">
+            <span class="table-card__title">Eventos da tramitação</span>
+            <span class="table-card__count">{{ eventos|length }} evento{{ eventos|length|pluralize:"s" }}</span>
+            {% if eventos %}
+            <div class="hist-vista" role="group" aria-label="Forma de ver os eventos">
+                <button type="button" class="hist-vista__btn is-active" data-hist-vista="linha" aria-pressed="true">
+                    <span class="material-symbols-rounded">timeline</span>
+                    Linha do tempo
+                </button>
+                <button type="button" class="hist-vista__btn" data-hist-vista="tabela" aria-pressed="false">
+                    <span class="material-symbols-rounded">table_rows</span>
+                    Lista
+                </button>
+            </div>
+            {% endif %}
+        </div>
+        {% if eventos %}
+        <div data-hist-painel="linha">
+            <ol class="tl">
+                {% for evento in eventos reversed %}
+                <li class="tl__item">
+                    <button type="button" class="tl__icone" aria-label="{{ evento.get_tipo_display }}">
+                        <span class="material-symbols-rounded">{{ evento.tipo|icone_evento }}</span>
+                        <span class="tl__balao" role="tooltip">
+                            <strong>{{ evento.get_tipo_display }}</strong>
+                            {{ evento.tipo|dica_evento }}
+                        </span>
+                    </button>
+                    <div class="tl__corpo">
+                        <div class="tl__quando">{{ evento.criado_em_formatted }}</div>
+                        <div class="tl__titulo">{{ evento.get_tipo_display }}</div>
+                        {% if evento.descricao %}
+                        <p class="tl__texto">{{ evento.descricao }}</p>
+                        {% endif %}
+                        {% if evento.dados.autorizado_por %}
+                        <div class="cell-muted">Autorizado por: {{ evento.dados.autorizado_por }}</div>
+                        {% endif %}
+                        {% if evento.dados.observacao %}
+                        <div class="cell-muted">Observação: {{ evento.dados.observacao }}</div>
+                        {% endif %}
+                        <div class="tl__quem">
+                            {{ evento.usuario.get_full_name|default:evento.usuario.username|default:"—" }}
+                        </div>
+                    </div>
+                </li>
+                {% endfor %}
+            </ol>
+        </div>
+        <div data-hist-painel="tabela" hidden>
+            <div class="table-scroll">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Data/hora</th>
+                            <th>Evento</th>
+                            <th>Descrição</th>
+                            <th>Usuário</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for evento in eventos %}
+                        <tr>
+                            <td>{{ evento.criado_em_formatted }}</td>
+                            <td><span class="badge badge--primary">{{ evento.get_tipo_display }}</span></td>
+                            <td class="cell-wrap">
+                                {{ evento.descricao }}
+                                {% if evento.dados.autorizado_por %}<div class="cell-muted">Autorizado por: {{ evento.dados.autorizado_por }}</div>{% endif %}
+                                {% if evento.dados.observacao %}<div class="cell-muted">Observação: {{ evento.dados.observacao }}</div>{% endif %}
+                            </td>
+                            <td>{{ evento.usuario.get_full_name|default:evento.usuario.username|default:"—" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="empty empty--compact">
+            <span class="material-symbols-rounded">timeline</span>
+            <div class="empty__title">Nenhum evento registrado</div>
+            <div>Processos anteriores à nova tramitação não têm eventos.</div>
+        </div>
+        {% endif %}
+    </section>
+
+    <section class="table-card">
+        <div class="table-card__header">
+            <span class="table-card__title">Diligências</span>
+            <span class="table-card__count">
+                {% if tem_pendencia_aberta %}Com diligência aberta{% else %}Sem diligência aberta{% endif %}
+                · {{ pendencias|length }} {{ pendencias|length|pluralize:"item,itens" }}
+            </span>
+        </div>
+        {% if pendencias %}
+            <div class="table-scroll">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Descrição</th>
+                            <th>Situação</th>
+                            <th>Registrada em</th>
+                            <th>Responsável técnico</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pendencia in pendencias %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td class="cell-wrap cell-diligencia">
+                                {% include "includes/checklist_diligencia.html" with texto=pendencia.descricao concluidos=pendencia.itens_concluidos %}
+                                {% if pendencia.status == 'CANCELADA' and pendencia.motivo_cancelamento %}<div class="cell-muted">Cancelada: {{ pendencia.motivo_cancelamento }}</div>{% endif %}
+                            </td>
+                            <td><span class="badge">{{ pendencia.get_status_display }}</span></td>
+                            <td>{{ pendencia.criada_em_formatted }}</td>
+                            <td>{{ pendencia.responsavel_tecnico|default:pendencia.criada_por|default:"N/A" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="empty">
+                <span class="material-symbols-rounded">playlist_add_check</span>
+                <div class="empty__title">Nenhuma diligência listada</div>
+                <div>O analista ainda não descreveu diligências neste processo.</div>
+            </div>
+        {% endif %}
+    </section>
 
     <section class="table-card">
         <div class="table-card__header">
@@ -70,219 +402,28 @@
         </div>
     </section>
 
-    {# item 50: tempos do fluxo deste processo #}
-    {% if tempos.em_fila is not None or tempos.total is not None %}
-    <section class="table-card">
-        <div class="table-card__header">
-            <span class="table-card__title">Tempos do fluxo (dias)</span>
-        </div>
-        <div class="table-scroll table-scroll--compact">
-            <table class="table">
-                <thead>
-                    <tr><th>Em fila</th><th>Análise</th><th>Pós-análise</th><th>Aguardando retirada</th><th>Total</th></tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>{{ tempos.em_fila|default_if_none:"—" }}</td>
-                        <td>{{ tempos.analise|default_if_none:"—" }}</td>
-                        <td>{{ tempos.pos_analise|default_if_none:"—" }}</td>
-                        <td>{{ tempos.aguardando_retirada|default_if_none:"—" }}</td>
-                        <td><strong>{{ tempos.total|default_if_none:"—" }}</strong></td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </section>
-    {% endif %}
-
-    {# item 45: atos administrativos da tramitação — quem, o quê, quando #}
-    <section class="table-card">
-        <div class="table-card__header">
-            <span class="table-card__title">Eventos da tramitação</span>
-            <span class="table-card__count">{{ eventos|length }} evento{{ eventos|length|pluralize:"s" }}</span>
-        </div>
-        {% if eventos %}
-            <div class="table-scroll">
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Data/hora</th>
-                            <th>Evento</th>
-                            <th>Descrição</th>
-                            <th>Usuário</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for evento in eventos %}
-                        <tr>
-                            <td>{{ evento.criado_em_formatted }}</td>
-                            <td><span class="badge badge--primary">{{ evento.get_tipo_display }}</span></td>
-                            <td class="cell-wrap">
-                                {{ evento.descricao }}
-                                {% if evento.dados.autorizado_por %}<div class="cell-muted">Autorizado por: {{ evento.dados.autorizado_por }}</div>{% endif %}
-                                {% if evento.dados.observacao %}<div class="cell-muted">Observação: {{ evento.dados.observacao }}</div>{% endif %}
-                            </td>
-                            <td>{{ evento.usuario.get_full_name|default:evento.usuario.username|default:"—" }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% else %}
-            <div class="empty empty--compact">
-                <span class="material-symbols-rounded">timeline</span>
-                <div class="empty__title">Nenhum evento registrado</div>
-                <div>Processos anteriores à nova tramitação não têm eventos; as alterações de campo aparecem abaixo.</div>
-            </div>
-        {% endif %}
-    </section>
-
-    <section class="table-card">
-        <div class="table-card__header">
-            <span class="table-card__title">Diligências</span>
-            <span class="table-card__count">
-                {% if tem_pendencia_aberta %}Com diligência aberta{% else %}Sem diligência aberta{% endif %}
-                · {{ pendencias|length }} {{ pendencias|length|pluralize:"item,itens" }}
-            </span>
-        </div>
-        {% if pendencias %}
-            <div class="table-scroll">
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Descrição</th>
-                            <th>Situação</th>
-                            <th>Registrada em</th>
-                            <th>Responsável técnico</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for pendencia in pendencias %}
-                        <tr>
-                            <td>{{ forloop.counter }}</td>
-                            <td class="cell-wrap cell-diligencia">
-                                {% include "includes/checklist_diligencia.html" with texto=pendencia.descricao concluidos=pendencia.itens_concluidos %}
-                                {% if pendencia.status == 'CANCELADA' and pendencia.motivo_cancelamento %}<div class="cell-muted">Cancelada: {{ pendencia.motivo_cancelamento }}</div>{% endif %}
-                            </td>
-                            <td><span class="badge">{{ pendencia.get_status_display }}</span></td>
-                            <td>{{ pendencia.criada_em_formatted }}</td>
-                            <td>{{ pendencia.responsavel_tecnico|default:pendencia.criada_por|default:"N/A" }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% else %}
-            <div class="empty">
-                <span class="material-symbols-rounded">playlist_add_check</span>
-                <div class="empty__title">Nenhuma diligência listada</div>
-                <div>O analista ainda não descreveu diligências neste processo.</div>
-            </div>
-        {% endif %}
-    </section>
-
-    <section class="table-card">
-        <div class="table-card__header">
-            <span class="table-card__title">Histórico de edições</span>
-            <span class="table-card__count">{{ history|length }} registro{{ history|length|pluralize:"s" }}</span>
-        </div>
-        {% if history %}
-            <div class="table-scroll">
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Campo</th>
-                            <th>Valor anterior</th>
-                            <th>Novo valor</th>
-                            <th>Data/Hora</th>
-                            <th>Alterado por</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for record in history %}
-                        <tr>
-                            <td><span class="badge">{{ record.field_name }}</span></td>
-                            <td class="cell-wrap">
-                                <span class="cell-preview">{{ record.old_value|default:'—'|truncatechars:70 }}</span>
-                                {% if record.old_value and record.old_value|length > 70 %}
-                                    <button type="button" class="link-more" onclick="visualizarObservacao('{{ record.old_value|escapejs }}', 'Valor anterior')">Ver tudo</button>
-                                {% endif %}
-                            </td>
-                            <td class="cell-wrap">
-                                <span class="cell-preview">{{ record.new_value|default:'—'|truncatechars:70 }}</span>
-                                {% if record.new_value and record.new_value|length > 70 %}
-                                    <button type="button" class="link-more" onclick="visualizarObservacao('{{ record.new_value|escapejs }}', 'Novo valor')">Ver tudo</button>
-                                {% endif %}
-                            </td>
-                            <td>{{ record.changed_at_formatted }}</td>
-                            <td>{{ record.changed_by_user|default:"N/A" }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% else %}
-            <div class="empty">
-                <span class="material-symbols-rounded">history</span>
-                <div class="empty__title">Nenhuma edição registrada</div>
-                <div>Este processo ainda não foi alterado desde o cadastro.</div>
-            </div>
-        {% endif %}
-    </section>
-
-    <section class="table-card">
-        <div class="table-card__header">
-            <span class="table-card__title">Histórico de monitoramento</span>
-            <span class="table-card__count">{{ monitoramento_records|length }} registro{{ monitoramento_records|length|pluralize:"s" }}</span>
-        </div>
-        {% if monitoramento_records %}
-            <div class="table-scroll">
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Data do registro</th>
-                            <th>Observação</th>
-                            <th>Registrado por</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for record in monitoramento_records %}
-                        <tr>
-                            <td>{{ record.data_registro }}</td>
-                            <td class="cell-wrap">
-                                <span class="cell-preview">{{ record.observacao|default:'—'|truncatechars:90 }}</span>
-                                {% if record.observacao and record.observacao|length > 90 %}
-                                    <button type="button" class="link-more" onclick="visualizarObservacao('{{ record.observacao|escapejs }}', 'Observação')">Ver tudo</button>
-                                {% endif %}
-                            </td>
-                            <td>{{ record.registrado_por }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% else %}
-            <div class="empty">
-                <span class="material-symbols-rounded">monitoring</span>
-                <div class="empty__title">Nenhum monitoramento registrado</div>
-                <div>Este processo não possui registros de monitoramento.</div>
-            </div>
-        {% endif %}
-    </section>
+    {% include "includes/anexos_processo.html" %}
 </div>
+{% endblock %}
 
-<div class="modal" id="observacaoModal">
-    <div class="modal__dialog">
-        <div class="modal__header">
-            <span class="modal__title" data-modal-title>Conteúdo completo</span>
-            <button type="button" class="icon-btn" data-modal-close aria-label="Fechar">
-                <span class="material-symbols-rounded">close</span>
-            </button>
-        </div>
-        <div class="modal__body">
-            <p class="modal__content" id="observacaoConteudo" data-modal-content></p>
-        </div>
-    </div>
-</div>
+{% block extra_js %}
+<script>
+(function () {
+    var raiz = document.getElementById('eventosTramitacao');
+    if (!raiz) return;
+    raiz.addEventListener('click', function (event) {
+        var botao = event.target.closest('[data-hist-vista]');
+        if (!botao) return;
+        var vista = botao.getAttribute('data-hist-vista');
+        raiz.querySelectorAll('[data-hist-vista]').forEach(function (el) {
+            var ativo = el === botao;
+            el.setAttribute('aria-pressed', ativo ? 'true' : 'false');
+            el.classList.toggle('is-active', ativo);
+        });
+        raiz.querySelectorAll('[data-hist-painel]').forEach(function (painel) {
+            painel.hidden = painel.getAttribute('data-hist-painel') !== vista;
+        });
+    });
+})();
+</script>
 {% endblock %}

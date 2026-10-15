@@ -59,13 +59,19 @@
                             data-anexo-tipo="{% if anexo.extensao == '.pdf' or anexo.extensao == '.docx' %}pdf{% elif anexo.extensao == '.txt' %}texto{% else %}imagem{% endif %}"
                             data-anexo-nome="{{ anexo.nome_original|escape }}"
                             data-anexo-url="{% url 'ver_anexo' anexo.id %}"
-                            data-anexo-baixar="{% url 'baixar_anexo' anexo.id %}">
+                            data-anexo-baixar="{% url 'baixar_anexo' anexo.id %}"
+                            {% if anexo.extensao == '.docx' %}data-anexo-baixar-pdf="{% url 'baixar_anexo' anexo.id %}?formato=pdf"{% endif %}>
                         <span class="material-symbols-rounded">open_in_full</span>
                     </button>
                     {% endif %}
+                    {% if anexo.extensao == '.docx' %}
+                    <a class="btn btn--outline btn--sm" href="{% url 'baixar_anexo' anexo.id %}?formato=docx" title="Baixar o Word original">DOCX</a>
+                    <a class="btn btn--outline btn--sm" href="{% url 'baixar_anexo' anexo.id %}?formato=pdf" title="Baixar a cópia em PDF">PDF</a>
+                    {% else %}
                     <a class="icon-btn" href="{% url 'baixar_anexo' anexo.id %}" title="Baixar arquivo">
                         <span class="material-symbols-rounded">download</span>
                     </a>
+                    {% endif %}
                     {% if pode_anexar %}
                     <form method="post" action="{% url 'remover_anexo' anexo.id %}"
                           data-confirm="Remover este arquivo?"
@@ -100,8 +106,15 @@
                      loading="lazy">
                 {% endif %}
                 <p class="anexo-card__fallback cell-muted">
+                    {% if anexo.extensao == '.docx' %}
+                    Se o preview não abrir, baixe em
+                    <a href="{% url 'baixar_anexo' anexo.id %}?formato=pdf">PDF</a>
+                    ou
+                    <a href="{% url 'baixar_anexo' anexo.id %}?formato=docx">DOCX</a>.
+                    {% else %}
                     Se o preview não abrir,
                     <a href="{% url 'baixar_anexo' anexo.id %}">baixe o arquivo</a>.
+                    {% endif %}
                 </p>
             </div>
             {% endif %}
@@ -136,6 +149,10 @@
             <a id="anexoPreviewBaixar" class="btn btn--outline" href="#">
                 <span class="material-symbols-rounded">download</span>
                 Baixar
+            </a>
+            <a id="anexoPreviewBaixarPdf" class="btn btn--outline" href="#" hidden>
+                <span class="material-symbols-rounded">picture_as_pdf</span>
+                Baixar PDF
             </a>
             <button type="button" class="btn btn--primary" data-modal-close="modalAnexoPreview">Fechar</button>
         </div>
@@ -277,14 +294,23 @@
             var nome = el.getAttribute('data-anexo-nome') || 'Arquivo';
             var url = el.getAttribute('data-anexo-url');
             var urlBaixar = el.getAttribute('data-anexo-baixar') || url;
+            var urlPdf = el.getAttribute('data-anexo-baixar-pdf') || '';
             var titulo = document.getElementById('tituloAnexoPreview');
             var frame = document.getElementById('anexoPreviewFrame');
             var img = document.getElementById('anexoPreviewImg');
             var txt = document.getElementById('anexoPreviewTxt');
             var baixar = document.getElementById('anexoPreviewBaixar');
+            var baixarPdf = document.getElementById('anexoPreviewBaixarPdf');
             limparPreview();
             if (titulo) titulo.textContent = nome;
-            if (baixar) baixar.href = urlBaixar;
+            if (baixar) {
+                baixar.href = urlPdf ? (urlBaixar + (urlBaixar.indexOf('?') >= 0 ? '&' : '?') + 'formato=docx') : urlBaixar;
+                baixar.lastChild.textContent = urlPdf ? ' Baixar DOCX' : ' Baixar';
+            }
+            if (baixarPdf) {
+                baixarPdf.hidden = !urlPdf;
+                if (urlPdf) baixarPdf.href = urlPdf;
+            }
 
             if (tipo === 'imagem' && img) {
                 img.src = url;
