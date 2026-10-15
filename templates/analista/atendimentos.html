@@ -9,7 +9,9 @@
     {% for pendencia in pendencias %}
     <section class="card">
         <div class="card__header">
-            <span class="card__title">{{ pendencia.processo.numero_processo }}</span>
+            <a href="{% url 'analista_processo' pendencia.processo_id %}" class="card__title" title="Abrir processo">
+                {{ pendencia.processo.numero_processo }}
+            </a>
             <span class="card__hint">
                 {{ pendencia.processo.secretaria }} ·
                 indicado por {{ pendencia.atendimento_indicado_por|default:'Gestão' }}

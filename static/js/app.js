@@ -637,16 +637,50 @@
         });
     }
 
+    function initDilVerMais() {
+        function medir() {
+            document.querySelectorAll('.dil-check__text--clamp').forEach(function (el) {
+                var body = el.closest('.dil-check__body');
+                var btn = body ? body.querySelector('[data-dil-mais]') : null;
+                if (!btn) return;
+                if (el.classList.contains('is-expanded')) {
+                    btn.hidden = false;
+                    return;
+                }
+                btn.hidden = el.scrollHeight <= el.clientHeight + 2;
+            });
+        }
+
+        document.addEventListener('click', function (event) {
+            var btn = event.target.closest('[data-dil-mais]');
+            if (!btn) return;
+            event.preventDefault();
+            event.stopPropagation();
+            var body = btn.closest('.dil-check__body');
+            var texto = body ? body.querySelector('.dil-check__text--clamp') : null;
+            if (!texto) return;
+            var aberto = texto.classList.toggle('is-expanded');
+            btn.textContent = aberto ? 'Ver menos' : 'Ver mais';
+            btn.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+        });
+
+        medir();
+        window.addEventListener('resize', medir);
+    }
+
     function initFlashDialogs() {
         var alerts = document.querySelectorAll('#flashAlerts [data-flash-text]');
         if (!alerts.length || typeof window.appAlert !== 'function') return;
-        // Mostra o primeiro aviso relevante no diálogo do sistema (OK para fechar).
+        // Prioridade: erro > aviso (pendências) > sucesso > info.
         var escolhido = null;
-        for (var i = 0; i < alerts.length; i++) {
-            var tags = (alerts[i].getAttribute('data-flash-tags') || '').toLowerCase();
-            if (tags.indexOf('error') >= 0 || tags.indexOf('success') >= 0 || tags.indexOf('info') >= 0) {
-                escolhido = alerts[i];
-                break;
+        var ordem = ['error', 'danger', 'warning', 'success', 'info'];
+        for (var p = 0; p < ordem.length && !escolhido; p++) {
+            for (var i = 0; i < alerts.length; i++) {
+                var tags = (alerts[i].getAttribute('data-flash-tags') || '').toLowerCase();
+                if (tags.indexOf(ordem[p]) >= 0) {
+                    escolhido = alerts[i];
+                    break;
+                }
             }
         }
         if (!escolhido) escolhido = alerts[0];
@@ -658,6 +692,10 @@
             opts.titulo = 'Atenção';
             opts.icone = 'error';
             opts.danger = true;
+        } else if (tags.indexOf('warning') >= 0) {
+            opts.titulo = 'Pendências em aberto';
+            opts.tipo = 'warning';
+            opts.icone = 'assignment_late';
         } else if (tags.indexOf('success') >= 0) {
             opts.titulo = 'Sucesso';
             opts.tipo = 'success';
@@ -753,5 +791,6 @@
         initAnexos();
         initUrgencia();
         initFlashDialogs();
+        initDilVerMais();
     });
 })();

@@ -79,7 +79,7 @@ class ImportarDiligenciasTest(BaseProcessoTestCase):
         resultado = svc.importar_planilha(self.gestao, arquivo)
         self.assertEqual(resultado['criadas'], 1)
         self.assertEqual(resultado['ignoradas'], 2)
-        self.assertEqual(resultado['processos_novos'], 0)
+        self.assertEqual(resultado['sem_processo'], 0)
         self.assertEqual(resultado['lidas'], 3)
         self.assertEqual(
             Pendencia.objects.filter(processo=processo)
@@ -88,7 +88,8 @@ class ImportarDiligenciasTest(BaseProcessoTestCase):
         nova = Pendencia.objects.get(processo=processo, descricao='Falta NF')
         self.assertEqual(nova.status, 'AGUARDANDO_ATENDIMENTO')
 
-    def test_cria_stub_quando_processo_nao_existe(self):
+    def test_sem_processo_nao_cria_processo_nem_pendencia(self):
+        antes = Processo.objects.count()
         arquivo = _xlsx([
             CABECALHO,
             [
@@ -97,17 +98,42 @@ class ImportarDiligenciasTest(BaseProcessoTestCase):
             ],
         ])
         resultado = svc.importar_planilha(self.gestao, arquivo)
-        self.assertEqual(resultado['criadas'], 1)
-        self.assertEqual(resultado['processos_novos'], 1)
-        processo = Processo.objects.get(numero_processo='88002/2025')
-        self.assertEqual(processo.genero, LIQ)
-        self.assertEqual(processo.processo_pagamento, '99001/2024')
-        self.assertTrue(
+        self.assertEqual(resultado['criadas'], 0)
+        self.assertEqual(resultado['sem_processo'], 1)
+        self.assertEqual(Processo.objects.count(), antes)
+        self.assertFalse(
             Pendencia.objects.filter(
-                processo=processo,
                 descricao='Pedir esclarecimento').exists())
+        self.assertFalse(
+            Processo.objects.filter(especie=svc.ESPECIE_STUB).exists())
+
+    def test_remove_stubs_de_importacao_antiga(self):
+        stub = Processo.objects.create(
+            numero_processo='88002/2025',
+            volume='1',
+            secretaria='Turismo',
+            data_entrada=date(2025, 3, 1),
+            hora_entrada='00:00',
+            genero=LIQ,
+            especie=svc.ESPECIE_STUB,
+            objeto='stub',
+            situacao_tramite='DISPONIVEL',
+            status_analise='NAO_APLICAVEL',
+        )
+        Pendencia.objects.create(
+            processo=stub,
+            descricao='Só no stub',
+            criada_por=self.gestao,
+            status='AGUARDANDO_ATENDIMENTO',
+        )
+        self.assertEqual(svc.remover_stubs_de_importacao(), 1)
+        self.assertFalse(Processo.objects.filter(id=stub.id).exists())
+        self.assertFalse(
+            Pendencia.objects.filter(descricao='Só no stub').exists())
 
     def test_saneada_vem_como_resolvida(self):
+        processo = self.novo_processo(
+            self.especie_liq, numero_processo='77001/2025')
         arquivo = _xlsx([
             CABECALHO,
             [
@@ -119,7 +145,8 @@ class ImportarDiligenciasTest(BaseProcessoTestCase):
         resultado = svc.importar_planilha(self.gestao, arquivo)
         self.assertEqual(resultado['criadas'], 1)
         self.assertEqual(resultado['saneadas'], 1)
-        p = Pendencia.objects.get(descricao='Já sanada na planilha')
+        p = Pendencia.objects.get(
+            processo=processo, descricao='Já sanada na planilha')
         self.assertEqual(p.status, 'RESOLVIDA')
         self.assertIsNotNone(p.resolvida_em)
 
@@ -129,6 +156,9 @@ class ImportarDiligenciasTest(BaseProcessoTestCase):
             svc.importar_planilha(self.analista_liq, arquivo)
 
     def test_view_upload_gestao(self):
+        self.novo_processo(
+            self.especie_liq, numero_processo='20/2025',
+            processo_pagamento='10/2024')
         self.client.force_login(self.gestao)
         pagina = self.client.get(reverse('gestao_diligencias'))
         self.assertContains(pagina, 'Importar Excel')
@@ -149,6 +179,8 @@ class ImportarDiligenciasTest(BaseProcessoTestCase):
         self.assertTrue(
             Pendencia.objects.filter(
                 descricao='Diligência via upload').exists())
+        self.assertFalse(
+            Processo.objects.filter(especie=svc.ESPECIE_STUB).exists())
 
     def test_view_analista_nao_ve_botao_e_post_falha(self):
         self.client.force_login(self.analista_lic)

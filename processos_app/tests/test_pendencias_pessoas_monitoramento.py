@@ -111,6 +111,10 @@ class PendenciasTest(BaseProcessoTestCase):
         self.assertContains(fim, 'Já confirmada')
         self.assertContains(fim, 'Ainda aberta')
         self.assertContains(fim, 'Concluída')
+        self.assertContains(fim, 'Concluída por')
+        self.assertContains(fim, self.gestao.get_full_name() or self.gestao.username)
+        self.assertContains(fim, 'Histórico')
+        self.assertContains(fim, 'Resolvida')
         self.assertEqual(fim.context['total'], 2)
 
     def test_admin_cancela_e_edita_diligencia_de_outro(self):
@@ -191,6 +195,239 @@ class PendenciasTest(BaseProcessoTestCase):
         self.assertIn(p, list(pendencias.fila_diligencias()))
         pendencias.indicar_atendimento(p.id, self.gestao)
         self.assertEqual(pendencias.total_atendimentos_indicados(self.analista_lic), 1)
+
+    def test_aviso_ao_assumir_e_checklist_de_correcao(self):
+        from django.contrib.messages import get_messages
+
+        from processos_app.services.diligencia_texto import separar_itens
+
+        passagem = self.processo_em_analise()
+        texto = (
+            '1- Regularizar assinaturas; '
+            '2- Juntar portaria; '
+            '3- Atualizar FGTS')
+        antiga = pendencias.criar(passagem.id, self.analista_lic, texto)
+        itens = separar_itens(texto)
+        self.assertEqual(len(itens), 3)
+
+        reentrada = self.novo_processo(numero_processo=passagem.numero_processo)
+        aviso = pendencias.mensagem_aviso_ao_assumir(reentrada)
+        self.assertIn('diligências em aberto', aviso.casefold())
+        self.assertNotIn('1 pendência', aviso.casefold())
+        self.assertNotIn('tela de diligências', aviso.casefold())
+
+        self.client.force_login(self.analista_lic)
+        resp = self.client.post(
+            reverse('assumir_processo', args=[reentrada.id]), follow=True)
+        self.assertEqual(resp.status_code, 200)
+        msgs = [m.message for m in get_messages(resp.wsgi_request)]
+        self.assertTrue(any('diligências em aberto' in m.casefold() for m in msgs))
+        self.assertContains(resp, 'Diligências da passagem anterior')
+        self.assertContains(resp, 'Salvar verificação')
+        self.assertContains(resp, 'Regularizar assinaturas')
+
+        # Parcial 2/3: permanece aberta e na análise; não vai a Finalizados.
+        parcial = self.client.post(
+            reverse('pend_verificar_correcao', args=[antiga.id]),
+            {
+                'processo_atual': reentrada.id,
+                'itens_concluidos': itens[:2],
+                'next': reverse('analista_processo', args=[reentrada.id]),
+            },
+            follow=True,
+        )
+        antiga.refresh_from_db()
+        self.assertEqual(antiga.status, 'AGUARDANDO_ATENDIMENTO')
+        self.assertEqual(set(antiga.itens_concluidos), set(itens[:2]))
+        self.assertContains(parcial, 'Salvar verificação')
+        self.assertContains(parcial, itens[2])
+        fim = self.client.get(reverse('gestao_diligencias') + '?status=RESOLVIDA')
+        self.assertNotContains(fim, 'Regularizar assinaturas')
+        abertas = self.client.get(reverse('gestao_diligencias'))
+        self.assertContains(abertas, 'Regularizar assinaturas')
+
+        # Completa 3/3: conclui, mas continua listada na análise.
+        ok = self.client.post(
+            reverse('pend_verificar_correcao', args=[antiga.id]),
+            {
+                'processo_atual': reentrada.id,
+                'itens_concluidos': itens,
+                'next': reverse('analista_processo', args=[reentrada.id]),
+            },
+            follow=True,
+        )
+        antiga.refresh_from_db()
+        self.assertEqual(antiga.status, 'RESOLVIDA')
+        self.assertEqual(set(antiga.itens_concluidos), set(itens))
+        self.assertContains(ok, 'Resolvida')
+        self.assertContains(ok, 'Regularizar assinaturas')
+
+    def test_outro_analista_nao_verifica_correcao(self):
+        from processos_app.services import tramitacao
+
+        passagem = self.processo_em_analise()
+        antiga = pendencias.criar(passagem.id, self.analista_lic, 'Falta NF')
+        reentrada = self.novo_processo(numero_processo=passagem.numero_processo)
+        tramitacao.assumir(reentrada.id, self.analista_lic)
+
+        with self.assertRaises(PermissionDenied):
+            pendencias.verificar_correcao(
+                antiga.id, self.analista_lic2, reentrada.id)
+
+    def test_aviso_e_checklist_via_processo_origem(self):
+        """Liquidação com nº de pagamento diferente vê pendência da Licitação."""
+        from django.contrib.messages import get_messages
+
+        from processos_app.services.diligencia_texto import separar_itens
+
+        lic = self.processo_em_analise(especie=self.especie_lic)
+        Processo.objects.filter(id=lic.id).update(
+            numero_processo='ORIGEM-100/2026')
+        lic.refresh_from_db()
+        texto = '1- Regularizar doc da Licitação'
+        antiga = pendencias.criar(lic.id, self.analista_lic, texto)
+        itens = separar_itens(texto)
+
+        liq_sem_origem = self.novo_processo(
+            self.especie_liq, numero_processo='PAG-201/2026')
+        self.assertIsNone(
+            pendencias.mensagem_aviso_ao_assumir(liq_sem_origem))
+
+        liq = self.novo_processo(
+            self.especie_liq, numero_processo='PAG-200/2026')
+        # Origem é campo de análise (não entra no cadastro do Protocolo).
+        Processo.objects.filter(id=liq.id).update(
+            processo_pagamento='ORIGEM-100/2026')
+        liq.refresh_from_db()
+        aviso = pendencias.mensagem_aviso_ao_assumir(liq)
+        self.assertIsNotNone(aviso)
+        self.assertIn('diligências em aberto', aviso.casefold())
+        self.assertIn(
+            antiga,
+            list(pendencias.pendencias_de_passagens_anteriores(liq)))
+
+        self.client.force_login(self.analista_liq)
+        resp = self.client.post(
+            reverse('assumir_processo', args=[liq.id]), follow=True)
+        self.assertEqual(resp.status_code, 200)
+        msgs = [m.message for m in get_messages(resp.wsgi_request)]
+        self.assertTrue(
+            any('diligências em aberto' in m.casefold() for m in msgs))
+        self.assertContains(resp, 'Diligências da passagem anterior')
+        self.assertContains(resp, 'Regularizar doc da Licitação')
+        self.assertContains(resp, 'Salvar verificação')
+
+        ok = self.client.post(
+            reverse('pend_verificar_correcao', args=[antiga.id]),
+            {
+                'processo_atual': liq.id,
+                'itens_concluidos': itens,
+                'next': reverse('analista_processo', args=[liq.id]),
+            },
+            follow=True,
+        )
+        antiga.refresh_from_db()
+        self.assertEqual(antiga.status, 'RESOLVIDA')
+        self.assertContains(ok, 'Resolvida')
+        self.assertContains(ok, 'Regularizar doc da Licitação')
+
+        # Pendência já resolvida: outra Liquidação com a mesma origem não avisa.
+        liq2 = self.novo_processo(
+            self.especie_liq, numero_processo='PAG-202/2026')
+        Processo.objects.filter(id=liq2.id).update(
+            processo_pagamento='ORIGEM-100/2026')
+        liq2.refresh_from_db()
+        self.assertIsNone(pendencias.mensagem_aviso_ao_assumir(liq2))
+
+    def test_aviso_via_origem_ignora_ponto_no_numero(self):
+        """18.245/2025 e 18245/2025 são o mesmo nº na ligação origem ↔ pendência."""
+        from processos_app.services import tramitacao
+        from processos_app.services.diligencia_texto import separar_itens
+
+        lic = self.processo_em_analise(especie=self.especie_lic)
+        Processo.objects.filter(id=lic.id).update(
+            numero_processo='18245/2025')
+        lic.refresh_from_db()
+        texto = '1- Falta documento com ponto no número'
+        antiga = pendencias.criar(lic.id, self.analista_lic, texto)
+        itens = separar_itens(texto)
+
+        liq = self.novo_processo(
+            self.especie_liq, numero_processo='99.001/2026')
+        Processo.objects.filter(id=liq.id).update(
+            processo_pagamento='18.245/2025')
+        liq.refresh_from_db()
+
+        self.assertEqual(
+            pendencias.numeros_vinculados_pendencia(liq),
+            ['99001/2026', '18245/2025'])
+        aviso = pendencias.mensagem_aviso_ao_assumir(liq)
+        self.assertIsNotNone(aviso)
+        self.assertIn(
+            antiga,
+            list(pendencias.pendencias_de_passagens_anteriores(liq)))
+
+        self.client.force_login(self.analista_liq)
+        tramitacao.assumir(liq.id, self.analista_liq)
+        ok = self.client.post(
+            reverse('pend_verificar_correcao', args=[antiga.id]),
+            {
+                'processo_atual': liq.id,
+                'itens_concluidos': itens,
+                'next': reverse('analista_processo', args=[liq.id]),
+            },
+            follow=True,
+        )
+        antiga.refresh_from_db()
+        self.assertEqual(antiga.status, 'RESOLVIDA')
+        self.assertContains(ok, 'Resolvida')
+
+    def test_aviso_trata_origem_e_pagamento_como_dupla_invertivel(self):
+        """Campos invertidos (origem↔pagamento) ainda ligam à mesma pendência."""
+        from processos_app.services import tramitacao
+        from processos_app.services.diligencia_texto import separar_itens
+
+        # Passagem com a dupla “correta”: pagamento 1122, origem 18640.
+        anterior = self.processo_em_analise(
+            analista=self.analista_liq, especie=self.especie_liq)
+        Processo.objects.filter(id=anterior.id).update(
+            numero_processo='1122/2026',
+            processo_pagamento='18640/2023',
+        )
+        anterior.refresh_from_db()
+        texto = '1- Pendência da dupla origem/pagamento'
+        antiga = pendencias.criar(anterior.id, self.analista_liq, texto)
+        itens = separar_itens(texto)
+
+        # Nova passagem com os campos invertidos (como no controle de relatório).
+        atual = self.novo_processo(
+            self.especie_liq, numero_processo='18640/2023')
+        Processo.objects.filter(id=atual.id).update(
+            processo_pagamento='1122/2026')
+        atual.refresh_from_db()
+
+        self.assertEqual(
+            set(pendencias.numeros_vinculados_pendencia(atual)),
+            {'18640/2023', '1122/2026'})
+        self.assertIsNotNone(pendencias.mensagem_aviso_ao_assumir(atual))
+        self.assertIn(
+            antiga,
+            list(pendencias.pendencias_de_passagens_anteriores(atual)))
+
+        self.client.force_login(self.analista_liq)
+        tramitacao.assumir(atual.id, self.analista_liq)
+        ok = self.client.post(
+            reverse('pend_verificar_correcao', args=[antiga.id]),
+            {
+                'processo_atual': atual.id,
+                'itens_concluidos': itens,
+                'next': reverse('analista_processo', args=[atual.id]),
+            },
+            follow=True,
+        )
+        antiga.refresh_from_db()
+        self.assertEqual(antiga.status, 'RESOLVIDA')
+        self.assertContains(ok, 'Resolvida')
 
 
 class GestaoPessoasTest(BaseProcessoTestCase):

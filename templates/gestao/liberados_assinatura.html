@@ -30,7 +30,12 @@
                 <tbody>
                     {% for processo in processos %}
                     <tr class="{{ processo.prioridade_linha_class }}">
-                        <td class="col-sticky"><strong>{{ processo.numero_processo }}</strong></td>
+                        <td class="col-sticky">
+                            <a href="{% url 'analista_processo' processo.id %}?next={% url 'gestao_liberados_assinatura' %}"
+                               title="Abrir processo">
+                                <strong>{{ processo.numero_processo }}</strong>
+                            </a>
+                        </td>
                         <td>{{ processo.volume|default:"—" }}</td>
                         <td>{{ processo.secretaria }}</td>
                         <td>{{ processo.especie|default:"—" }}</td>

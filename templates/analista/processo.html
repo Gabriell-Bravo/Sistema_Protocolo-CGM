@@ -249,6 +249,16 @@
         </div>
     {% endif %}
 
+    {% if aviso_pendencias_abertas %}
+        <div class="alert alert--warning" role="status">
+            <span class="material-symbols-rounded">assignment_late</span>
+            <span>
+                <strong>{{ aviso_pendencias_abertas }}</strong>
+                <a href="#blocoPendencias">Ir para a lista</a>
+            </span>
+        </div>
+    {% endif %}
+
     {% if aviso_numero_reaproveitavel %}
         <div class="alert alert--warning" id="avisoNumeroReservado" role="status">
             <span class="material-symbols-rounded">confirmation_number</span>
@@ -925,6 +935,66 @@ A análise em andamento será limpa (incluindo número de relatório, se houver)
             </div>
         {% endif %}
 
+        {% if pendencias_anteriores %}
+        <div class="pendencia-anteriores" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border, #e5e7eb);">
+            <div class="card__header" style="padding:0 0 10px;border:0;">
+                <span class="card__title">Diligências da passagem anterior</span>
+                <span class="card__hint">{{ pendencias_anteriores|length }}</span>
+            </div>
+            <p class="cell-muted" style="margin:0 0 12px;">
+                Marque só os itens já corrigidos e salve. A diligência só é concluída quando todos os itens estiverem marcados — e continua visível aqui.
+            </p>
+            <ul class="pendencia-list">
+                {% for pendencia in pendencias_anteriores %}
+                    <li class="pendencia-item">
+                        <div style="flex:1;min-width:0;">
+                            {% if pode_verificar_pendencias_anteriores and pendencia.esta_aberta %}
+                            <form action="{% url 'pend_verificar_correcao' pendencia.id %}" method="post">
+                                {% csrf_token %}
+                                <input type="hidden" name="processo_atual" value="{{ processo.id }}">
+                                <input type="hidden" name="next" value="{{ request.path }}">
+                                <ul class="dil-check">
+                                    {% for item in pendencia.checklist %}
+                                    <li class="dil-check__item">
+                                        <label class="dil-check__label">
+                                            <input type="checkbox" name="itens_concluidos"
+                                                   value="{{ item.texto }}"
+                                                   {% if item.concluido %}checked{% endif %}>
+                                            <span class="dil-check__text">{{ item.texto }}</span>
+                                        </label>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                                <div class="pendencia-item__meta" style="margin-top:8px;">
+                                    <span class="badge badge--warning">{{ pendencia.get_status_display }}</span>
+                                    · passagem com entrada em {{ pendencia.processo.data_entrada|date:"d/m/Y" }}
+                                    · há {{ pendencia.dias_decorridos }} dia{{ pendencia.dias_decorridos|pluralize:"s" }}
+                                </div>
+                                <div class="pendencia-item__acoes" style="margin-top:10px;">
+                                    <button type="submit" class="btn btn--primary btn--sm">
+                                        <span class="material-symbols-rounded">save</span>
+                                        Salvar verificação
+                                    </button>
+                                </div>
+                            </form>
+                            {% else %}
+                            {% include "includes/checklist_diligencia.html" with texto=pendencia.descricao concluidos=pendencia.itens_concluidos %}
+                            <div class="pendencia-item__meta">
+                                <span class="badge {% if pendencia.status == 'RESOLVIDA' %}badge--success{% else %}badge--warning{% endif %}">{{ pendencia.get_status_display }}</span>
+                                {% if pendencia.status == 'RESOLVIDA' and pendencia.resolvida_por %}
+                                · por {{ pendencia.resolvida_por.get_full_name|default:pendencia.resolvida_por.username }}
+                                {% if pendencia.resolvida_em %} em {{ pendencia.resolvida_em|date:"d/m/Y H:i" }}{% endif %}
+                                {% endif %}
+                                · passagem com entrada em {{ pendencia.processo.data_entrada|date:"d/m/Y" }}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
         {% if pode_editar %}
         <div class="pendencia-add" id="formPendencia">
             <label class="field__label" for="descricaoPendencia">Nova diligência</label>
@@ -941,31 +1011,6 @@ A análise em andamento será limpa (incluindo número de relatório, se houver)
         </div>
         {% endif %}
     </section>
-
-    {# item 34: pendências abertas de passagens anteriores, somente leitura #}
-    {% if pendencias_anteriores %}
-    <section class="card">
-        <div class="card__header">
-            <span class="card__title">Diligências abertas de passagens anteriores — {{ pendencias_anteriores|length }}</span>
-            <span class="card__hint">Somente leitura</span>
-        </div>
-        <ul class="pendencia-list">
-            {% for pendencia in pendencias_anteriores %}
-                <li class="pendencia-item">
-                    <div>
-                        {% include "includes/checklist_diligencia.html" with texto=pendencia.descricao concluidos=pendencia.itens_concluidos %}
-                        <div class="pendencia-item__meta">
-                            <span class="badge badge--warning">{{ pendencia.get_status_display }}</span>
-                            · passagem com entrada em {{ pendencia.processo.data_entrada|date:"d/m/Y" }}
-                            {% if pendencia.responsavel_tecnico %} · {{ pendencia.responsavel_tecnico.get_full_name|default:pendencia.responsavel_tecnico.username }}{% endif %}
-                            · há {{ pendencia.dias_decorridos }} dia{{ pendencia.dias_decorridos|pluralize:"s" }}
-                        </div>
-                    </div>
-                </li>
-            {% endfor %}
-        </ul>
-    </section>
-    {% endif %}
 
     {% if pode_editar or pode_liberar or pode_direcionar or pode_declinar or desfazer %}
     <section class="card" id="acoesAnalise" style="margin-top:14px;">

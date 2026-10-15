@@ -53,6 +53,8 @@ def _executar(request, funcao, destino, *args, sucesso='', **kwargs):
 @require_POST
 def assumir(request, process_id):
     """Assumir processo disponível e abrir a tela de análise."""
+    from .services import pendencias as svc_pendencias
+
     destino_lista = request.POST.get('next') or reverse('area_analista')
     if not str(destino_lista).startswith('/'):
         destino_lista = reverse('area_analista')
@@ -62,6 +64,9 @@ def assumir(request, process_id):
         sucesso='Processo assumido. Continue a análise.')
     if erro:
         return erro
+    aviso = svc_pendencias.mensagem_aviso_ao_assumir(processo)
+    if aviso:
+        messages.warning(request, aviso)
     return redirect('analista_processo', process_id=processo.id)
 
 

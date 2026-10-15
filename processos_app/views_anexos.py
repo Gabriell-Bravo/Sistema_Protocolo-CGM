@@ -24,22 +24,70 @@ def _quer_json(request):
     )
 
 
+def _pagina_preview_indisponivel(anexo, motivo):
+    """HTML no iframe — evita o navegador embutir .docx e falhar no domínio."""
+    from django.utils.html import escape
+
+    nome = escape(anexo.nome_original or 'Arquivo')
+    motivo = escape(motivo)
+    baixar = reverse('baixar_anexo', args=[anexo.id])
+    return HttpResponse(
+        '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">'
+        f'<title>{nome}</title>'
+        '<style>'
+        'body{font-family:Segoe UI,Arial,sans-serif;margin:24px;color:#0f172a;'
+        'background:#f8fafc;}'
+        '.box{max-width:420px;margin:40px auto;padding:24px;background:#fff;'
+        'border:1px solid #e2e8f0;border-radius:12px;text-align:center;}'
+        'p{color:#64748b;line-height:1.5;}'
+        'a{display:inline-flex;align-items:center;gap:6px;margin-top:12px;'
+        'padding:10px 16px;border-radius:8px;background:#1d4ed8;color:#fff;'
+        'text-decoration:none;font-weight:600;}'
+        '</style></head><body><div class="box">'
+        f'<strong>{nome}</strong>'
+        f'<p>{motivo}</p>'
+        f'<a href="{baixar}" target="_parent">Baixar arquivo</a>'
+        '</div></body></html>',
+        content_type='text/html; charset=utf-8',
+    )
+
+
 def _abrir_anexo(anexo, usuario, *, inline=False):
     perm.assert_permissao(
         perm.pode_ver_grupo(usuario, anexo.processo.grupo),
         'Você não tem permissão para ver este arquivo.')
     if not anexo.arquivo:
+        if inline:
+            return _pagina_preview_indisponivel(
+                anexo, 'Arquivo não encontrado no servidor.')
         raise Http404('Arquivo não encontrado.')
 
-    # Preview Word (.docx): HTML no iframe; download continua o arquivo original.
+    # Preview Word (.docx): só HTML no iframe. Nunca embute o binário —
+    # o navegador tenta abrir via o host e pode falhar (conexão recusada).
     if inline and anexo.extensao == '.docx':
         html = svc.html_preview_docx(anexo)
         if html:
             return HttpResponse(html, content_type='text/html; charset=utf-8')
+        return _pagina_preview_indisponivel(
+            anexo,
+            'Não foi possível gerar a pré-visualização deste Word. '
+            'Baixe o arquivo para abrir no computador.')
+
+    if inline and anexo.extensao == '.doc':
+        return _pagina_preview_indisponivel(
+            anexo,
+            'Arquivos .doc antigos não têm pré-visualização no navegador. '
+            'Baixe o arquivo para abrir no Word.')
 
     try:
         handle = anexo.arquivo.open('rb')
     except FileNotFoundError as exc:
+        if inline:
+            return _pagina_preview_indisponivel(
+                anexo,
+                'O arquivo não está disponível neste servidor '
+                '(pode ter ficado só no sistema original). '
+                'Peça o reenvio do anexo ou baixe de um backup de mídia.')
         raise Http404('Arquivo não encontrado.') from exc
     content_type, _ = mimetypes.guess_type(anexo.nome_original or '')
     return FileResponse(

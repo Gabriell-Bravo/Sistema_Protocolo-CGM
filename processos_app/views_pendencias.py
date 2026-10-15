@@ -32,9 +32,31 @@ def _voltar_para_processo(pendencia_id):
 # Gestão — Diligências (itens 28 e 29)
 # --------------------------------------------------------------------------
 
-def _diligencias_visiveis(usuario, status):
-    return perm.filtrar_por_grupo(
-        usuario, svc.fila_diligencias(status), campo='processo__genero')
+FILTROS_GRUPO_DILIGENCIA = (
+    ('todos', 'Todos'),
+    (perm.GRUPO_LICITACOES, 'Licitação'),
+    (perm.GRUPO_LIQUIDACOES, 'Liquidação'),
+)
+
+
+def _grupo_filtro(request):
+    grupo = (request.GET.get('grupo') or 'todos').strip()
+    if grupo not in dict(FILTROS_GRUPO_DILIGENCIA):
+        return 'todos'
+    return grupo
+
+
+def _diligencias_visiveis(usuario, status, grupo='todos'):
+    """Analistas, Gestão e admin veem Licitação e Liquidação; filtro por grupo."""
+    from .services.secretaria_cgm import excluir_processos_cgm
+
+    consulta = excluir_processos_cgm(
+        svc.fila_diligencias(status), via='processo')
+    consulta = consulta.filter(
+        processo__genero__in=(perm.GRUPO_LICITACOES, perm.GRUPO_LIQUIDACOES))
+    if grupo in (perm.GRUPO_LICITACOES, perm.GRUPO_LIQUIDACOES):
+        consulta = consulta.filter(processo__genero=grupo)
+    return consulta
 
 
 ABAS_DILIGENCIA = (
@@ -50,16 +72,29 @@ def diligencias(request):
     """Lista diligências abertas ou finalizadas (todas do processo resolvidas).
 
     Gestão/admin concluem direto. Progresso do processo aparece como N/M.
+    Analistas consultam os dois grupos, com filtro Todos/Licitação/Liquidação.
     """
+    # Limpa processos criados por engano em importação antiga (só pendências).
+    if perm.pode_concluir_pendencia(request.user):
+        from .services import importar_diligencias as svc_import
+        stubs = svc_import.remover_stubs_de_importacao()
+        if stubs:
+            messages.info(
+                request,
+                f'Removidos {stubs} processo(s) criados por engano na '
+                'importação de pendências. Reimporte a planilha para '
+                'vincular só aos processos já cadastrados.')
+
     status = request.GET.get('status', 'AGUARDANDO_ATENDIMENTO')
     if status == 'ATENDIMENTO_INDICADO':
         status = 'AGUARDANDO_ATENDIMENTO'
     if status not in dict(ABAS_DILIGENCIA) and status != 'ABERTAS':
         status = 'AGUARDANDO_ATENDIMENTO'
+    grupo = _grupo_filtro(request)
     termo = request.GET.get('termo', '').strip()
 
     lista = svc.filtrar_por_termo(
-        _diligencias_visiveis(request.user, status), termo)
+        _diligencias_visiveis(request.user, status, grupo), termo)
     if status == 'RESOLVIDA':
         from django.db.models import F
         lista = lista.order_by(F('resolvida_em').desc(nulls_last=True), '-id')
@@ -76,8 +111,11 @@ def diligencias(request):
         'titulo_aba': titulo_aba,
         'status_choices': Pendencia.STATUS_CHOICES,
         'termo': termo,
+        'grupo_atual': grupo,
+        'filtros_grupo': FILTROS_GRUPO_DILIGENCIA,
         'abas_diligencia': [
-            (chave, rotulo, _diligencias_visiveis(request.user, chave).count())
+            (chave, rotulo, _diligencias_visiveis(
+                request.user, chave, grupo).count())
             for chave, rotulo in ABAS_DILIGENCIA
         ],
         **perm.contexto_de_permissoes(request.user),
@@ -134,6 +172,7 @@ def importar_planilha_diligencias(request):
     from .services import importar_diligencias as svc_import
 
     try:
+        stubs = svc_import.remover_stubs_de_importacao()
         resultado = svc_import.importar_planilha(
             request.user, request.FILES.get('planilha'))
         texto = (
@@ -141,12 +180,16 @@ def importar_planilha_diligencias(request):
             f', {resultado["ignoradas"]} já existente(s) ignorada(s)'
             f' (de {resultado["lidas"]} linha(s) lida(s)).'
         )
-        if resultado['processos_novos']:
+        if resultado['sem_processo']:
             texto += (
-                f' {resultado["processos_novos"]} processo(s) criado(s) '
-                'para vincular pendências sem cadastro.')
+                f' {resultado["sem_processo"]} linha(s) sem processo '
+                'cadastrado no sistema — não importadas.')
         if resultado['saneadas']:
             texto += f' {resultado["saneadas"]} já veio(ram) com data de saneamento.'
+        if stubs:
+            texto += (
+                f' Removidos {stubs} processo(s) criados por engano '
+                'em importação anterior.')
         messages.success(request, texto)
     except (PermissionDenied, ValidationError) as exc:
         _erro(request, exc)
@@ -221,6 +264,36 @@ def confirmar_resolucao(request, pendencia_id):
     except (PermissionDenied, ValidationError) as exc:
         _erro(request, exc)
     return redirect(destino) if destino else _voltar_para_processo(pendencia_id)
+
+
+@login_required
+@require_POST
+def verificar_correcao(request, pendencia_id):
+    """Analista salva itens; só conclui a diligência se todos estiverem marcados."""
+    bruto = request.POST.get('processo_atual')
+    destino = request.POST.get('next')
+    try:
+        processo_id = int(bruto)
+    except (TypeError, ValueError):
+        messages.error(request, 'Processo da análise atual não informado.')
+        return _voltar_para_processo(pendencia_id)
+    try:
+        _pendencia, completa = svc.verificar_correcao(
+            pendencia_id, request.user, processo_id,
+            request.POST.getlist('itens_concluidos'))
+        if completa:
+            messages.success(
+                request, 'Diligência marcada como corrigida e concluída.')
+        else:
+            messages.info(
+                request,
+                'Marcações salvas. A diligência só é concluída quando '
+                'todos os itens estiverem marcados.')
+    except (PermissionDenied, ValidationError) as exc:
+        _erro(request, exc)
+    if destino and str(destino).startswith('/'):
+        return redirect(destino)
+    return redirect('analista_processo', process_id=processo_id)
 
 
 @login_required

@@ -2,7 +2,7 @@
 
 {% block title %}Diligências{% endblock %}
 {% block page_title %}Diligências{% endblock %}
-{% block page_subtitle %}{% if is_analista %}Consulta das diligências do seu grupo. A conclusão é da Gestão ou do administrador.{% elif status_atual == 'RESOLVIDA' %}Processos em que todas as diligências foram concluídas.{% else %}Diligências abertas. Conclua cada uma; o processo vai para Finalizados quando todas estiverem completas.{% endif %}{% endblock %}
+{% block page_subtitle %}{% if is_analista %}Consulta das diligências de Licitação e Liquidação. A conclusão é da Gestão ou do administrador.{% elif status_atual == 'RESOLVIDA' %}Processos em que todas as diligências foram concluídas.{% else %}Diligências abertas. Conclua cada uma; o processo vai para Finalizados quando todas estiverem completas.{% endif %}{% endblock %}
 
 {% block content %}
 <div class="stack">
@@ -10,7 +10,7 @@
     <section class="stats">
         {% for chave, rotulo, quantidade in abas_diligencia %}
         <a class="stat stat--link {% if status_atual == chave %}is-active{% endif %}"
-           href="?status={{ chave }}{% if termo %}&termo={{ termo|urlencode }}{% endif %}">
+           href="?status={{ chave }}&grupo={{ grupo_atual }}{% if termo %}&termo={{ termo|urlencode }}{% endif %}">
             <div class="stat__value">{{ quantidade }}</div>
             <div class="stat__label">{{ rotulo }}</div>
         </a>
@@ -18,9 +18,21 @@
     </section>
 
     <section class="filters">
+        <div class="filters__chips">
+            {% for chave, rotulo in filtros_grupo %}
+            <a href="?status={{ status_atual }}&grupo={{ chave }}{% if termo %}&termo={{ termo|urlencode }}{% endif %}"
+               class="chip {% if grupo_atual == chave %}chip--ativo{% endif %}">
+                {{ rotulo }}
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="filters">
         <div class="filters__bar" style="flex-wrap:wrap;gap:12px;">
             <form method="get" class="search">
                 <input type="hidden" name="status" value="{{ status_atual }}">
+                <input type="hidden" name="grupo" value="{{ grupo_atual }}">
                 <div class="search__field">
                     <span class="material-symbols-rounded search__icon">search</span>
                     <input type="text" name="termo" class="input"
@@ -29,7 +41,7 @@
                 </div>
                 <button type="submit" class="btn btn--primary">Buscar</button>
                 {% if termo %}
-                <a href="?status={{ status_atual }}" class="btn btn--outline">Limpar</a>
+                <a href="?status={{ status_atual }}&grupo={{ grupo_atual }}" class="btn btn--outline">Limpar</a>
                 {% endif %}
             </form>
             {% if pode_concluir_pendencia %}
@@ -39,9 +51,10 @@
                 <input type="file" name="planilha" class="input" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required
                        title="Planilha CONTROLE DE PENDÊNCIAS">
                 <button type="submit" class="btn btn--outline"
-                        data-confirm="Importar diligências desta planilha?
+                        data-confirm="Importar só as diligências desta planilha?
 
-Linhas já existentes no mesmo processo (mesmo texto) serão ignoradas."
+Não cria processo novo. Linhas sem processo já cadastrado e linhas já existentes (mesmo texto) serão ignoradas.
+Processos criados por engano em importação antiga serão removidos."
                         data-confirm-title="Importar pendências"
                         data-confirm-ok="Importar">
                     <span class="material-symbols-rounded">upload_file</span>
@@ -69,8 +82,7 @@ Linhas já existentes no mesmo processo (mesmo texto) serão ignoradas."
                         <th>Volume</th>
                         <th>Secretaria</th>
                         <th>Diligência</th>
-                        <th>Analista</th>
-                        <th>Tempo</th>
+                        <th>{% if status_atual == 'RESOLVIDA' %}Concluída por{% else %}Analista{% endif %}</th>
                         <th class="col-actions">Ação</th>
                     </tr>
                 </thead>
@@ -78,7 +90,10 @@ Linhas já existentes no mesmo processo (mesmo texto) serão ignoradas."
                     {% for pendencia in pendencias %}
                     <tr class="{{ pendencia.processo.prioridade_linha_class }}">
                         <td class="col-sticky">
-                            <strong>{{ pendencia.processo.numero_processo }}</strong>
+                            <a href="{% url 'analista_processo' pendencia.processo_id %}?next={% url 'gestao_diligencias' %}"
+                               title="Abrir processo">
+                                <strong>{{ pendencia.processo.numero_processo }}</strong>
+                            </a>
                             {% if pendencia.progresso_rotulo %}
                             <div class="cell-muted">{{ pendencia.progresso_rotulo }}</div>
                             {% endif %}
@@ -97,11 +112,39 @@ Linhas já existentes no mesmo processo (mesmo texto) serão ignoradas."
                                 {% include "includes/checklist_diligencia.html" with texto=pendencia.descricao concluidos=pendencia.itens_concluidos %}
                             </div>
                             {{ pendencia.checklist|json_script:pendencia.checklist_script_id }}
+                            {% if pendencia.eventos.all %}
+                            <details class="dil-historico">
+                                <summary>Histórico</summary>
+                                <ul class="dil-historico__lista">
+                                    {% for evento in pendencia.eventos.all %}
+                                    <li>
+                                        <strong>{{ evento.get_tipo_display }}</strong>
+                                        · {{ evento.criado_em|date:"d/m/Y H:i" }}
+                                        {% if evento.usuario %}
+                                        · {{ evento.usuario.get_full_name|default:evento.usuario.username }}
+                                        {% endif %}
+                                        {% if evento.descricao %}
+                                        <div class="cell-muted">{{ evento.descricao }}</div>
+                                        {% endif %}
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </details>
+                            {% endif %}
                         </td>
-                        <td>{{ pendencia.responsavel_tecnico|default:'—' }}</td>
-                        <td class="cell-tempo">
-                            <strong>{{ pendencia.dias_decorridos }} dia{{ pendencia.dias_decorridos|pluralize:"s" }}</strong>
-                            <div class="cell-muted">desde {{ pendencia.criada_em|date:"d/m/Y" }}</div>
+                        <td>
+                            {% if status_atual == 'RESOLVIDA' %}
+                                {% if pendencia.resolvida_por %}
+                                <strong>{{ pendencia.resolvida_por.get_full_name|default:pendencia.resolvida_por.username }}</strong>
+                                {% else %}
+                                <span class="cell-muted">—</span>
+                                {% endif %}
+                                {% if pendencia.resolvida_em %}
+                                <div class="cell-muted">{{ pendencia.resolvida_em|date:"d/m/Y H:i" }}</div>
+                                {% endif %}
+                            {% else %}
+                                {{ pendencia.responsavel_tecnico|default:'—' }}
+                            {% endif %}
                         </td>
                         <td class="col-actions">
                             <div class="dil-acoes">
@@ -130,7 +173,7 @@ Linhas já existentes no mesmo processo (mesmo texto) serão ignoradas."
                             </button>
                             {% elif pendencia.status == 'RESOLVIDA' %}
                             <span class="badge badge--success">
-                                Concluída{% if pendencia.resolvida_em %} em {{ pendencia.resolvida_em|date:"d/m/Y" }}{% endif %}
+                                Concluída{% if pendencia.resolvida_por %} por {{ pendencia.resolvida_por.get_full_name|default:pendencia.resolvida_por.username }}{% endif %}
                             </span>
                             {% else %}
                             <span class="badge">{{ pendencia.get_status_display }}</span>
@@ -140,7 +183,7 @@ Linhas já existentes no mesmo processo (mesmo texto) serão ignoradas."
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7">
+                        <td colspan="6">
                             <div class="empty empty--compact">
                                 <span class="material-symbols-rounded">inbox</span>
                                 <div class="empty__title">{% if termo %}Nenhuma diligência encontrada{% else %}Nenhuma diligência nesta situação{% endif %}</div>

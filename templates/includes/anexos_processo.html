@@ -86,17 +86,23 @@
                 {% if anexo.extensao == '.pdf' or anexo.extensao == '.docx' %}
                 <iframe class="anexo-embed"
                         src="{% url 'ver_anexo' anexo.id %}"
-                        title="Preview de {{ anexo.nome_original }}"></iframe>
+                        title="Preview de {{ anexo.nome_original }}"
+                        referrerpolicy="same-origin"></iframe>
                 {% elif anexo.extensao == '.txt' %}
                 <iframe class="anexo-embed anexo-embed--txt"
                         src="{% url 'ver_anexo' anexo.id %}"
-                        title="Preview de {{ anexo.nome_original }}"></iframe>
+                        title="Preview de {{ anexo.nome_original }}"
+                        referrerpolicy="same-origin"></iframe>
                 {% else %}
                 <img class="anexo-embed-img"
                      src="{% url 'ver_anexo' anexo.id %}"
                      alt="{{ anexo.nome_original }}"
                      loading="lazy">
                 {% endif %}
+                <p class="anexo-card__fallback cell-muted">
+                    Se o preview não abrir,
+                    <a href="{% url 'baixar_anexo' anexo.id %}">baixe o arquivo</a>.
+                </p>
             </div>
             {% endif %}
         </li>

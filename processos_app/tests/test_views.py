@@ -63,10 +63,17 @@ class TelasPorPapelTest(BaseProcessoTestCase):
         self._get(self.gestao, 'gestao_dashboard', query='?inicio=2026-01-01&fim=2026-12-31')
         # item 2: Gestão consulta a tela do processo sem praticar ato.
         self._get(self.gestao, 'analista_processo', self.processo.id)
-        # Menu Gestão expõe Controle de análise (só leitura).
+        # Menu Gestão enxuto: Operação + Configurações (sem Para assinar / Espécies / Controle de análise).
         menu = self._get(self.gestao, 'gestao_dashboard')
-        self.assertContains(menu, reverse('controle_analise'))
-        self.assertContains(menu, 'Controle de análise')
+        self.assertContains(menu, 'Operação')
+        self.assertContains(menu, 'Configurações')
+        self.assertContains(menu, 'Consulta')
+        self.assertContains(menu, reverse('gestao_processos'))
+        self.assertContains(menu, reverse('gestao_diligencias'))
+        self.assertContains(menu, reverse('gestao_cadastros', kwargs={'slug': 'unidades'}))
+        self.assertNotContains(menu, reverse('controle_analise'))
+        self.assertNotContains(menu, reverse('gestao_liberados_assinatura'))
+        self.assertNotContains(menu, reverse('gestao_cadastros', kwargs={'slug': 'especies'}))
 
     def test_acessos_negados(self):
         self._get(self.analista_lic, 'gestao_cadastros_inicio', esperado=403)
@@ -112,12 +119,28 @@ class TelasPorPapelTest(BaseProcessoTestCase):
         processo_pend.save(update_fields=['numero_processo'])
         pendencia = pendencias.criar(
             processo_pend.id, self.analista_lic, 'Falta documento')
+        liq_pend = self.processo_em_analise(
+            analista=self.analista_liq, especie=self.especie_liq)
+        liq_pend.numero_processo = '2005/2026'
+        liq_pend.save(update_fields=['numero_processo'])
+        pendencias.criar(liq_pend.id, self.analista_liq, 'Falta NF liquidação')
+
         dilig = self._get(self.analista_lic, 'gestao_diligencias')
+        self.assertEqual(dilig.context['grupo_atual'], 'todos')
         self.assertContains(dilig, 'Falta documento')
+        self.assertContains(dilig, 'Falta NF liquidação')
+        self.assertContains(dilig, 'Licitação')
+        self.assertContains(dilig, 'Liquidação')
         self.assertContains(dilig, 'data-checklist-ver')
         self.assertNotContains(dilig, 'data-checklist-indicar="')
         self.assertContains(dilig, 'A conclusão é da Gestão ou do administrador.')
         self.assertContains(dilig, 'name="termo"')
+
+        so_liq = self._get(
+            self.analista_lic, 'gestao_diligencias',
+            query='?grupo=LIQUIDACOES')
+        self.assertContains(so_liq, 'Falta NF liquidação')
+        self.assertNotContains(so_liq, 'Falta documento')
 
         busca = self._get(self.analista_lic, 'gestao_diligencias',
                           query='?termo=2004')
@@ -1193,11 +1216,12 @@ class AcessoAnaliseLicitacoesGestaoAdminTest(BaseProcessoTestCase):
         pagina = self.client.get(reverse('controle_analise'))
         self.assertEqual(pagina.status_code, 200)
         self.assertContains(pagina, 'Controle de análise')
-        # Admin mantém Nova análise pelas permissões atuais.
+        # Menu Admin enxuto: sem Controle de análise (acesso direto pela URL permanece).
         menu = self.client.get(reverse('manage_users'))
         self.assertEqual(menu.status_code, 200)
-        self.assertContains(menu, reverse('controle_analise'))
-        self.assertContains(menu, 'Controle de análise')
+        self.assertContains(menu, 'Configurações')
+        self.assertContains(menu, reverse('manage_users'))
+        self.assertNotContains(menu, reverse('controle_analise'))
 
     def test_gestao_analista_processo_somente_leitura(self):
         self.client.force_login(self.gestao)

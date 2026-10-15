@@ -41,7 +41,12 @@
                             {% include "includes/badge_prioridade.html" with processo=processo %}
                         {% endif %}
                     </td>
-                    <td class="col-sticky"><strong>{{ processo.numero_processo }}</strong></td>
+                    <td class="col-sticky">
+                        <a href="{% url 'analista_processo' processo.id %}{% if modo_gestao %}?next={% url 'gestao_processos' %}{% endif %}"
+                           title="Abrir processo">
+                            <strong>{{ processo.numero_processo }}</strong>
+                        </a>
+                    </td>
                     <td>{{ processo.especie|default:"—" }}</td>
                     <td>{{ processo.secretaria }}</td>
                     {% if mostrar_contratada %}

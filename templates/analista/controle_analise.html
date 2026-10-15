@@ -102,7 +102,12 @@
                 <tbody>
                     {% for processo in processos %}
                     <tr class="{% if processo.eh_comigo %}tr-situacao-voce{% endif %} {{ processo.prioridade_linha_class }}">
-                        <td class="col-sticky"><strong>{{ processo.numero_processo }}</strong></td>
+                        <td class="col-sticky">
+                            <a href="{% url 'analista_processo' processo.id %}?next={% url 'controle_analise' %}"
+                               title="Abrir processo">
+                                <strong>{{ processo.numero_processo }}</strong>
+                            </a>
+                        </td>
                         <td>{{ processo.volume|default:"—" }}</td>
                         <td>{{ processo.especie|default:"—" }}</td>
                         <td>{{ processo.secretaria }}</td>

@@ -6,6 +6,10 @@ Divisão de trabalho:
 
     ANALISTA  identifica tecnicamente a pendência e a registra
               -> nasce AGUARDANDO_ATENDIMENTO
+    ANALISTA (reentrada)  verifica pendências antigas do mesmo nº
+              -> pode marcar como corrigida (RESOLVIDA)
+    ANALISTA (Liquidação) também vê pendências do Processo origem
+              (campo processo_pagamento) quando o nº de pagamento difere
     GESTÃO / ADMIN  concluem a diligência quando a Secretaria atendeu
               -> RESOLVIDA (sem passar pelo analista)
 
@@ -15,12 +19,24 @@ código só para registros legados ainda em ATENDIMENTO_INDICADO.
 """
 
 from django.db import transaction
+from django.db.models import Q, Value
+from django.db.models.functions import Replace
 from django.utils import timezone
 
 from ..models import Pendencia, Processo
 from . import permissions as perm
 from .eventos import registrar_evento_pendencia, registrar_diff
+from .numeros import chaves_dupla_origem_pagamento
 from .tramitacao import TransicaoInvalida
+
+
+def _expr_numero_sem_ponto(campo):
+    """Remove '.' e espaços do número gravado (para comparar com normalizar_numero)."""
+    return Replace(
+        Replace(campo, Value('.'), Value('')),
+        Value(' '),
+        Value(''),
+    )
 
 
 # --------------------------------------------------------------------------
@@ -386,11 +402,23 @@ def fila_diligencias(status='AGUARDANDO_ATENDIMENTO'):
     AGUARDANDO_ATENDIMENTO (aba ativa): todas as ainda abertas.
     RESOLVIDA (Finalizados): só quando o processo não tem mais nenhuma aberta.
     """
-    from django.db.models import Exists, OuterRef
+    from django.db.models import Exists, OuterRef, Prefetch
+
+    from ..models import EventoPendencia
 
     consulta = (Pendencia.objects
                 .select_related('processo', 'responsavel_tecnico',
-                                'atendimento_indicado_por', 'resolvida_por')
+                                'atendimento_indicado_por', 'resolvida_por',
+                                'criada_por')
+                .prefetch_related(
+                    Prefetch(
+                        'eventos',
+                        queryset=(
+                            EventoPendencia.objects
+                            .select_related('usuario')
+                            .order_by('criado_em', 'id')
+                        ),
+                    ))
                 .order_by('criada_em'))
     if status == 'ABERTAS' or status == 'AGUARDANDO_ATENDIMENTO':
         return consulta.filter(status__in=Pendencia.STATUS_ABERTOS)
@@ -447,18 +475,119 @@ def total_atendimentos_indicados(usuario):
     return atendimentos_indicados(usuario).count()
 
 
-def abertas_de_passagens_anteriores(processo):
-    """item 34: mesmo número de processo, passagem anterior, somente leitura.
+def numeros_vinculados_pendencia(processo):
+    """Dupla normalizada: nº do processo + Processo origem/pagamento.
 
-    Não duplica pendência: apenas mostra o que ficou em aberto quando o
-    processo esteve aqui antes.
+    Em Liquidação o nº da tela costuma ser o de pagamento e a origem fica
+    em processo_pagamento — mas os campos às vezes vêm invertidos. Por isso
+    os dois entram no mesmo conjunto (ordem irrelevante).
+    18.245/2025 e 18245/2025 contam como o mesmo número.
     """
+    return chaves_dupla_origem_pagamento(processo)
+
+
+def _pendencias_por_numeros_normalizados(processo, chaves):
+    """Pendências cujo processo toca a dupla em qualquer um dos dois campos."""
+    if not chaves:
+        return Pendencia.objects.none()
     return (Pendencia.objects
-            .filter(processo__numero_processo=processo.numero_processo,
-                    status__in=Pendencia.STATUS_ABERTOS)
+            .annotate(
+                _num_norm=_expr_numero_sem_ponto(
+                    'processo__numero_processo'),
+                _pag_norm=_expr_numero_sem_ponto(
+                    'processo__processo_pagamento'),
+            )
+            .filter(Q(_num_norm__in=chaves) | Q(_pag_norm__in=chaves))
             .exclude(processo_id=processo.id)
-            .select_related('processo', 'responsavel_tecnico')
+            .exclude(status='CANCELADA')
+            .select_related(
+                'processo', 'responsavel_tecnico', 'resolvida_por')
             .order_by('criada_em'))
+
+
+def abertas_de_passagens_anteriores(processo):
+    """Pendências ainda abertas de passagens anteriores (dupla origem/pagamento)."""
+    return (pendencias_de_passagens_anteriores(processo)
+            .filter(status__in=Pendencia.STATUS_ABERTOS))
+
+
+def pendencias_de_passagens_anteriores(processo):
+    """Passagem anterior: abertas e já corrigidas (para não sumirem da análise).
+
+    Liga pela dupla origem ↔ pagamento (ordem dos campos irrelevante).
+    Números com ou sem ponto milhar são tratados como iguais.
+    """
+    return _pendencias_por_numeros_normalizados(
+        processo, numeros_vinculados_pendencia(processo))
+
+
+def abertas_do_mesmo_numero(processo):
+    """Pendências abertas da mesma dupla origem/pagamento."""
+    return (_pendencias_por_numeros_normalizados(
+                processo, numeros_vinculados_pendencia(processo))
+            .filter(status__in=Pendencia.STATUS_ABERTOS))
+
+
+def mensagem_aviso_ao_assumir(processo):
+    """Texto do alerta ao assumir, ou None se não houver diligência aberta."""
+    if not abertas_do_mesmo_numero(processo).exists():
+        return None
+    return (
+        'Este processo possui diligências em aberto. '
+        'Verifique na lista abaixo se já foram corrigidas.'
+    )
+
+
+@transaction.atomic
+def verificar_correcao(pendencia_id, usuario, processo_atual_id,
+                       itens_concluidos=None):
+    """Salva marcações; só conclui a diligência quando todos os itens estão ok.
+
+    Marcação parcial mantém a diligência aberta (não vai para Finalizados).
+    """
+    pendencia = _travar(pendencia_id)
+    processo_atual = (Processo.objects.select_for_update()
+                      .filter(id=processo_atual_id).first())
+    if processo_atual is None:
+        raise TransicaoInvalida('Processo não encontrado.')
+
+    perm.assert_permissao(
+        perm.pode_verificar_correcao_pendencia(
+            usuario, pendencia, processo_atual),
+        'Só o analista responsável desta passagem verifica a correção '
+        'das pendências anteriores.')
+
+    if not pendencia.esta_aberta:
+        raise TransicaoInvalida(
+            f'Diligência em "{pendencia.get_status_display()}" não pode '
+            'ser atualizada agora.')
+
+    validos, escolhidos = _itens_marcados(pendencia, itens_concluidos)
+    pendencia.itens_concluidos = escolhidos
+    completa = (not validos) or set(validos).issubset(set(escolhidos))
+
+    if not completa:
+        # Parcial: guarda os itens, mantém aberta (não vai a Finalizados).
+        pendencia.save(update_fields=['itens_concluidos'])
+        return pendencia, False
+
+    pendencia.status = 'RESOLVIDA'
+    pendencia.resolvida_em = timezone.now()
+    pendencia.resolvida_por = usuario
+    if pendencia.atendimento_indicado_em is None:
+        pendencia.atendimento_indicado_em = pendencia.resolvida_em
+        pendencia.atendimento_indicado_por = usuario
+    pendencia.save(update_fields=[
+        'status', 'resolvida_em', 'resolvida_por', 'itens_concluidos',
+        'atendimento_indicado_em', 'atendimento_indicado_por'])
+
+    detalhe = (
+        f'Corrigida na análise da passagem atual por '
+        f'{perm.nome_usuario(usuario)}.')
+    if validos:
+        detalhe += f' {len(escolhidos)} de {len(validos)} item(ns).'
+    registrar_evento_pendencia(pendencia, 'RESOLVIDA', usuario, detalhe)
+    return pendencia, True
 
 
 def _travar(pendencia_id):

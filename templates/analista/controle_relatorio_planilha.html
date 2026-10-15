@@ -418,7 +418,11 @@
               <span class="sheet-ro">
                 {% if col.campo == 'numero_relatorio' %}<strong>{{ linha.numero_relatorio|default:"—" }}</strong>
                 {% elif col.campo == 'data_relatorio' %}{{ linha.data_relatorio|date:"d/m/Y"|default:"—" }}
-                {% elif col.campo == 'numero_processo' %}{{ linha.numero_processo|default:"—" }}
+                {% elif col.campo == 'numero_processo' %}
+                  {% if linha.processo_id and linha.numero_processo %}
+                  <a href="{% url 'analista_processo' linha.processo_id %}?next={% url 'controle_relatorio' %}%3Faba%3D{{ aba }}%26secao%3Danalises"
+                     title="Abrir processo">{{ linha.numero_processo }}</a>
+                  {% else %}{{ linha.numero_processo|default:"—" }}{% endif %}
                 {% elif col.campo == 'processo_pagamento' %}{{ linha.processo_pagamento|default:"—" }}
                 {% elif col.campo == 'analista' %}{{ linha.analista|default:"—" }}
                 {% elif col.campo == 'secretaria' %}{{ linha.secretaria|default:"—" }}

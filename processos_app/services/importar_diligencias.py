@@ -5,9 +5,8 @@ Colunas esperadas (1ª linha):
   Processo origem | Processo Pagamento | Secretaria | Objeto |
   Pendência | Data da pendência | Envio para Simone | Data de Saneamento
 
+Só cria diligências em processos já cadastrados. Não cadastra processo.
 Não duplica diligência já existente no mesmo processo com o mesmo texto.
-Se o processo não existir, cria um stub de Liquidações para a pendência
-aparecer na fila.
 """
 
 from __future__ import annotations
@@ -19,8 +18,11 @@ from django.utils import timezone
 
 from ..models import Pendencia, Processo
 from . import permissions as perm
-from .eventos import registrar_evento, registrar_evento_pendencia
+from .eventos import registrar_evento_pendencia
+from .numeros import normalizar_numero
 from .tramitacao import TransicaoInvalida
+
+ESPECIE_STUB = 'Importação de pendências'
 
 CABECALHOS = {
     'processo origem': 'origem',
@@ -34,20 +36,6 @@ CABECALHOS = {
     'envio para simone': 'envio',
     'data de saneamento': 'data_saneamento',
 }
-
-
-def normalizar_numero(valor):
-    """24.273/2025 → 24273/2025; remove espaços."""
-    texto = str(valor or '').strip()
-    if not texto or texto.lower() in ('none', 'nan', '-'):
-        return ''
-    if isinstance(valor, float) and valor == int(valor):
-        texto = str(int(valor))
-    texto = texto.replace(' ', '')
-    if '/' in texto:
-        esquerda, direita = texto.split('/', 1)
-        return f'{esquerda.replace(".", "")}/{direita.replace(".", "")}'
-    return texto.replace('.', '')
 
 
 def normalizar_descricao(texto):
@@ -112,6 +100,7 @@ def _ler_linhas(arquivo):
     for bruto in linhas[1:]:
         if not bruto:
             continue
+
         def col(nome):
             indice = mapa.get(nome)
             if indice is None or indice >= len(bruto):
@@ -136,10 +125,11 @@ def _ler_linhas(arquivo):
 
 
 def _indice_processos():
-    """numero normalizado → Processo (pagamento e origem)."""
+    """numero normalizado → Processo (pagamento e origem). Ignora stubs."""
     indice = {}
-    for processo in Processo.objects.only(
-            'id', 'numero_processo', 'processo_pagamento'):
+    for processo in (
+            Processo.objects.exclude(especie=ESPECIE_STUB)
+            .only('id', 'numero_processo', 'processo_pagamento')):
         for bruto in (processo.numero_processo, processo.processo_pagamento):
             chave = normalizar_numero(bruto)
             if chave and chave not in indice:
@@ -152,38 +142,6 @@ def _localizar_processo(registro, indice):
         if chave and chave in indice:
             return indice[chave]
     return None
-
-
-def _criar_stub(registro, usuario, indice):
-    pagamento = registro['pagamento'] or registro['origem']
-    origem = registro['origem'] if registro['origem'] != pagamento else ''
-    data_ref = registro['data_pendencia'] or timezone.now()
-    data_entrada = timezone.localtime(data_ref).date() if hasattr(
-        data_ref, 'date') else timezone.localdate()
-
-    processo = Processo(
-        numero_processo=pagamento,
-        volume='1',
-        processo_pagamento=origem,
-        secretaria=registro['secretaria'][:255],
-        data_entrada=data_entrada,
-        hora_entrada=time(0, 0),
-        genero='LIQUIDACOES',
-        especie='Importação de pendências',
-        objeto=registro['objeto'],
-        situacao_tramite='DISPONIVEL',
-        status_analise='NAO_APLICAVEL',
-        observacao_protocolo=(
-            'Processo criado na importação da planilha CONTROLE DE PENDÊNCIAS.'),
-    )
-    processo.save()
-    registrar_evento(
-        processo, 'PROCESSO_CADASTRADO', usuario,
-        descricao='Processo stub criado na importação de diligências.')
-    for chave in (normalizar_numero(pagamento), normalizar_numero(origem)):
-        if chave:
-            indice[chave] = processo
-    return processo
 
 
 def _descricoes_existentes(processo_ids):
@@ -199,9 +157,23 @@ def _descricoes_existentes(processo_ids):
     return mapa
 
 
+def stubs_de_importacao():
+    """Processos criados por engano na importação antiga."""
+    return Processo.objects.filter(especie=ESPECIE_STUB)
+
+
+@transaction.atomic
+def remover_stubs_de_importacao():
+    """Apaga processos stub e as diligências ligadas a eles."""
+    consulta = stubs_de_importacao()
+    removidos = consulta.count()
+    consulta.delete()
+    return removidos
+
+
 @transaction.atomic
 def importar_planilha(usuario, arquivo):
-    """Importa pendências do Excel. Retorna contagens do resultado."""
+    """Importa só pendências em processos já existentes. Retorna contagens."""
     perm.assert_permissao(
         perm.pode_concluir_pendencia(usuario),
         'Somente a Gestão ou o administrador importam a planilha de diligências.')
@@ -216,17 +188,16 @@ def importar_planilha(usuario, arquivo):
     indice = _indice_processos()
     criadas = 0
     ignoradas = 0
-    processos_novos = 0
+    sem_processo = 0
     saneadas = 0
     vistos_arquivo = set()
 
-    # Primeiro passa: resolve/cria processos e coleta ids.
     resolvidos = []
     for registro in registros:
         processo = _localizar_processo(registro, indice)
         if processo is None:
-            processo = _criar_stub(registro, usuario, indice)
-            processos_novos += 1
+            sem_processo += 1
+            continue
         resolvidos.append((registro, processo))
 
     existentes = _descricoes_existentes({p.id for _, p in resolvidos})
@@ -269,7 +240,7 @@ def importar_planilha(usuario, arquivo):
     return {
         'criadas': criadas,
         'ignoradas': ignoradas,
-        'processos_novos': processos_novos,
+        'sem_processo': sem_processo,
         'saneadas': saneadas,
         'lidas': len(registros),
     }

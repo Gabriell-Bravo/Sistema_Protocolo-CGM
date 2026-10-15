@@ -123,6 +123,8 @@ urlpatterns = [
          pend.meus_atendimentos, name='meus_atendimentos'),
     path('pendencias/<int:pendencia_id>/resolver/',
          pend.confirmar_resolucao, name='pend_confirmar_resolucao'),
+    path('pendencias/<int:pendencia_id>/verificar-correcao/',
+         pend.verificar_correcao, name='pend_verificar_correcao'),
     path('pendencias/<int:pendencia_id>/insuficiente/',
          pend.atendimento_insuficiente, name='pend_atendimento_insuficiente'),
     path('pendencias/<int:pendencia_id>/cancelar/',

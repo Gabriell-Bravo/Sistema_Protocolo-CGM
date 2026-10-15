@@ -344,6 +344,27 @@ def pode_concluir_pendencia(user):
     return is_gestao(user) or eh_administrador(user)
 
 
+def pode_verificar_correcao_pendencia(user, pendencia, processo_atual):
+    """Analista da passagem atual marca pendência antiga como corrigida.
+
+    Liga pela dupla nº + Processo origem/pagamento (ordem irrelevante).
+    18.245/2025 e 18245/2025 contam como o mesmo número.
+    """
+    from .numeros import chaves_dupla_origem_pagamento
+
+    if not processo_atual or not pendencia:
+        return False
+    if not pode_analisar_processo(user, processo_atual):
+        return False
+    if not pendencia.esta_aberta:
+        return False
+    if pendencia.processo_id == processo_atual.id:
+        return False
+    atuais = set(chaves_dupla_origem_pagamento(processo_atual))
+    da_pendencia = set(chaves_dupla_origem_pagamento(pendencia.processo))
+    return bool(atuais and da_pendencia and atuais & da_pendencia)
+
+
 def pode_desfazer_indicacao_atendimento(user):
     """O administrador desfaz uma indicação feita por engano.
 

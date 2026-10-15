@@ -1676,6 +1676,9 @@ def assumir_processo(request, process_id):
             return redirect(destino)
         return redirect('area_analista')
     messages.success(request, 'Processo assumido. Continue a análise.')
+    aviso = svc_pendencias.mensagem_aviso_ao_assumir(processo)
+    if aviso:
+        messages.warning(request, aviso)
     return redirect('analista_processo', process_id=processo.id)
 
 
@@ -1852,8 +1855,12 @@ def analista_processo(request, process_id):
         'analistas_relator': perm.opcoes_relator(
             processo.genero or perm.GRUPO_LIQUIDACOES, relator_atual),
         'pendencias': pendencias,
-        'pendencias_anteriores': svc_pendencias.abertas_de_passagens_anteriores(
-            processo),
+        'pendencias_anteriores': list(
+            svc_pendencias.pendencias_de_passagens_anteriores(processo)),
+        'pode_verificar_pendencias_anteriores': pode_editar,
+        'aviso_pendencias_abertas': (
+            svc_pendencias.mensagem_aviso_ao_assumir(processo)
+            if pode_editar else None),
         'somente_leitura': (
             not pode_editar
             and (perm.is_gestao(request.user) or perm.eh_administrador(request.user))

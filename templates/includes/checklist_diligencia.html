@@ -3,7 +3,10 @@
     {% for item in texto|itens_diligencia %}
     <li class="dil-check__item">
         <span class="dil-check__box{% if item in concluidos %} is-done{% endif %}" aria-hidden="true">{% if item in concluidos %}✓{% endif %}</span>
-        <span class="dil-check__text">{{ item }}</span>
+        <div class="dil-check__body">
+            <span class="dil-check__text dil-check__text--clamp">{{ item }}</span>
+            <button type="button" class="dil-check__mais" hidden data-dil-mais>Ver mais</button>
+        </div>
     </li>
     {% endfor %}
 </ul>

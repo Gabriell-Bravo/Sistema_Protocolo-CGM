@@ -1573,6 +1573,10 @@ button.encaminhamento__opcao:disabled {
     pointer-events: none;
 }
 
+.dil-preview .dil-check__mais {
+    pointer-events: auto;
+}
+
 .dil-check {
     list-style: none;
     margin: 0;
@@ -1588,6 +1592,15 @@ button.encaminhamento__opcao:disabled {
     align-items: flex-start;
     gap: 8px;
     text-align: left;
+}
+
+.dil-check__body {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
 }
 
 .dil-check__box {
@@ -1660,6 +1673,39 @@ button.encaminhamento__opcao:disabled {
     white-space: normal;
 }
 
+.dil-check__text--clamp {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+    overflow: hidden;
+}
+
+.dil-check__text--clamp.is-expanded {
+    display: block;
+    -webkit-line-clamp: unset;
+    overflow: visible;
+}
+
+.dil-check__mais {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    color: var(--primary);
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.dil-check__mais:hover,
+.dil-check__mais:focus-visible {
+    opacity: 0.85;
+}
+
 .table .col-sticky {
     position: sticky;
     left: 0;
@@ -1676,6 +1722,32 @@ button.encaminhamento__opcao:disabled {
 
 .table tbody tr:hover>td.col-sticky {
     background: var(--primary-soft);
+}
+
+.dil-historico {
+    margin-top: 10px;
+    font-size: 0.85rem;
+}
+
+.dil-historico > summary {
+    cursor: pointer;
+    color: var(--text-muted, #6b7280);
+    user-select: none;
+}
+
+.dil-historico__lista {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+}
+
+.dil-historico__lista li {
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--surface-2, #f3f4f6);
+    white-space: normal;
 }
 
 .dil-acoes {
@@ -3010,6 +3082,19 @@ button.encaminhamento__opcao:disabled {
     border-radius: var(--radius);
     overflow: hidden;
     background: #fff;
+}
+
+.anexo-card__fallback {
+    margin: 0;
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    font-size: 0.85rem;
+    background: var(--surface-2, #f8fafc);
+}
+
+.anexo-card__fallback a {
+    color: var(--primary);
+    font-weight: 600;
 }
 
 .anexo-embed {
