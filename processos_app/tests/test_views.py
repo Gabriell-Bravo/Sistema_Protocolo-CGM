@@ -1020,6 +1020,8 @@ class FilaAnalistaESituacaoTest(BaseProcessoTestCase):
         posicoes = [html.find(titulo) for titulo in ordem]
         self.assertTrue(all(pos >= 0 for pos in posicoes), posicoes)
         self.assertEqual(posicoes, sorted(posicoes))
+        self.assertNotContains(historico, 'Nº do relatório')
+        self.assertContains(historico, 'Arquivos anexados')
         self.assertContains(historico, 'Linha do tempo')
         self.assertContains(historico, 'data-hist-vista="tabela"')
         self.assertNotContains(historico, 'Tempos do fluxo')

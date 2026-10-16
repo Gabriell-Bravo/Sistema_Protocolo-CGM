@@ -125,12 +125,14 @@
     <section class="table-card">
         <div class="table-card__header">
             <span class="table-card__title">Informações da análise</span>
+            {% if not eh_licitacao %}
             {% if foi_analisado %}
             <span class="badge {% if processo.status_analise == 'PROSSEGUIMENTO_SEM_RESSALVA' %}badge--success{% elif processo.status_analise == 'PROSSEGUIMENTO_COM_RESSALVA' %}badge--warning{% elif processo.status_analise == 'NAO_PROSSEGUIMENTO' or processo.status_analise == 'DEVOLUCAO_PARA_SANEAMENTO' %}badge--danger{% endif %}">
                 {{ processo.get_status_analise_display }}
             </span>
             {% else %}
             <span class="badge">Sem análise</span>
+            {% endif %}
             {% endif %}
         </div>
         {% if foi_analisado %}
@@ -144,8 +146,12 @@
                 {% endif %}
             </div>
         </div>
+        {% endif %}
+        {% if eh_licitacao %}
+        {% include "includes/anexos_processo.html" %}
+        {% elif foi_analisado %}
         <div class="hist-fatos">
-            <article class="fato" tabindex="0">
+            <article class="fato">
                 <span class="material-symbols-rounded fato__icone">numbers</span>
                 <div>
                     <span class="fato__rotulo">Nº do relatório</span>
@@ -402,7 +408,6 @@
         </div>
     </section>
 
-    {% include "includes/anexos_processo.html" %}
 </div>
 {% endblock %}
 

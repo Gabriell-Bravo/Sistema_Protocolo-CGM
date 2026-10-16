@@ -3764,8 +3764,6 @@ tr.is-inativo td {
     border-radius: var(--radius);
     background: var(--surface-2);
     min-width: 0;
-    cursor: help;
-    transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease;
 }
 
 .fato > div {
@@ -3780,8 +3778,6 @@ tr.is-inativo td {
 .fato:hover,
 .fato:focus-visible {
     border-color: var(--primary-border);
-    box-shadow: var(--shadow-sm);
-    transform: translateY(-1px);
     outline: none;
 }
 
@@ -3810,16 +3806,6 @@ tr.is-inativo td {
 
 .fato__dica {
     display: none;
-    flex: 1 0 100%;
-    margin-top: 2px;
-    font-size: 12.5px;
-    line-height: 1.4;
-    color: var(--primary);
-}
-
-.fato:hover .fato__dica,
-.fato:focus-visible .fato__dica {
-    display: block;
 }
 
 .analise-hero {
@@ -3831,6 +3817,11 @@ tr.is-inativo td {
     border-radius: var(--radius);
     background: var(--primary-soft);
     border: 1px solid var(--primary-border);
+}
+
+.table-card > #blocoAnexos {
+    margin: 14px 16px 16px;
+    box-shadow: none;
 }
 
 .analise-hero .material-symbols-rounded {
@@ -3917,7 +3908,7 @@ tr.is-inativo td {
     background: var(--primary-soft);
     color: var(--primary);
     cursor: help;
-    transition: background .15s ease, color .15s ease, transform .15s ease;
+    transition: background .15s ease, color .15s ease;
 }
 
 .tl__icone .material-symbols-rounded {
@@ -3928,7 +3919,6 @@ tr.is-inativo td {
 .tl__icone:focus-visible {
     background: var(--primary);
     color: #fff;
-    transform: scale(1.06);
     outline: none;
 }
 
