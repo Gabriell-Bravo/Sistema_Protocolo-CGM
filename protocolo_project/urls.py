@@ -9,6 +9,8 @@ from django.contrib.auth import views as auth_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    # LAI antes das rotas amplas do protocolo. Acesso só do administrador (lai.middleware).
+    path('lai/', include('lai.urls')),
     path('', include('processos_app.urls')),
     path('accounts/', include('django.contrib.auth.urls')),  # Nova linha
     # Esta URL será para a sua custom login view

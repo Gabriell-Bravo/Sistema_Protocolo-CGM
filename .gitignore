@@ -18,3 +18,5 @@ venv/
 # Gerados
 staticfiles_build/
 mediafiles/
+# Módulo LAI: documentos, perfil do navegador (login do Fala.BR) e pastas dos NUPs. Nunca versionar.
+lai_dados/

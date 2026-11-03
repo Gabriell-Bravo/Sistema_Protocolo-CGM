@@ -21,7 +21,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY . /app/
 
 # Criar diretórios necessários
-RUN mkdir -p /app/staticfiles_build /app/mediafiles
+RUN mkdir -p /app/staticfiles_build /app/mediafiles /app/lai_dados
 
 EXPOSE 8800
 

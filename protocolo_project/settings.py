@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'processos_app',
     'django.contrib.humanize',
+    'lai',  # Lei de Acesso à Informação: aba exclusiva do administrador
 ]
 
 MIDDLEWARE = [
@@ -78,6 +79,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Nega /lai/ a quem não é administrador (valor de LAI_SOMENTE_ADMIN abaixo).
+    'lai.middleware.SomenteAdministrador',
 ]
 
 ROOT_URLCONF = 'protocolo_project.urls'
@@ -94,6 +97,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'processos_app.services.permissions.contexto_processor',
+                'lai.context_processors.layout',
             ],
         },
     },
@@ -179,3 +183,47 @@ LOGGING = {
         'processos_app': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
     },
 }
+
+
+# ---------------------------------------------------------------------------
+# Módulo LAI (Lei de Acesso à Informação): aba exclusiva do administrador.
+# Tudo que ele grava (documentos, perfil do navegador do Fala.BR, pastas dos NUPs)
+# fica em LAI_DATA_DIR, fora de MEDIA_ROOT e sem rota pública.
+# ---------------------------------------------------------------------------
+LAI_ENABLED = _env_bool('LAI_ENABLED', True)
+# True: só superusuário acessa /lai/ (middleware lai.middleware) e o cadastro de Operador
+# do administrador é criado sozinho na primeira visita. False: valem só as permissões lai.*.
+LAI_SOMENTE_ADMIN = _env_bool('LAI_SOMENTE_ADMIN', True)
+LAI_BASE_TEMPLATE = 'base.html'   # o módulo usa o layout (menu, tema) do protocolo
+LAI_DATA_DIR = Path(os.environ.get('LAI_DATA_DIR', BASE_DIR / 'lai_dados'))
+DATA_DIR = LAI_DATA_DIR            # usado por lai.navegador_falabr (perfil do navegador)
+LAI_PRIVATE_ROOT = LAI_DATA_DIR / 'privado'
+LAI_MAX_UPLOAD_BYTES = 15 * 1024 * 1024
+LAI_SCANNER = os.environ.get('LAI_SCANNER', '')
+LAI_PUBLIC_URL = os.environ.get('LAI_PUBLIC_URL', 'https://controladoria.saquarema.rj.gov.br/lai/')
+
+# E-mail do módulo: SIMULADO até a TI homologar o SMTP (LAI_LIVE_EMAIL=1). O protocolo não envia e-mail.
+LAI_LIVE_EMAIL = _env_bool('LAI_LIVE_EMAIL', False)
+EMAIL_BACKEND = ('django.core.mail.backends.smtp.EmailBackend' if LAI_LIVE_EMAIL
+                 else 'django.core.mail.backends.locmem.EmailBackend')
+EMAIL_HOST = os.environ.get('LAI_SMTP_HOST', '')
+EMAIL_PORT = int(os.environ.get('LAI_SMTP_PORT', '587'))
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.environ.get('LAI_SMTP_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('LAI_SMTP_PASSWORD', '')
+EMAIL_TIMEOUT = 20
+DEFAULT_FROM_EMAIL = os.environ.get('LAI_FROM_EMAIL', 'lai@example.invalid')
+
+# Automação das pastas dos NUPs (só funciona no computador onde há Edge/Chrome com o Fala.BR logado).
+# Para usar o Google Drive, aponte LAI_PASTA_ANO para a pasta sincronizada (Drive para computador).
+LAI_PASTA_ANO = Path(os.environ.get('LAI_PASTA_ANO', LAI_DATA_DIR / 'pedidos' / '2026'))
+LAI_PLANILHA_ATIVA = _env_bool('LAI_PLANILHA_ATIVA', False)   # desligada até definir o formato da planilha
+LAI_PLANILHA_NOME = os.environ.get('LAI_PLANILHA_NOME', '2026 - CONTROLE FALA.BR.xlsx')
+LAI_PLANILHA_ABA = os.environ.get('LAI_PLANILHA_ABA', 'FALA BR')
+LAI_PLANILHA_MODO = os.environ.get('LAI_PLANILHA_MODO', 'copia')   # 'copia' (seguro) ou 'original' (com backup)
+LAI_PLANILHA_DIAS_SECRETARIA = int(os.environ.get('LAI_PLANILHA_DIAS_SECRETARIA', '4'))
+LAI_FALABR_BASE = os.environ.get('LAI_FALABR_BASE', 'https://falabr.cgu.gov.br').rstrip('/')
+LAI_FALABR_CLIENT_ID = os.environ.get('LAI_FALABR_CLIENT_ID', '')
+LAI_FALABR_CLIENT_SECRET = os.environ.get('LAI_FALABR_CLIENT_SECRET', '')
+LAI_FALABR_USERNAME = os.environ.get('LAI_FALABR_USERNAME', '')
+LAI_FALABR_PASSWORD = os.environ.get('LAI_FALABR_PASSWORD', '')

@@ -13,6 +13,7 @@ __pycache__
 *.pyc
 staticfiles_build
 mediafiles
+lai_dados
 backups
 *.sql
 *.dump

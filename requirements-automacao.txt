@@ -1,0 +1,7 @@
+# Só para o computador onde roda a automação das pastas dos NUPs (Edge/Chrome com o Fala.BR logado).
+# Não é necessário no container do servidor: sem isto o sistema funciona e a automação avisa que não está instalada.
+#   pip install -r requirements.txt -r requirements-automacao.txt
+playwright==1.64.1
+greenlet==3.5.6
+pyee==14.0.0
+typing-extensions==4.16.0

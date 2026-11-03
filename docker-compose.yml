@@ -44,6 +44,8 @@ services:
     volumes:
       - ./staticfiles_build:/app/staticfiles_build
       - ./mediafiles:/app/mediafiles
+      # Módulo LAI: documentos privados, perfil do navegador e pastas dos NUPs. Precisa persistir.
+      - ./lai_dados:/app/lai_dados
     ports:
       - "${WEB_PORT:-8800}:8800"
     environment:

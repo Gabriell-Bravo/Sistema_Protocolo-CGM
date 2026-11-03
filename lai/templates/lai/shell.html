@@ -1,0 +1,18 @@
+{% load static %}<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}LAI{% endblock %} · CGM Saquarema</title>
+<link rel="stylesheet" href="{% static 'lai/protocolo-original.css' %}">
+{% block extra_css %}{% endblock %}</head><body>
+<div class="app-shell"><aside class="sidebar" id="sidebar">
+<div class="sidebar__brand"><span class="sidebar__logo">CGM</span><span class="sidebar__brand-text"><span class="sidebar__title">Protocolo</span><span class="sidebar__subtitle">Controladoria Geral</span></span></div>
+<nav class="sidebar__nav"><div class="sidebar__group-label">Acesso à Informação</div>
+<a class="nav-item is-active" href="{% url 'lai:dashboard' %}"><span class="nav-item__label">Painel LAI</span></a>
+{% if perms.lai.operar %}<a class="nav-item" href="{% url 'lai:pendentes' %}"><span class="nav-item__label">NUPs pendentes</span></a><a class="nav-item" href="{% url 'lai:importar' %}"><span class="nav-item__label">Importar NUP</span></a>{% endif %}
+{% if perms.lai.gestao %}<a class="nav-item" href="{% url 'lai:gestao' %}"><span class="nav-item__label">Gestão processual · LAI</span></a>{% endif %}
+{% if perms.lai.cadastrar %}<a class="nav-item" href="{% url 'lai:cadastros' %}"><span class="nav-item__label">Cadastros LAI</span></a>{% endif %}
+<div class="sidebar__group-label">Conta</div><button class="nav-item" type="button" id="lai-theme">Alternar tema</button>
+{% if user.is_authenticated %}<form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="nav-item" type="submit">Sair</button></form>{% endif %}
+</nav><div class="sidebar__footer"><div class="lai-user">{{ user.get_full_name|default:user.username }}<br><small>Ambiente de demonstração isolado</small></div></div></aside>
+<div class="main"><header class="topbar"><div class="topbar__heading"><div class="topbar__title">{% block page_title %}Lei de Acesso à Informação{% endblock %}</div><div class="topbar__subtitle">{% block page_subtitle %}Controladoria-Geral de Saquarema{% endblock %}</div></div></header>
+<main class="content">{% for message in messages %}<div class="lai-notice">{{ message }}</div>{% endfor %}{% block content %}{% endblock %}</main></div></div>
+<script src="{% static 'lai/lai.js' %}"></script>{% block extra_js %}{% endblock %}</body></html>

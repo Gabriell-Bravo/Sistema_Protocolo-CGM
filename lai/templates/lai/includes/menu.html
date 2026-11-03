@@ -1,0 +1,5 @@
+{% comment %}Aba LAI do menu lateral. Exclusiva do administrador: o acesso de verdade é negado também no servidor (lai.middleware).{% endcomment %}
+{% if user.is_superuser %}
+<div class="sidebar__group-label">Acesso à Informação</div>
+<a href="{% url 'lai:dashboard' %}" class="nav-item {% if request.resolver_match.namespace == 'lai' %}is-active{% endif %}" title="LAI — Lei de Acesso à Informação (somente administrador)"><span class="material-symbols-rounded">policy</span><span class="nav-item__label">LAI</span></a>
+{% endif %}

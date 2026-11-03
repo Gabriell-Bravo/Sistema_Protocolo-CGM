@@ -10,3 +10,8 @@ tzdata==2025.2
 python-dotenv==1.0.0
 python-dateutil==2.9.0.post0
 whitenoise==6.12.0
+
+# Módulo LAI (aba exclusiva do administrador)
+pypdf==6.21.4
+reportlab==5.0.1
+pillow==12.3.0

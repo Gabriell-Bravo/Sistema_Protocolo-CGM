@@ -1,0 +1,1 @@
+(() => { const key='theme'; try { if(localStorage.getItem(key)==='dark') document.documentElement.dataset.theme='dark'; }catch(e){} document.getElementById('lai-theme')?.addEventListener('click',()=>{const value=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=value;try{localStorage.setItem(key,value);}catch(e){}}); })();

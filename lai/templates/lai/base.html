@@ -1,0 +1,8 @@
+{% extends lai_shell|default:'lai/shell.html' %}{% load static %}
+{% block title %}LAI · Acesso à Informação{% endblock %}
+{% block page_title %}Lei de Acesso à Informação{% endblock %}
+{% block page_subtitle %}Pedidos, respostas e recursos · CGM Saquarema{% endblock %}
+{% block extra_css %}{{ block.super }}<link rel="stylesheet" href="{% static 'lai/lai.css' %}?v=20261103a">{% endblock %}
+{% block content %}<div class="lai-module stack">
+<nav class="lai-tabs" aria-label="Navegação LAI"><a href="{% url 'lai:dashboard' %}">Demandas</a>{% if perms.lai.operar %}<a href="{% url 'lai:pendentes' %}">NUPs pendentes</a><a href="{% url 'lai:importar' %}">Importar NUP</a><a href="{% url 'lai:nova' %}">Cadastro manual</a>{% endif %}{% if perms.lai.gestao %}<a href="{% url 'lai:gestao' %}">Gestão processual</a>{% endif %}{% if perms.lai.cadastrar %}<a href="{% url 'lai:cadastros' %}">Cadastros</a>{% endif %}</nav>
+{% block lai_content %}{% endblock %}</div>{% endblock %}
