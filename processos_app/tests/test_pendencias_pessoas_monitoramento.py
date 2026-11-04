@@ -5,6 +5,7 @@ from django.urls import reverse
 
 from processos_app.models import Pendencia, Processo, TipoIndisponibilidade
 from processos_app.services import gestao_pessoas, monitoramento, pendencias, prazos
+from processos_app.services import permissions as perm
 from processos_app.services.tramitacao import TransicaoInvalida
 
 from .base import BaseProcessoTestCase
@@ -428,6 +429,39 @@ class PendenciasTest(BaseProcessoTestCase):
         antiga.refresh_from_db()
         self.assertEqual(antiga.status, 'RESOLVIDA')
         self.assertContains(ok, 'Resolvida')
+
+    def test_liquidacoes_irmas_com_mesma_origem_nao_trocam_diligencias(self):
+        """Dois pagamentos da mesma origem não herdam a diligência um do outro."""
+        a = self.processo_em_analise(
+            analista=self.analista_liq, especie=self.especie_liq)
+        Processo.objects.filter(id=a.id).update(
+            numero_processo='21359/2023', processo_pagamento='ORIGEM-1/2023')
+        a.refresh_from_db()
+        antiga = pendencias.criar(
+            a.id, self.analista_liq, '1- Regularizar assinatura nas fls. 11.775')
+
+        b = self.novo_processo(
+            self.especie_liq, numero_processo='21361/2023')
+        Processo.objects.filter(id=b.id).update(
+            processo_pagamento='ORIGEM-1/2023')
+        b.refresh_from_db()
+
+        self.assertNotIn(antiga, list(pendencias.pendencias_de_passagens_anteriores(b)))
+        self.assertIsNone(pendencias.mensagem_aviso_ao_assumir(b))
+        self.assertFalse(
+            perm.pode_verificar_correcao_pendencia(self.analista_liq, antiga, b))
+
+    def test_origem_nao_recebe_diligencia_dos_pagamentos(self):
+        pag = self.processo_em_analise(
+            analista=self.analista_liq, especie=self.especie_liq)
+        Processo.objects.filter(id=pag.id).update(
+            numero_processo='PAG-1/2026', processo_pagamento='ORIGEM-2/2025')
+        pag.refresh_from_db()
+        pendencias.criar(pag.id, self.analista_liq, '1- Falta NF')
+
+        origem = self.novo_processo(numero_processo='ORIGEM-2/2025')
+        self.assertEqual(
+            list(pendencias.pendencias_de_passagens_anteriores(origem)), [])
 
 
 class GestaoPessoasTest(BaseProcessoTestCase):

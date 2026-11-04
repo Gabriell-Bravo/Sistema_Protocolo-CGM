@@ -104,8 +104,15 @@ def diligencias(request):
     titulo_aba = titulos.get(status) or 'Aguardando atendimento'
     if status == 'ABERTAS':
         titulo_aba = 'Todas as abertas'
+    # Diligências abertas que a lista não mostra de propósito (processos da Contabilidade/CGM ou
+    # de fora de Licitação e Liquidação). Avisa quem conclui, para ninguém achar que sumiram.
+    ocultas = 0
+    if perm.pode_concluir_pendencia(request.user):
+        ocultas = (svc.fila_diligencias(status).count()
+                   - _diligencias_visiveis(request.user, status, 'todos').count())
     return render(request, 'gestao/diligencias.html', {
         'pendencias': pendencias,
+        'ocultas': max(ocultas, 0),
         'total': len(pendencias),
         'status_atual': status,
         'titulo_aba': titulo_aba,

@@ -474,10 +474,11 @@ def pode_concluir_pendencia(user):
 def pode_verificar_correcao_pendencia(user, pendencia, processo_atual):
     """Analista da passagem atual marca pendência antiga como corrigida.
 
-    Liga pela dupla nº + Processo origem/pagamento (ordem irrelevante).
-    18.245/2025 e 18245/2025 contam como o mesmo número.
+    Liga pelo número do processo da pendência, que precisa ser um dos números da dupla
+    nº + Processo origem/pagamento do processo atual (ordem irrelevante). Duas Liquidações
+    que só compartilham a origem não se ligam. 18.245/2025 e 18245/2025 contam como o mesmo.
     """
-    from .numeros import chaves_dupla_origem_pagamento
+    from .numeros import chaves_dupla_origem_pagamento, normalizar_numero
 
     if not processo_atual or not pendencia:
         return False
@@ -488,8 +489,8 @@ def pode_verificar_correcao_pendencia(user, pendencia, processo_atual):
     if pendencia.processo_id == processo_atual.id:
         return False
     atuais = set(chaves_dupla_origem_pagamento(processo_atual))
-    da_pendencia = set(chaves_dupla_origem_pagamento(pendencia.processo))
-    return bool(atuais and da_pendencia and atuais & da_pendencia)
+    numero_da_pendencia = normalizar_numero(pendencia.processo.numero_processo)
+    return bool(atuais and numero_da_pendencia and numero_da_pendencia in atuais)
 
 
 def pode_desfazer_indicacao_atendimento(user):

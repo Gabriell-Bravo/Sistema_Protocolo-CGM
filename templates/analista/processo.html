@@ -953,6 +953,9 @@ A análise em andamento será limpa (incluindo número de relatório, se houver)
                 {% for pendencia in pendencias_anteriores %}
                     <li class="pendencia-item">
                         <div style="flex:1;min-width:0;">
+                            <div class="cell-muted" style="margin-bottom:6px;">
+                                Do processo <strong>{{ pendencia.processo.numero_processo }}</strong>{% if pendencia.processo.volume %} · volume {{ pendencia.processo.volume }}{% endif %}{% if pendencia.processo.secretaria %} · {{ pendencia.processo.secretaria }}{% endif %}
+                            </div>
                             {% if pode_verificar_pendencias_anteriores and pendencia.esta_aberta %}
                             <form action="{% url 'pend_verificar_correcao' pendencia.id %}" method="post">
                                 {% csrf_token %}

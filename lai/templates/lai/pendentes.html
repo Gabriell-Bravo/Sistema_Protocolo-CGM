@@ -32,9 +32,11 @@
 </div>
 {% if perms.lai.operar and rows %}
 <div class="card__body">
-<form id="form-auto" class="lai-busca" autocomplete="off">{% csrf_token %}
+<form id="form-auto" class="lai-busca" autocomplete="off">{% csrf_token %}<input type="hidden" name="sequencia_inicial" id="sequencia-inicial" value="">
+
 <label class="lai-marcar"><input type="checkbox" id="marcar-todos"> Marcar todos desta lista</label>
 <button class="btn btn--primary" id="btn-automacao" type="submit" disabled>Automatizar pastas</button>
+<button class="btn btn--ghost" id="btn-memorandos" type="button" disabled>Gerar memorandos</button>
 <span class="lai-muted" id="contagem-marcados">Nenhum pedido marcado</span>
 {% if pode_abrir_pasta %}<button class="btn btn--ghost" id="abrir-pasta" type="button">Abrir pasta</button>{% endif %}
 </form>
@@ -44,14 +46,15 @@
 <div class="lai-table-wrap"><table><thead><tr>{% if perms.lai.operar %}<th><span class="lai-sr">Marcar</span></th>{% endif %}<th>NUP</th><th>Assunto</th><th>Cadastro</th><th>Prazo</th><th>Situação no Fala.BR</th><th>No módulo</th></tr></thead><tbody>
 {% for row in rows %}
 <tr>
-{% if perms.lai.operar %}<td>{% if row.pk and row.link %}<input type="checkbox" class="marcar-nup" form="form-auto" name="selecionados" value="{{ row.pk }}" aria-label="Marcar {{ row.nup }}">{% endif %}</td>{% endif %}
+{% if perms.lai.operar %}<td>{% if row.pk and row.link %}<input type="checkbox" class="marcar-nup" form="form-auto" name="selecionados" value="{{ row.pk }}" aria-label="Marcar {{ row.nup }}" data-nup="{{ row.nup }}" data-assunto="{{ row.assunto }}" data-prazo="{{ row.prazo|date:'Y-m-d' }}" data-obs="{{ row.memo_obs }}" data-secretaria="{{ row.ultimo_memorando.secretaria }}">{% endif %}</td>{% endif %}
 <td class="nup">{{ row.nup }}{% if row.tipo %}<small>{{ row.tipo }}</small>{% endif %}{% if row.link %}<small><a href="{{ row.link }}" target="_blank" rel="noopener noreferrer">Abrir no Fala.BR</a></small>{% endif %}</td>
 <td>{{ row.assunto|default:'—' }}{% if row.responsavel %}<small>Responsável: {{ row.responsavel }}</small>{% endif %}
 {% if row.pk and perms.lai.operar %}<details class="lai-tema"><summary>Tema da pasta: {{ row.tema_efetivo|upper|default:'—' }}{% if row.tema %} (editado){% endif %}</summary>
 <form method="post" class="lai-busca">{% csrf_token %}<input type="hidden" name="acao" value="tema"><input type="hidden" name="pk" value="{{ row.pk }}"><input type="hidden" name="filtro" value="{{ filtro }}"><input type="hidden" name="q" value="{{ busca }}">
 <label>Tema (nome da pasta). Deixe vazio para usar o assunto.<input type="text" name="tema" value="{{ row.tema }}" maxlength="200" placeholder="{{ row.assunto }}"></label>
 <button class="btn btn--ghost" type="submit">Salvar tema</button></form></details>{% endif %}
-{% if row.baixado_em %}<small>Pasta: {{ row.pasta }} (baixada em {{ row.baixado_em|date:'d/m/Y H:i' }})</small>{% endif %}</td>
+{% if row.baixado_em %}<small>Pasta: {{ row.pasta }} (baixada em {{ row.baixado_em|date:'d/m/Y H:i' }})</small>{% endif %}
+{% if row.ultimo_memorando %}<small>Memorando {{ row.ultimo_memorando.rotulo }} para {{ row.ultimo_memorando.secretaria }} (gerado em {{ row.ultimo_memorando.criado_em|date:'d/m/Y H:i' }})</small>{% endif %}</td>
 <td>{{ row.cadastro|date:'d/m/Y'|default:'—' }}</td>
 <td>{% if row.prazo %}{{ row.prazo|date:'d/m/Y' }}{% else %}—{% endif %}<small><span class="lai-badge {{ row.classe }}">{{ row.dias_texto }}</span></small></td>
 <td><span class="lai-badge">{{ row.situacao|default:'—' }}</span>{% if row.alteracao %}<small>{{ row.alteracao }}{% if row.alterado_em %} (em {{ row.alterado_em|date:'d/m/Y H:i' }}){% endif %}</small>{% endif %}</td>
@@ -61,6 +64,42 @@
 {% endfor %}
 </tbody></table></div></section>
 
+{% if perms.lai.operar and rows %}
+<dialog id="lai-numeracao" class="lai-numeracao" aria-labelledby="lai-num-titulo">
+  <form id="lai-num-form" method="dialog" class="stack">
+    <h2 id="lai-num-titulo">Numeração das pastas</h2>
+    <label>Começar na numeração
+      <input type="number" id="lai-num-inicio" min="1" max="999999" step="1" required data-sugestao="{{ proxima_numeracao }}" value="{{ proxima_numeracao }}">
+    </label>
+    <p class="lai-muted">Sugestão: continuar de onde parou ({{ proxima_numeracao }}). As pastas recebem os números em ordem crescente do NUP.</p>
+    <p id="lai-num-resumo" class="lai-muted" role="status"></p>
+    <div class="lai-actions">
+      <button type="submit" class="btn btn--primary">Continuar</button>
+      <button type="button" id="lai-num-cancelar" class="btn btn--ghost">Cancelar</button>
+    </div>
+  </form>
+</dialog>
+{% endif %}
+{% if perms.lai.operar and rows %}
+<dialog id="lai-memo" class="lai-numeracao lai-memo" aria-labelledby="lai-memo-titulo">
+  <form id="lai-memo-form" method="dialog" class="stack">
+    <h2 id="lai-memo-titulo">Gerar memorandos de reiteração</h2>
+    <p class="lai-muted">Usa o modelo da Controladoria e troca só os dados de cada NUP. O prazo vem do Fala.BR; a secretaria de destino não vem no PDF exportado, então escolha ou digite.</p>
+    <div class="lai-memo__topo">
+      <label>Data do memorando<input type="date" id="lai-memo-data" value="{{ memo_hoje|date:'Y-m-d' }}" required></label>
+      <label>Primeiro número<input type="number" id="lai-memo-inicio" min="1" max="99999" step="1" value="{{ memo_proximo }}" required></label>
+    </div>
+    <p class="lai-muted">Sugestão de número: o seguinte ao último gerado aqui neste ano. Se a numeração da CGM é compartilhada com outros memorandos, ajuste o primeiro número (cada linha também pode ser editada).</p>
+    <div class="lai-table-wrap"><table class="lai-memo__tabela"><thead><tr><th>NUP</th><th>Nº</th><th>Secretaria de destino</th><th>Tratamento</th><th>Prazo da resposta</th><th>Observação do prazo</th></tr></thead><tbody id="lai-memo-linhas"></tbody></table></div>
+    <datalist id="lai-memo-secretarias">{% for nome in secretarias_memo %}<option value="{{ nome }}">{% endfor %}</datalist>
+    <p id="lai-memo-erro" class="lai-aviso" role="alert" hidden></p>
+    <div class="lai-actions">
+      <button type="submit" class="btn btn--primary" id="lai-memo-gerar">Gerar e baixar</button>
+      <button type="button" id="lai-memo-cancelar" class="btn btn--ghost">Cancelar</button>
+    </div>
+  </form>
+</dialog>
+{% endif %}
 <div id="lai-auto" class="lai-auto" hidden role="dialog" aria-modal="true" aria-labelledby="lai-auto-titulo">
   <div class="lai-auto__caixa">
     <div class="lai-auto__anel" id="lai-auto-anel" aria-hidden="true"></div>
@@ -85,7 +124,7 @@
   var URLS = {
     trazer: '{% url "lai:trazer_iniciar" %}', iniciar: '{% url "lai:automacao_iniciar" %}',
     estado: '{% url "lai:automacao_estado" %}', cancelar: '{% url "lai:automacao_cancelar" %}',
-    abrir: '{% url "lai:automacao_abrir_pasta" %}'
+    abrir: '{% url "lai:automacao_abrir_pasta" %}', memorandos: '{% url "lai:memorandos_gerar" %}'
   };
   var versaoEsperada = caixa.dataset.versao;
   var atual = 'verificando';
@@ -274,6 +313,7 @@
   function atualizar() {
     var n = caixas().filter(function (c) { return c.checked; }).length;
     botao.disabled = n === 0 || !window.laiOnline;
+    el('btn-memorandos').disabled = n === 0;  /* não precisa do Fala.BR: usa só os dados já lidos */
     contagem.textContent = !window.laiOnline ? 'Entre no Fala.BR (e deixe a extensão ligada) para automatizar'
       : (n === 0 ? 'Nenhum pedido marcado' : n + ' pedido(s) marcado(s)');
   }
@@ -285,9 +325,128 @@
   document.addEventListener('change', function (e) {
     if (e.target.classList && e.target.classList.contains('marcar-nup')) atualizar();
   });
+  /* Pergunta a numeração das pastas antes de começar. */
+  var dlg = el('lai-numeracao');
+  var campoNum = el('lai-num-inicio');
+  var resumoNum = el('lai-num-resumo');
+  function qtdMarcados() { return caixas().filter(function (c) { return c.checked; }).length; }
+  function resumirNumeracao() {
+    var n = qtdMarcados(), ini = parseInt(campoNum.value, 10);
+    if (!ini || ini < 1) { resumoNum.textContent = 'Informe um número inteiro maior que zero.'; return false; }
+    resumoNum.textContent = n === 1 ? 'A pasta será a de número ' + ini + '.'
+      : n + ' pedidos marcados: numeração de ' + ini + ' a ' + (ini + n - 1)
+        + '. Pedidos que já têm pasta mantêm o número atual e não gastam número.';
+    return true;
+  }
+  campoNum.addEventListener('input', resumirNumeracao);
+  el('lai-num-cancelar').addEventListener('click', function () { dlg.close(); });
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     if (botao.disabled) return;
+    campoNum.value = campoNum.getAttribute('data-sugestao');
+    resumirNumeracao();
+    dlg.showModal();
+    campoNum.focus();
+    campoNum.select();
+  });
+  el('lai-num-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (!resumirNumeracao()) return;
+    el('sequencia-inicial').value = String(parseInt(campoNum.value, 10));
+    dlg.close();
+    iniciarPastas();
+  });
+  /* ---- Gerar memorandos (.docx) ---- */
+  var memo = el('lai-memo');
+  var memoLinhas = el('lai-memo-linhas');
+  var memoErro = el('lai-memo-erro');
+  var OBS = [['nenhuma', 'Sem observação'], ['vencido', 'Prazo vencido'], ['prorrogado', 'Prazo já prorrogado'],
+             ['ambos', 'Vencido e já prorrogado']];
+  function criar(tag, atributos, texto) {
+    var e = document.createElement(tag);
+    Object.keys(atributos || {}).forEach(function (k) { e.setAttribute(k, atributos[k]); });
+    if (texto) e.textContent = texto;
+    return e;
+  }
+  function celula(filho) { var td = criar('td'); td.appendChild(filho); return td; }
+  function opcoes(lista, atual) {
+    var s = criar('select');
+    lista.forEach(function (o) {
+      var op = criar('option', {value: o[0]}, o[1]);
+      if (o[0] === atual) op.selected = true;
+      s.appendChild(op);
+    });
+    return s;
+  }
+  function renumerar() {
+    var ini = parseInt(el('lai-memo-inicio').value, 10);
+    if (!ini || ini < 1) return;
+    Array.prototype.forEach.call(memoLinhas.querySelectorAll('input[data-campo=numero]'), function (c, i) { c.value = ini + i; });
+  }
+  el('btn-memorandos').addEventListener('click', function () {
+    var marcados = caixas().filter(function (c) { return c.checked; });
+    if (!marcados.length) return;
+    memoLinhas.textContent = '';
+    memoErro.hidden = true;
+    marcados.forEach(function (c) {
+      var tr = criar('tr', {'data-pk': c.value});
+      var nup = criar('td', {'class': 'nup'}, c.getAttribute('data-nup'));
+      nup.appendChild(criar('small', {}, c.getAttribute('data-assunto') || ''));
+      tr.appendChild(nup);
+      tr.appendChild(celula(criar('input', {type: 'number', min: 1, max: 99999, step: 1, required: '', 'data-campo': 'numero', 'aria-label': 'Número do memorando'})));
+      tr.appendChild(celula(criar('input', {type: 'text', list: 'lai-memo-secretarias', maxlength: 160, required: '',
+        'data-campo': 'secretaria', 'aria-label': 'Secretaria de destino', placeholder: 'Secretaria Municipal de…',
+        value: c.getAttribute('data-secretaria') || ''})));
+      var trat = opcoes([['secretario', 'Senhor Secretário'], ['secretaria', 'Senhora Secretária']], 'secretario');
+      trat.setAttribute('data-campo', 'tratamento'); trat.setAttribute('aria-label', 'Tratamento');
+      tr.appendChild(celula(trat));
+      tr.appendChild(celula(criar('input', {type: 'date', required: '', 'data-campo': 'prazo', 'aria-label': 'Prazo da resposta', value: c.getAttribute('data-prazo') || ''})));
+      var obs = opcoes(OBS, c.getAttribute('data-obs') || 'nenhuma');
+      obs.setAttribute('data-campo', 'observacao'); obs.setAttribute('aria-label', 'Observação do prazo');
+      tr.appendChild(celula(obs));
+      memoLinhas.appendChild(tr);
+    });
+    renumerar();
+    memo.showModal();
+  });
+  el('lai-memo-inicio').addEventListener('input', renumerar);
+  el('lai-memo-cancelar').addEventListener('click', function () { memo.close(); });
+  function nomeDoArquivo(resposta) {
+    var cab = resposta.headers.get('Content-Disposition') || '', m = cab.match(/filename\*=UTF-8''([^;]+)/);
+    try { return m ? decodeURIComponent(m[1]) : 'memorandos.docx'; } catch (e) { return 'memorandos.docx'; }
+  }
+  el('lai-memo-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var corpo = new FormData();
+    corpo.append('data', el('lai-memo-data').value);
+    Array.prototype.forEach.call(memoLinhas.querySelectorAll('tr'), function (tr) {
+      corpo.append('pk', tr.getAttribute('data-pk'));
+      ['numero', 'secretaria', 'tratamento', 'prazo', 'observacao'].forEach(function (nome) {
+        corpo.append(nome, tr.querySelector('[data-campo=' + nome + ']').value);
+      });
+    });
+    var gerar = el('lai-memo-gerar');
+    gerar.disabled = true;
+    memoErro.hidden = true;
+    fetch(URLS.memorandos, {method: 'POST', body: corpo, headers: {'X-CSRFToken': csrf}, credentials: 'same-origin'})
+      .then(function (r) {
+        if ((r.headers.get('Content-Type') || '').indexOf('application/json') === 0) {
+          return r.json().then(function (j) { throw new Error(j.erro || 'Não foi possível gerar os memorandos.'); });
+        }
+        if (!r.ok) throw new Error('O servidor recusou a geração dos memorandos.');
+        return r.blob().then(function (blob) { return {blob: blob, nome: nomeDoArquivo(r)}; });
+      })
+      .then(function (arq) {
+        var url = URL.createObjectURL(arq.blob), a = criar('a', {href: url, download: arq.nome});
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); window.location.reload(); }, 1200);
+        memo.close();
+      })
+      .catch(function (erro) { memoErro.textContent = erro.message; memoErro.hidden = false; })
+      .then(function () { gerar.disabled = false; });
+  });
+
+  function iniciarPastas() {
     abrirPainel('Iniciando automatização…', 'Preparando a extensão', false);
     fetch(URLS.iniciar, {method: 'POST', body: new FormData(form), headers: {'X-CSRFToken': csrf}, credentials: 'same-origin'})
       .then(function (r) { return r.json().then(function (j) { return {ok: r.ok, j: j}; }); })
@@ -301,7 +460,7 @@
         });
       })
       .catch(function () { terminar(false, 'Não foi possível iniciar', 'O servidor não respondeu.'); });
-  });
+  }
   atualizar();
 })();
 </script>

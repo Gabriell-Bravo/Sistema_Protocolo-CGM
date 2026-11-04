@@ -331,6 +331,72 @@ class PastasPelaExtensaoTest(_Base):
         self.assertTrue(nomes[0].startswith('1 - 03996.2026.000937-90'))
         self.assertTrue(nomes[1].startswith('2 - 03996.2026.000938-70'))
 
+    def _iniciar_com_numeracao(self, inicial, *registros):
+        return self.client.post(reverse('lai:automacao_iniciar'), {
+            'selecionados': [r.pk for r in registros], 'sequencia_inicial': inicial})
+
+    def _enviar(self, *nups):
+        for nup in nups:
+            self.client.post(reverse('lai:ext_pedido'), {'nup': nup, 'pdf': io.BytesIO(PDF)}, **self.cabecalho())
+
+    def test_numeracao_escolhida_pela_pessoa_vale_para_as_pastas_novas(self):
+        a = self.registro(nup='03996.2026.000937-90', assunto='A')
+        b = self.registro(nup='03996.2026.000938-70', assunto='B')
+        c = self.registro(nup='03996.2026.000939-50', assunto='C')
+        self.assertEqual(self._iniciar_com_numeracao('25', a, b, c).status_code, 200)
+        self._enviar(a.nup, b.nup, c.nup)
+        nomes = sorted(p.name for p in self.pasta_base().iterdir())
+        self.assertEqual([n.split(' - ')[0] for n in nomes], ['25', '26', '27'])
+
+    def test_numeracao_em_branco_continua_do_maior(self):
+        a = self.registro(nup='03996.2026.000937-90', assunto='A')
+        self.assertEqual(self._iniciar_com_numeracao('', a).status_code, 200)
+        self._enviar(a.nup)
+        self.assertTrue(next(self.pasta_base().iterdir()).name.startswith('1 - '))
+
+    def test_faixa_que_bate_com_pasta_existente_e_recusada_sem_criar_nada(self):
+        base = self.pasta_base()
+        (base / '27 - 03996.2026.000001-00 - Outro').mkdir(parents=True)
+        a = self.registro(nup='03996.2026.000937-90', assunto='A')
+        b = self.registro(nup='03996.2026.000938-70', assunto='B')
+        c = self.registro(nup='03996.2026.000939-50', assunto='C')
+        resp = self._iniciar_com_numeracao('25', a, b, c)
+        self.assertEqual(resp.status_code, 409)
+        self.assertIn('27', resp.json()['erro'])
+        self.assertEqual(len(list(base.iterdir())), 1)
+        self.assertFalse(self.client.get(reverse('lai:automacao_estado')).json()['rodando'])
+
+    def test_numeracao_invalida_e_recusada(self):
+        a = self.registro()
+        for valor in ('abc', '0', '-3', '1000000'):
+            with self.subTest(valor=valor):
+                self.assertEqual(self._iniciar_com_numeracao(valor, a).status_code, 409)
+
+    def test_pedido_que_ja_tem_pasta_nao_gasta_numero(self):
+        a = self.registro(nup='03996.2026.000937-90', assunto='A')
+        self.iniciar_pastas(a)
+        self._enviar(a.nup)
+        self.api('ext_concluir')
+        b = self.registro(nup='03996.2026.000938-70', assunto='B')
+        self.assertEqual(self._iniciar_com_numeracao('10', a, b).status_code, 200)
+        self._enviar(b.nup)
+        nomes = sorted(p.name.split(' - ')[0] for p in self.pasta_base().iterdir())
+        self.assertEqual(nomes, ['1', '10'])
+
+    def test_numero_que_apareceu_no_meio_da_tarefa_e_pulado(self):
+        a = self.registro(nup='03996.2026.000937-90', assunto='A')
+        self._iniciar_com_numeracao('5', a)
+        (self.pasta_base() / '5 - 03996.2026.000001-00 - Outro').mkdir(parents=True)
+        self._enviar(a.nup)
+        nomes = sorted(p.name.split(' - ')[0] for p in self.pasta_base().iterdir())
+        self.assertEqual(nomes, ['5', '6'])
+
+    def test_tela_sugere_a_proxima_numeracao(self):
+        (self.pasta_base() / '41 - 03996.2026.000001-00 - Outro').mkdir(parents=True)
+        self.registro()
+        resp = self.client.get(reverse('lai:pendentes'))
+        self.assertContains(resp, 'data-sugestao="42"')
+
     def test_pedido_que_ja_tem_pdf_nao_e_baixado_de_novo(self):
         registro = self.registro()
         self.iniciar_pastas(registro)

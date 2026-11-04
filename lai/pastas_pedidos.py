@@ -105,6 +105,18 @@ def proxima_sequencia(base):
     return maior + 1
 
 
+def sequencias_em_uso(base):
+    """{número: nome da pasta} de todas as pastas numeradas que já existem."""
+    base = Path(base)
+    usadas = {}
+    if base.is_dir():
+        for filho in base.iterdir():
+            achado = _SEQUENCIA.match(filho.name) if filho.is_dir() else None
+            if achado:
+                usadas.setdefault(int(achado.group(1)), filho.name)
+    return usadas
+
+
 def achar_pasta(base, nup):
     """Pasta já criada para este NUP, ou None."""
     base = Path(base)

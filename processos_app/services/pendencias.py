@@ -26,7 +26,7 @@ from django.utils import timezone
 from ..models import Pendencia, Processo
 from . import permissions as perm
 from .eventos import registrar_evento_pendencia, registrar_diff
-from .numeros import chaves_dupla_origem_pagamento
+from .numeros import chaves_dupla_origem_pagamento, normalizar_numero
 from .tramitacao import TransicaoInvalida
 
 
@@ -503,7 +503,19 @@ def filtrar_por_termo(consulta, termo):
     if not termo:
         return consulta
     from django.db.models import Q
+    # O número também é buscado sem pontos e espaços, nos dois campos do processo
+    # (nº e origem/pagamento): 21361/2023 acha "21.361/2023" e o contrário. Em Liquidação
+    # o nº da tela costuma ser o de pagamento e o de origem fica em processo_pagamento.
+    chave = normalizar_numero(termo)
+    por_numero = Q()
+    if chave and any(c.isdigit() for c in chave):
+        consulta = consulta.annotate(
+            _busca_num=_expr_numero_sem_ponto('processo__numero_processo'),
+            _busca_pag=_expr_numero_sem_ponto('processo__processo_pagamento'))
+        por_numero = Q(_busca_num__icontains=chave) | Q(_busca_pag__icontains=chave)
     return consulta.filter(
+        por_numero |
+        Q(processo__processo_pagamento__icontains=termo) |
         Q(descricao__icontains=termo) |
         Q(processo__numero_processo__icontains=termo) |
         Q(processo__secretaria__icontains=termo) |
@@ -544,17 +556,21 @@ def numeros_vinculados_pendencia(processo):
 
 
 def _pendencias_por_numeros_normalizados(processo, chaves):
-    """Pendências cujo processo toca a dupla em qualquer um dos dois campos."""
+    """Pendências de processos cujo PRÓPRIO número é um dos números da dupla.
+
+    Casa só pelo número do processo da pendência, nunca pelo campo origem/pagamento dele.
+    Assim uma Liquidação vê a diligência do seu processo origem (e das passagens do mesmo
+    número), mas duas Liquidações irmãs que apenas compartilham a origem NÃO trocam diligências
+    entre si, nem a origem recebe as dos pagamentos.
+    """
     if not chaves:
         return Pendencia.objects.none()
     return (Pendencia.objects
             .annotate(
                 _num_norm=_expr_numero_sem_ponto(
                     'processo__numero_processo'),
-                _pag_norm=_expr_numero_sem_ponto(
-                    'processo__processo_pagamento'),
             )
-            .filter(Q(_num_norm__in=chaves) | Q(_pag_norm__in=chaves))
+            .filter(_num_norm__in=chaves)
             .exclude(processo_id=processo.id)
             .exclude(status='CANCELADA')
             .select_related(

@@ -1,6 +1,8 @@
 import csv
 import os
-from urllib.parse import urlencode, urlsplit
+import zipfile
+from datetime import date
+from urllib.parse import quote, urlencode, urlsplit
 from django import forms
 import uuid
 from io import BytesIO
@@ -23,7 +25,7 @@ from .forms import *
 from .permissions import exigir, visiveis
 from .arquivos import guardar, validar
 from .extracao import extrair
-from . import acompanhamento, automacao_falabr, falabr, navegador_falabr, ponte_extensao, services
+from . import acompanhamento, automacao_falabr, falabr, memorando_docx, navegador_falabr, ponte_extensao, services
 from .prazos import somar, marco
 from .pdf import gerar_memorando
 
@@ -94,11 +96,23 @@ def pendentes(request):
     filtro = acompanhamento.filtro_valido(request.GET.get('filtro'))
     busca = (request.GET.get('q') or '').strip()[:80]
     rows = acompanhamento.filtrar(todos, filtro, busca)
+    hoje = timezone.localdate()
+    ultimos = {}
+    for m in MemorandoFalabr.objects.filter(manifestacao_id__in=[r['pk'] for r in rows if r['pk']]):
+        ultimos.setdefault(m.manifestacao_id, m)  # a ordem da classe já traz o mais novo primeiro
+    for r in rows:
+        r['ultimo_memorando'] = ultimos.get(r['pk'])
+        r['memo_obs'] = memorando_docx.observacao_padrao(r['prazo'], hoje, r['prorrogada']) if r['pk'] else 'nenhuma'
+    ultimo_numero = (MemorandoFalabr.objects.filter(ano=hoje.year).order_by('-numero')
+                     .values_list('numero', flat=True).first()) or 0
+    secretarias_memo = list(Secretaria.objects.filter(ativa=True).values_list('nome', flat=True))
     return render(request, 'lai/pendentes.html', {
+        'memo_proximo': ultimo_numero + 1, 'memo_hoje': hoje, 'secretarias_memo': secretarias_memo,
         'rows': rows, 'cards': acompanhamento.resumo(todos), 'erro': erro,
         'versao_extensao': ponte_extensao.VERSAO, 'base_guardada': navegador_falabr._base_guardada(),
         'planilha_ativa': bool(getattr(settings, 'LAI_PLANILHA_ATIVA', False)),
         'pode_abrir_pasta': _acesso_local(request), 'pasta_pedidos': str(automacao_falabr.pasta_base()),
+        'proxima_numeracao': ponte_extensao.proxima_numeracao(),
         'filtro': filtro, 'busca': busca, 'filtros': acompanhamento.FILTROS,
         'filtro_rotulo': dict((c, r) for c, r, _f in acompanhamento.FILTROS)[filtro],
         'total_lido': len(todos),
@@ -154,10 +168,66 @@ def automacao_iniciar(request):
               'cadastro': r.cadastro, 'prazo': r.prazo}
              for r in ManifestacaoFalabr.objects.filter(pk__in=ids).order_by('nup')]
     try:
-        preparo = ponte_extensao.iniciar_pastas(itens)
+        preparo = ponte_extensao.iniciar_pastas(itens, request.POST.get('sequencia_inicial'))
     except ponte_extensao.ExtensaoError as exc:
         return JsonResponse({'ok': False, 'erro': str(exc)}, status=409)
     return JsonResponse(dict(preparo, ok=True))
+
+@privado
+def memorandos_gerar(request):
+    """Gera o memorando de reiteração (.docx) dos NUPs marcados. Um NUP: o .docx; vários: um .zip."""
+    exigir(request.user, 'operar')
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'erro': 'Use o botão da tela.'}, status=405)
+    pks = request.POST.getlist('pk')
+    if not pks or len(pks) > 100:
+        return JsonResponse({'ok': False, 'erro': 'Marque de 1 a 100 pedidos para gerar os memorandos.'}, status=400)
+    campos = {nome: request.POST.getlist(nome) for nome in ('numero', 'secretaria', 'tratamento', 'prazo', 'observacao')}
+    if any(len(v) != len(pks) for v in campos.values()):
+        return JsonResponse({'ok': False, 'erro': 'Os dados dos memorandos vieram incompletos. Abra a janela de novo.'}, status=400)
+    try:
+        data = date.fromisoformat(request.POST.get('data') or '')
+    except ValueError:
+        return JsonResponse({'ok': False, 'erro': 'Informe a data do memorando.'}, status=400)
+    registros = {str(r.pk): r for r in ManifestacaoFalabr.objects.filter(pk__in=[p for p in pks if p.isdigit()])}
+    arquivos, historico, numeros = [], [], set()
+    for i, pk in enumerate(pks):
+        registro = registros.get(pk)
+        if registro is None:
+            return JsonResponse({'ok': False, 'erro': 'Um dos pedidos marcados não existe mais. Atualize a lista.'}, status=400)
+        try:
+            prazo = date.fromisoformat(campos['prazo'][i])
+        except ValueError:
+            return JsonResponse({'ok': False, 'erro': f'NUP {registro.nup}: informe o prazo da resposta.'}, status=400)
+        try:
+            conteudo = memorando_docx.gerar(
+                numero=campos['numero'][i], data=data, nup=registro.nup, secretaria=campos['secretaria'][i],
+                prazo=prazo, tratamento=campos['tratamento'][i], observacao=campos['observacao'][i])
+        except memorando_docx.MemorandoError as exc:
+            return JsonResponse({'ok': False, 'erro': f'NUP {registro.nup}: {exc}'}, status=400)
+        numero = int(campos['numero'][i])
+        if numero in numeros:
+            return JsonResponse({'ok': False, 'erro': f'O número {numero} foi usado em mais de um memorando desta remessa.'}, status=400)
+        numeros.add(numero)
+        arquivos.append((memorando_docx.nome_do_arquivo(numero, data.year, registro.nup), conteudo))
+        historico.append(MemorandoFalabr(
+            manifestacao=registro, numero=numero, ano=data.year, data=data, prazo=prazo, usuario=request.user,
+            secretaria=' '.join(campos['secretaria'][i].split())))
+    MemorandoFalabr.objects.bulk_create(historico)
+    if len(arquivos) == 1:
+        nome, conteudo = arquivos[0]
+        resposta = HttpResponse(conteudo, content_type=(
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'))
+        nome_zip = nome
+    else:
+        pacote = BytesIO()
+        with zipfile.ZipFile(pacote, 'w', zipfile.ZIP_DEFLATED) as z:
+            for nome, conteudo in arquivos:
+                z.writestr(nome, conteudo)
+        resposta = HttpResponse(pacote.getvalue(), content_type='application/zip')
+        nome_zip = f'memorandos-lai-{data.isoformat()}.zip'
+    resposta['Content-Disposition'] = "attachment; filename*=UTF-8''" + quote(nome_zip)
+    return resposta
 
 @privado
 def automacao_cancelar(request):

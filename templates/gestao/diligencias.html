@@ -85,6 +85,13 @@ Processos criados por engano em importação antiga serão removidos."
         </div>
     </section>
 
+    {% if ocultas %}
+    <p class="cell-muted" role="note" style="margin:0 0 12px;">
+        {{ ocultas }} diligência{{ ocultas|pluralize:"s" }} desta aba não aparece{{ ocultas|pluralize:"m" }} aqui porque
+        {{ ocultas|pluralize:"é,são" }} de processo{{ ocultas|pluralize:"s" }} da Contabilidade/CGM ou fora de Licitação e Liquidação.
+    </p>
+    {% endif %}
+
     <section class="table-card">
         <div class="table-card__header">
             <span class="table-card__title">
@@ -114,6 +121,9 @@ Processos criados por engano em importação antiga serão removidos."
                                title="Abrir processo">
                                 <strong>{{ pendencia.processo.numero_processo }}</strong>
                             </a>
+                            {% if pendencia.processo.processo_pagamento %}
+                            <div class="cell-muted">Origem/pagamento: {{ pendencia.processo.processo_pagamento }}</div>
+                            {% endif %}
                             {% if pendencia.progresso_rotulo %}
                             <div class="cell-muted">{{ pendencia.progresso_rotulo }}</div>
                             {% endif %}

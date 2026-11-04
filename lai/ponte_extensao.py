@@ -257,10 +257,31 @@ def _texto_data(valor):
     return valor.isoformat() if isinstance(valor, date) else (str(valor) if valor else '')
 
 
-def iniciar_pastas(itens):
+def proxima_numeracao():
+    """Número que a próxima pasta nova recebe se ninguém escolher outro."""
+    return pastas_pedidos.proxima_sequencia(pasta_base())
+
+
+def _validar_numeracao(base, itens, inicial):
+    """Confere que a faixa pedida está livre. Só os NUPs sem pasta ainda gastam número."""
+    novos = [i for i in itens if pastas_pedidos.achar_pasta(base, i['nup']) is None]
+    if not novos:
+        return inicial
+    em_uso = pastas_pedidos.sequencias_em_uso(base)
+    for numero in range(inicial, inicial + len(novos)):
+        if numero in em_uso:
+            raise ExtensaoError(
+                f'A numeração {numero} já está em uso pela pasta "{em_uso[numero]}". '
+                f'Para {len(novos)} pasta(s) nova(s) a partir de {inicial}, a faixa {inicial} a '
+                f'{inicial + len(novos) - 1} precisa estar livre. Escolha outro número inicial.')
+    return inicial
+
+
+def iniciar_pastas(itens, sequencia_inicial=None):
     """Prepara a tarefa. `itens` = [{'nup','link','tema','tema_manual','cadastro','prazo','pk'}].
 
     Quem já tem pasta com PDF é resolvido aqui. Devolve os que a extensão ainda precisa baixar.
+    `sequencia_inicial` é o número da primeira pasta nova (a pessoa escolhe); sem ele, continua do maior.
     """
     itens = [i for i in itens if str(i.get('link') or '').startswith(PREFIXO_LINK)]
     if not itens:
@@ -268,6 +289,15 @@ def iniciar_pastas(itens):
     _exigir_livre()
     itens = sorted(itens, key=lambda i: pastas_pedidos.so_digitos(i['nup']))
     base = pasta_base()
+    if sequencia_inicial in (None, ''):
+        sequencia_inicial = pastas_pedidos.proxima_sequencia(base)
+    try:
+        sequencia_inicial = int(sequencia_inicial)
+    except (TypeError, ValueError):
+        raise ExtensaoError('A numeração inicial precisa ser um número inteiro.')
+    if not 1 <= sequencia_inicial <= 999999:
+        raise ExtensaoError('A numeração inicial precisa estar entre 1 e 999999.')
+    _validar_numeracao(base, itens, sequencia_inicial)
     resultados, pendentes, marcados = [], [], []
     for item in itens:
         existente = pastas_pedidos.achar_pasta(base, item['nup'])
@@ -293,7 +323,7 @@ def iniciar_pastas(itens):
             'prazo': _texto_data(item.get('prazo'))}
     _gravar({'id': uuid.uuid4().hex, 'tipo': 'pastas', 'rodando': True, 'total': len(itens),
              'atual': len(resultados), 'nup': '', 'etapa': 'Aguardando a extensão…', 'resultados': resultados,
-             'itens': guardados, 'pasta': str(base), 'planilha': '', 'planilha_erro': '',
+             'itens': guardados, 'pasta': str(base), 'sequencia': sequencia_inicial, 'planilha': '', 'planilha_erro': '',
              'planilha_ativa': bool(getattr(settings, 'LAI_PLANILHA_ATIVA', False)),
              'inicio': time.time(), 'fim': None, 'erro': '', 'atualizado': time.time()})
     if not pendentes:
@@ -351,7 +381,13 @@ def receber_pedido(nup, pdf, anexos):
             temporario = Path(temporaria) / 'pedido.pdf'
             temporario.write_bytes(pdf)
             tema = _tema_do_pdf(temporario)
-    pasta, _, _ = pastas_pedidos.preparar_pasta(base, nup_pontos, tema, pastas_pedidos.proxima_sequencia(base))
+    sequencia = int(dados.get('sequencia') or pastas_pedidos.proxima_sequencia(base))
+    if pastas_pedidos.achar_pasta(base, nup_pontos) is None:
+        # Alguém pode ter criado uma pasta com este número durante a tarefa: pula para o próximo livre.
+        em_uso = pastas_pedidos.sequencias_em_uso(base)
+        while sequencia in em_uso:
+            sequencia += 1
+    pasta, criada, usada = pastas_pedidos.preparar_pasta(base, nup_pontos, tema, sequencia)
     destino_pdf = pasta / pastas_pedidos.nome_do_pdf(nup_pontos)
     destino_pdf.write_bytes(pdf)
     try:
@@ -364,7 +400,7 @@ def receber_pedido(nup, pdf, anexos):
     resultado = {'nup': nup_pontos, 'pasta': pasta.name, 'pdf': True, 'anexos': quantidade,
                  'ja_baixado': False, 'planilha': '', 'erro': ''}
     _marcar_baixado(item, pasta.name)
-    _registrar(resultado, chave, item)
+    _registrar(resultado, chave, item, proxima=usada + 1 if criada else None)
     return resultado
 
 
@@ -378,11 +414,13 @@ def registrar_falha(nup, erro):
                 'planilha': '', 'erro': str(erro or 'Falha sem detalhes.')[:600]}, chave, None)
 
 
-def _registrar(resultado, chave, item_atualizado):
+def _registrar(resultado, chave, item_atualizado, proxima=None):
     with _bloqueio():
         dados = _ler()
         if item_atualizado is not None:
             dados['itens'][chave] = item_atualizado
+        if proxima is not None:
+            dados['sequencia'] = proxima
         dados['resultados'] = [r for r in dados.get('resultados', []) if r.get('nup') != resultado['nup']] + [resultado]
         dados['atual'] = len(dados['resultados'])
         dados['atualizado'] = time.time()

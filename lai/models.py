@@ -287,6 +287,26 @@ class ManifestacaoFalabr(models.Model):
         super().save(*args, **kwargs)
     def __str__(self): return self.nup
 
+class MemorandoFalabr(models.Model):
+    """Registro de cada memorando de reiteração gerado (.docx) a partir de uma manifestação do Fala.BR.
+
+    O arquivo em si é entregue na hora para quem gerou; aqui fica só o histórico: número, secretaria e
+    prazo informados. O número segue o da Controladoria (pode ser compartilhado com outros memorandos),
+    por isso não é único: gerar de novo com o mesmo número é uma correção.
+    """
+    manifestacao = models.ForeignKey(ManifestacaoFalabr, on_delete=models.CASCADE, related_name='memorandos')
+    numero = models.PositiveIntegerField()
+    ano = models.PositiveIntegerField()
+    data = models.DateField()
+    secretaria = models.CharField(max_length=180)
+    prazo = models.DateField()
+    usuario = models.ForeignKey(USER, null=True, on_delete=models.SET_NULL)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    class Meta: ordering = ['-ano', '-numero', '-id']
+    @property
+    def rotulo(self): return f'{self.numero}/{self.ano}/CGM'
+    def __str__(self): return f'Memorando {self.rotulo}'
+
 class ExecucaoMonitor(models.Model):
     inicio = models.DateTimeField(auto_now_add=True)
     fim = models.DateTimeField(null=True)
