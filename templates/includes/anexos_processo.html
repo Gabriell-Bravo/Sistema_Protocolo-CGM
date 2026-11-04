@@ -1,7 +1,7 @@
-{% if eh_licitacao %}
+{% if eh_licitacao or eh_liquidacao %}
 <section class="card" id="blocoAnexos">
     <div class="card__header">
-        <span class="card__title">Arquivos anexados</span>
+        <span class="card__title">{% if eh_liquidacao %}Relatório anexado{% else %}Arquivos anexados{% endif %}</span>
         <span class="card__hint">{{ anexos|length }} arquivo{{ anexos|length|pluralize:"s" }}</span>
     </div>
 
@@ -31,8 +31,13 @@
             </button>
         </div>
         <p class="anexo-form__dica">
+            {% if eh_liquidacao %}
+            Anexe o relatório, se houver. Não é obrigatório: dá para encaminhar ao Controlador sem arquivo.
+            Depois de anexado, o documento aparece abaixo com preview — inclusive após a análise.
+            {% else %}
             Análise, diligências e encaminhamento continuam disponíveis e não são obrigatórios.
             Depois de anexado, o arquivo aparece abaixo com preview — inclusive após a análise.
+            {% endif %}
         </p>
     </form>
     {% endif %}
@@ -126,7 +131,7 @@
         <span class="material-symbols-rounded">attach_file</span>
         <div class="empty__title">Nenhum arquivo anexado</div>
         {% if pode_anexar %}
-        <div>Arraste um arquivo para a área acima ou escolha no computador.</div>
+        <div>{% if eh_liquidacao %}Arraste o relatório para a área acima ou escolha no computador.{% else %}Arraste um arquivo para a área acima ou escolha no computador.{% endif %}</div>
         {% endif %}
     </div>
     {% endif %}

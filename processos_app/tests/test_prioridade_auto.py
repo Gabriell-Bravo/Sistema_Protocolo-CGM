@@ -79,6 +79,22 @@ class PrioridadeAutoTest(BaseProcessoTestCase):
             'URGENTE',
         )
 
+    def test_n_recorrente_nao_detecta_por_palavra(self):
+        Prioridade.objects.update_or_create(
+            codigo='N_RECORRENTE',
+            defaults={
+                'nome': 'Prioridade N/Recorrente',
+                'prazo_dias': 3,
+                'ordem': 27,
+                'ativo': True,
+                'palavras_chave': 'EMPRESA SO DESTA VEZ',
+            },
+        )
+        prazos.limpar_cache()
+        self.assertIsNone(prioridade_auto.detectar_codigo({
+            'contratada': 'EMPRESA SO DESTA VEZ Ltda',
+        }))
+
     def test_sem_match_retorna_none(self):
         self.assertIsNone(
             prioridade_auto.detectar_codigo({'contratada': 'Empresa Qualquer'}),

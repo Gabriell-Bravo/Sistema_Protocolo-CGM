@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Funções extras{% endblock %}
+{% block page_title %}Funções extras{% endblock %}
+{% block page_subtitle %}Some as funções operacionais à sua conta de {{ papel_rotulo }}{% endblock %}
+{% block content_class %}content--narrow{% endblock %}
+
+{% block content %}
+<section class="card" style="max-width:640px;">
+    <div class="card__header">
+        <span class="card__title">O que você vai operar</span>
+        <span class="card__hint">O papel {{ papel_rotulo }} permanece. Marque só o que precisa no dia a dia.</span>
+    </div>
+    <form method="post" class="card__body">
+        {% csrf_token %}
+        <div class="funcoes-grid">
+            <label class="funcoes-opcao is-locked">
+                <input type="checkbox" checked disabled>
+                <span>
+                    <strong>{{ papel_rotulo }}</strong>
+                    <span>Papel principal desta conta — não se desmarca aqui.</span>
+                </span>
+            </label>
+            {% for codigo, rotulo in funcoes_escolhiveis %}
+                {% if codigo != papel_atual %}
+                <label class="funcoes-opcao">
+                    <input type="checkbox" name="funcoes" value="{{ codigo }}"
+                           {% if codigo in funcoes_marcadas %}checked{% endif %}>
+                    <span>
+                        <strong>{{ rotulo }}</strong>
+                        <span>
+                            {% if codigo == 'PROTOCOLO' %}
+                                Novo processo, correção cadastral e registro de saída.
+                            {% elif codigo == 'ANALISTA_LICITACOES' %}
+                                Fila de Licitações, anexos e Controle de análise.
+                            {% else %}
+                                Fila de Liquidações e Controle de relatório.
+                            {% endif %}
+                        </span>
+                    </span>
+                </label>
+                {% endif %}
+            {% endfor %}
+        </div>
+        <p class="field__hint" style="margin:16px 0 0;">
+            Dá para combinar, por exemplo Protocolo com Liquidações. O menu passa a mostrar as duas áreas.
+        </p>
+        <div class="form-actions" style="margin-top:18px;">
+            <button type="submit" class="btn btn--primary">
+                <span class="material-symbols-rounded">save</span>
+                Salvar funções
+            </button>
+        </div>
+    </form>
+</section>
+{% endblock %}

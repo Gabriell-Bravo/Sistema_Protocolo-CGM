@@ -13,6 +13,7 @@ class Processo(models.Model):
         ('NORMAL', 'Normal'),
         ('PRIORITARIO', 'Prioridade de obras'),
         ('RECORRENTE', 'Prioridade recorrente'),
+        ('N_RECORRENTE', 'Prioridade N/Recorrente'),
         ('URGENTE', 'Urgente'),
     ]
 
@@ -303,6 +304,7 @@ class Processo(models.Model):
             'NORMAL': 'Normal',
             'PRIORITARIO': 'Prioridade de obras',
             'RECORRENTE': 'Prioridade recorrente',
+            'N_RECORRENTE': 'Prioridade N/Recorrente',
             'URGENTE': 'Urgente',
             'SIM': 'Prioridade de obras',
             'NAO': 'Normal',
@@ -320,7 +322,7 @@ class Processo(models.Model):
             return 'badge--danger'
         if self.prioridade in ('PRIORITARIO', 'SIM'):
             return 'badge--obras'
-        if self.prioridade == 'RECORRENTE':
+        if self.prioridade in ('RECORRENTE', 'N_RECORRENTE'):
             return 'badge--recorrente'
         return ''
 
@@ -331,7 +333,7 @@ class Processo(models.Model):
             return 'tr-prio-urgente'
         if self.prioridade in ('PRIORITARIO', 'SIM'):
             return 'tr-prio-obras'
-        if self.prioridade == 'RECORRENTE':
+        if self.prioridade in ('RECORRENTE', 'N_RECORRENTE'):
             return 'tr-prio-recorrente'
         if self.prioridade in ('NORMAL', 'NAO'):
             return 'tr-prio-normal'
@@ -662,9 +664,10 @@ def _caminho_anexo(instance, filename):
 
 
 class AnexoProcesso(models.Model):
-    """Arquivo anexado pelo analista de Licitações e Contratos.
+    """Arquivo anexado pelo analista (Licitações ou Liquidações).
 
-    O arquivo não substitui a análise: ela continua disponível e opcional.
+    Em Licitações o anexo é o registro principal da análise. Em Liquidações
+    serve para o relatório e é opcional no encaminhamento ao Controlador.
     Quem pode ver o processo baixa o arquivo por uma rota autenticada.
     """
 
@@ -1177,6 +1180,13 @@ class Profile(models.Model):
         default='GESTAO',
         db_index=True,
         verbose_name="Papel operacional"
+    )
+    # Gestão e administrador escolhem funções extras (Protocolo, Licitações,
+    # Liquidações) sem perder o papel principal.
+    funcoes_extras = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name="Funções extras",
     )
 
     def __str__(self):

@@ -395,7 +395,7 @@ def devolver_da_assinatura(processo_id, usuario, motivo, destinatario_id=None):
         destinatario = User.objects.filter(id=destinatario_id).first()
         if not perm.is_analista_ativo(destinatario):
             raise TransicaoInvalida('Escolha um analista ativo.')
-        if perm.grupo_do_analista(destinatario) != processo.genero:
+        if processo.genero not in perm.grupos_do_analista(destinatario):
             raise TransicaoInvalida(
                 'Escolha um analista do mesmo grupo do processo.')
 
@@ -793,6 +793,8 @@ def escolher_recorrencia(valor):
 def mensagem_de_prioridade(processo, escolha):
     texto = (f'Prioridade de {processo.numero_processo} atualizada para '
              f'{processo.get_prioridade_display()}.')
+    if processo.prioridade in prazos.SO_DESTA_ENTRADA:
+        return texto + ' Vale só nesta entrada; a próxima não herda esta prioridade.'
     if processo.prioridade != 'URGENTE':
         return texto
     if escolha == 'sim':
@@ -828,9 +830,13 @@ def alterar_prioridade(processo_id, usuario, prioridade, recorrente=None):
 
     if prioridade == 'URGENTE' and recorrente is not None:
         UrgenciaRecorrente.definir(processo.numero_processo, bool(recorrente), usuario)
+    elif prioridade in prazos.SO_DESTA_ENTRADA:
+        UrgenciaRecorrente.definir(processo.numero_processo, False, usuario)
 
     descricao = f'Prioridade alterada para {processo.get_prioridade_display()}.'
-    if prioridade == 'URGENTE' and recorrente is True:
+    if prioridade in prazos.SO_DESTA_ENTRADA:
+        descricao += ' Vale só nesta entrada.'
+    elif prioridade == 'URGENTE' and recorrente is True:
         descricao += ' As próximas entradas deste número já nascem urgentes.'
     elif prioridade == 'URGENTE' and recorrente is False:
         descricao += ' Vale só nesta entrada.'
@@ -1026,8 +1032,8 @@ def disponiveis_para_assumir(usuario):
     from . import permissions as perm
     from .secretaria_cgm import excluir_processos_cgm
 
-    grupo = perm.grupo_do_analista(usuario)
-    if not grupo:
+    grupos = perm.grupos_do_analista(usuario)
+    if not grupos:
         return Processo.objects.none()
 
     consulta = excluir_processos_cgm(
@@ -1035,7 +1041,7 @@ def disponiveis_para_assumir(usuario):
         .filter(
             situacao_tramite='DISPONIVEL',
             analista_responsavel__isnull=True,
-            genero=grupo,
+            genero__in=grupos,
         )
         .select_related('prioridade_fk', 'especie_fk', 'analista_responsavel')
     )

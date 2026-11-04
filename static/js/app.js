@@ -654,17 +654,30 @@
                 btn.hidden = !estourou(el);
             });
             document.querySelectorAll('[data-dil-resumo]').forEach(function (btn) {
-                var caixa = btn.parentElement;
+                var caixa = btn.closest('.dil-preview') || btn.parentElement;
                 if (!caixa) return;
-                var algum = false;
-                caixa.querySelectorAll('.dil-check__text--clamp').forEach(function (el) {
-                    if (estourou(el)) algum = true;
-                });
-                btn.hidden = !algum;
+                if (caixa.classList.contains('is-expanded')) {
+                    btn.hidden = false;
+                    return;
+                }
+                var lista = caixa.querySelector('.dil-check');
+                btn.hidden = !(lista && estourou(lista));
             });
         }
 
         document.addEventListener('click', function (event) {
+            var resumo = event.target.closest('[data-dil-resumo]');
+            if (resumo) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+                var caixa = resumo.closest('.dil-preview') || resumo.parentElement;
+                if (!caixa) return;
+                var aberto = caixa.classList.toggle('is-expanded');
+                resumo.textContent = aberto ? 'Ver menos' : 'Ver mais';
+                resumo.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+                return;
+            }
             var btn = event.target.closest('[data-dil-mais]');
             if (!btn) return;
             event.preventDefault();

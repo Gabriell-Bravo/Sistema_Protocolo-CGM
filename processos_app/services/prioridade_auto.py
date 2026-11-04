@@ -6,6 +6,8 @@ import unicodedata
 
 from django.db import DatabaseError
 
+from .prazos import SO_DESTA_ENTRADA
+
 # Ordem de precedência: urgente > obras > recorrente > normal.
 PRECEDENCIA = ('URGENTE', 'PRIORITARIO', 'RECORRENTE', 'NORMAL')
 
@@ -90,6 +92,8 @@ def sugerir(dados):
         if (getattr(prio, 'palavras_chave', None) or '').strip()
     }
     for codigo in PRECEDENCIA:
+        if codigo in SO_DESTA_ENTRADA:
+            continue
         for termo, original in mapa.get(codigo, ()):
             if not _contem(haystack, termo):
                 continue

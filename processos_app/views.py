@@ -60,7 +60,7 @@ def is_analista(user):
 
 
 def pode_usar_area_analista(user):
-    """item 2: a Gestão NÃO é analista. Não acessa a área operacional."""
+    """Fila de análise: papel de analista ou função extra de análise."""
     return perm.is_analista(user)
 
 
@@ -207,6 +207,37 @@ def _filtrar_lista_protocolo(queryset, termo, prioridade, genero, especie, user)
     return queryset
 
 
+def _chave_passagem_busca(processo):
+    """Maior chave = passagem que deve aparecer na busca.
+
+    Se ainda está na CGM, ganha das que já saíram. Entre as da mesma
+    situação, vale a data/hora mais recente (saída se houver, senão entrada).
+    """
+    na_cgm = 1 if not processo.data_saida else 0
+    if processo.data_saida:
+        data = processo.data_saida
+        hora = processo.hora_saida or time.min
+    else:
+        data = processo.data_entrada
+        hora = processo.hora_entrada or time.min
+    return (na_cgm, data or date.min, hora, processo.id)
+
+
+def _uma_passagem_por_numero(processos):
+    """Na busca, um resultado por número: a última entrada ou saída.
+
+    Volumes e passagens anteriores continuam no Histórico.
+    """
+    melhor = {}
+    for processo in processos:
+        numero = processo.numero_processo
+        atual = melhor.get(numero)
+        if atual is None or _chave_passagem_busca(processo) > _chave_passagem_busca(atual):
+            melhor[numero] = processo
+    ids = {item.id for item in melhor.values()}
+    return [processo for processo in processos if processo.id in ids]
+
+
 def _montar_busca_combinada_protocolo(
         user, termo, prioridade='todas', genero='todas', especie='todas'):
     """Ativos primeiro, depois Finalizados (saída) — mesma busca."""
@@ -235,7 +266,10 @@ def _montar_busca_combinada_protocolo(
         processo.escopo_protocolo_item = 'ativo'
     for processo in finais:
         processo.escopo_protocolo_item = 'finalizado'
-    return ativos + finais, len(ativos), len(finais)
+    combinados = _uma_passagem_por_numero(ativos + finais)
+    n_ativos = sum(
+        1 for processo in combinados if processo.escopo_protocolo_item == 'ativo')
+    return combinados, n_ativos, len(combinados) - n_ativos
 
 
 def _erro_json(exc, status=400):
@@ -269,7 +303,9 @@ def ordem_fila(queryset):
             Case(
                 When(prioridade='URGENTE', then=Value(10)),
                 When(prioridade__in=['PRIORITARIO', 'SIM'], then=Value(20)),
-                When(prioridade__in=['NORMAL', 'NAO'], then=Value(30)),
+                When(prioridade='RECORRENTE', then=Value(25)),
+                When(prioridade='N_RECORRENTE', then=Value(27)),
+                When(prioridade__in=['NORMAL', 'NAO'], then=Value(40)),
                 default=Value(999),
                 output_field=IntegerField(),
             ),
@@ -468,8 +504,13 @@ def listar_processos(request):
     if aba_cgm:
         perm.assert_permissao(
             svc_cgm.pode_ver_processos_cgm(request.user),
-            'Somente Protocolo e Gestão veem Processos CGM.')
-    elif is_analista(request.user):
+            'Somente Protocolo e Gestão veem Processos Contabilidade.')
+    elif (
+        is_analista(request.user)
+        and not perm.is_protocolo(request.user)
+        and not perm.is_gestao(request.user)
+        and not perm.eh_administrador(request.user)
+    ):
         return redirect('area_analista')
 
     termo_pesquisa = request.GET.get('termo', '').strip()
@@ -621,8 +662,8 @@ def listar_processos(request):
         'prioridades': svc_cadastros.opcoes_prioridade(),
         'all_generos': all_generos,
         'all_especies': all_especies,
-        # item 51: só o Protocolo corrige dados de protocolo nesta tela
-        'can_edit': perm.is_protocolo(request.user),
+        # Protocolo e administrador corrigem o cadastro nesta tela
+        'can_edit': perm.pode_editar_lista_protocolo(request.user),
         'can_delete': perm.pode_cancelar_processo(request.user),
         'can_apagar': perm.pode_apagar_processo(request.user),
         'can_mark_saida': pode_saida,
@@ -826,6 +867,7 @@ def ver_historico_processo(request, process_id):
         'foi_analisado': _processo_foi_analisado(processo),
         'anexos': processo.anexos.select_related('enviado_por'),
         'eh_licitacao': processo.grupo == 'LICITACOES_E_CONTRATOS',
+        'eh_liquidacao': processo.grupo == 'LIQUIDACOES',
         'pode_anexar': False,
     })
 
@@ -1006,8 +1048,8 @@ def listar_finalizados(request):
         'all_especies': all_especies,
         'all_status_analise': all_status_analise,
         'is_admin': request.user.is_superuser,
-        # item 51: só o Protocolo corrige dados de protocolo
-        'can_edit': perm.is_protocolo(request.user),
+        # Protocolo e administrador corrigem ativos e processos com saída
+        'can_edit': perm.pode_editar_lista_protocolo(request.user),
         'campos_editaveis': sorted(svc_processos.campos_editaveis(request.user)),
         'can_delete': perm.pode_cancelar_processo(request.user),
         'can_concluir_monitoramento': perm.is_gestao(request.user),
@@ -1022,10 +1064,19 @@ def listar_finalizados(request):
 
 
 @login_required
-def get_process_by_number(request, numero_processo):
+def get_process_by_number(request, numero_processo=''):
+    """Última passagem do número, para preencher um novo cadastro.
+
+    O número vai na query (?numero=), porque o formato real contém barra
+    e o caminho da URL cortaria o restante.
+    """
     try:
-        processo = Processo.objects.filter(numero_processo=numero_processo).order_by(
-            '-data_entrada', '-hora_entrada').first()
+        numero = (numero_processo or request.GET.get('numero') or '').strip()
+        if not numero:
+            return JsonResponse({'message': 'Informe o número do processo.'}, status=400)
+
+        processo = Processo.objects.filter(numero_processo=numero).order_by(
+            '-data_entrada', '-hora_entrada', '-id').first()
 
         if not processo:
             return JsonResponse({'message': 'Processo não encontrado'}, status=404)
@@ -1049,6 +1100,7 @@ def get_process_by_number(request, numero_processo):
             'contratada': processo.contratada,
             'recorrente': processo.recorrente,
             'prioridade': processo.prioridade,
+            'observacao_protocolo': processo.observacao_protocolo or '',
             'tecnico': processo.tecnico,
             'data_analise': processo.data_analise.strftime('%Y-%m-%d') if processo.data_analise else None,
             'numero_despacho': processo.numero_despacho,
@@ -1132,11 +1184,59 @@ def manage_users(request):
     # item 3: o que governa o acesso é o papel, não o nível legado.
     user_levels = Profile.PAPEL_CHOICES
 
+    for usuario in users:
+        usuario.funcoes_marcadas = set(perm.funcoes_extras(usuario))
+        usuario.pode_escolher_funcoes = perm.pode_escolher_funcoes(usuario)
+
     return render(request, 'admin/manage_users.html', {
         'users': users,
         'user_levels': user_levels,
+        'funcoes_escolhiveis': perm.FUNCOES_ESCOLHIVEIS,
         'total_logados': sum(1 for usuario in users if usuario.esta_logado),
     })
+
+
+@login_required
+def minhas_funcoes(request):
+    """Gestão e admin marcam Protocolo / Licitações / Liquidações extras."""
+    if not perm.pode_escolher_funcoes(request.user):
+        return HttpResponse(
+            'Somente Gestão e administrador escolhem funções extras.',
+            status=403)
+    if request.method == 'POST':
+        try:
+            perm.gravar_funcoes_extras(
+                request.user, request.POST.getlist('funcoes'), request.user)
+        except PermissionDenied as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(request, 'Funções atualizadas. O menu já reflete a seleção.')
+        return redirect('minhas_funcoes')
+    extras = set(perm.funcoes_extras(request.user))
+    return render(request, 'admin/minhas_funcoes.html', {
+        'funcoes_escolhiveis': perm.FUNCOES_ESCOLHIVEIS,
+        'funcoes_marcadas': extras,
+        'papel_atual': perm.get_papel(request.user),
+        'papel_rotulo': request.user.profile.get_papel_display(),
+    })
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def update_user_funcoes(request, user_id):
+    if request.method != 'POST':
+        return redirect('manage_users')
+    alvo = get_object_or_404(User, id=user_id)
+    try:
+        perm.gravar_funcoes_extras(
+            alvo, request.POST.getlist('funcoes'), request.user)
+    except PermissionDenied as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(
+            request,
+            f'{alvo.username}: funções extras atualizadas.')
+    return redirect('manage_users')
 
 
 @login_required

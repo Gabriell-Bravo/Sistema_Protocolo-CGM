@@ -3,13 +3,14 @@
 Ponto único de autorização do sistema (item 4).
 
 Regras estruturais:
-  - Nenhum nome de servidor aparece aqui. O acesso decorre do PAPEL (item 3).
+  - Nenhum nome de servidor aparece aqui. O acesso decorre do PAPEL (item 3)
+    e, para Gestão/administrador, das funções extras escolhidas.
   - Ocultar botão no template não é segurança: toda operação de escrita
     chama `assert_permissao` ou o decorador `exige` (item 4).
-  - Gestão NÃO é Analista: não assume processo, não analisa, não libera
-    assinatura (item 2).
-  - `is_superuser` mantém o /admin e pode desfazer tramitação já avançada
-    (análise, encaminhamento, retirada e saída). Não assume nem analisa.
+  - Gestão, por padrão, NÃO é Analista. Pode somar Protocolo, Licitações
+    e/ou Liquidações nas funções extras e então assume/analisa nesses grupos.
+  - `is_superuser` mantém o /admin e pode desfazer tramitação já avançada.
+    Também escolhe funções extras para operar como Protocolo ou analista.
 
 Substitui os helpers que estavam em views.py:
     can_access_genero, filter_processes_by_user_level, is_analista,
@@ -53,6 +54,13 @@ MAPA_NIVEL_LEGADO = {
 
 PAPEL_PARA_NIVEL = {papel: nivel for nivel, papel in MAPA_NIVEL_LEGADO.items()}
 
+FUNCOES_ESCOLHIVEIS = (
+    (PROTOCOLO, 'Protocolo'),
+    (ANALISTA_LICITACOES, 'Licitações e Contratos'),
+    (ANALISTA_LIQUIDACOES, 'Liquidações'),
+)
+CODIGOS_FUNCOES_ESCOLHIVEIS = {codigo for codigo, _ in FUNCOES_ESCOLHIVEIS}
+
 
 # --------------------------------------------------------------------------
 # Leitura do papel
@@ -72,27 +80,101 @@ def get_papel(user):
     return MAPA_NIVEL_LEGADO.get(getattr(profile, 'level', None))
 
 
-def is_protocolo(user):
-    return get_papel(user) == PROTOCOLO
-
-
-def is_analista(user):
-    return get_papel(user) in (ANALISTA_LICITACOES, ANALISTA_LIQUIDACOES)
-
-
-def is_gestao(user):
-    return get_papel(user) == GESTAO
-
-
 def eh_administrador(user):
-    """Superusuário do sistema. Não assume nem analisa no lugar do
-    analista, mas desfaz tramitação e registra a saída como o Protocolo."""
+    """Superusuário do sistema. Desfaz tramitação avançada e gerencia contas."""
     return bool(user and user.is_authenticated and user.is_superuser)
 
 
+def pode_escolher_funcoes(user):
+    """Gestão e administrador marcam funções extras (Protocolo, análise)."""
+    return eh_administrador(user) or get_papel(user) == GESTAO
+
+
+def funcoes_extras(user):
+    """Códigos extras gravados no perfil, se a conta puder escolhê-los."""
+    if not pode_escolher_funcoes(user):
+        return []
+    profile = getattr(user, 'profile', None)
+    if profile is None:
+        return []
+    brutos = getattr(profile, 'funcoes_extras', None) or []
+    if not isinstance(brutos, (list, tuple)):
+        return []
+    papel = get_papel(user)
+    return [
+        codigo for codigo in brutos
+        if codigo in CODIGOS_FUNCOES_ESCOLHIVEIS and codigo != papel
+    ]
+
+
+def funcoes_ativas(user):
+    """Papel principal + funções extras (Gestão/admin)."""
+    ativas = set()
+    papel = get_papel(user)
+    if papel:
+        ativas.add(papel)
+    ativas.update(funcoes_extras(user))
+    return ativas
+
+
+def tem_funcao(user, codigo):
+    return codigo in funcoes_ativas(user)
+
+
+def gravar_funcoes_extras(alvo, funcoes, autor):
+    """Grava a seleção de funções extras. Só Gestão/admin; admin pode
+    alterar a de outro Gestão/admin."""
+    from ..models import Profile
+
+    if not pode_escolher_funcoes(autor):
+        raise PermissionDenied('Somente Gestão e administrador escolhem funções.')
+    if alvo.id != autor.id and not eh_administrador(autor):
+        raise PermissionDenied('Você só altera as próprias funções.')
+    if not pode_escolher_funcoes(alvo):
+        raise PermissionDenied(
+            'Só contas de Gestão ou administrador recebem funções extras.')
+    escolhidas = []
+    papel = get_papel(alvo)
+    for codigo in funcoes or []:
+        if codigo in CODIGOS_FUNCOES_ESCOLHIVEIS and codigo != papel:
+            if codigo not in escolhidas:
+                escolhidas.append(codigo)
+    profile, _ = Profile.objects.get_or_create(user=alvo)
+    profile.funcoes_extras = escolhidas
+    profile.save(update_fields=['funcoes_extras'])
+    return escolhidas
+
+
+def is_protocolo(user):
+    return tem_funcao(user, PROTOCOLO)
+
+
+def is_analista(user):
+    return bool(funcoes_ativas(user) & {ANALISTA_LICITACOES, ANALISTA_LIQUIDACOES})
+
+
+def is_gestao(user):
+    return tem_funcao(user, GESTAO)
+
+
+def grupos_do_analista(user):
+    """Grupos em que o usuário analisa (pode ser mais de um)."""
+    ativas = funcoes_ativas(user)
+    return {
+        PAPEL_PARA_GRUPO[papel]
+        for papel in (ANALISTA_LICITACOES, ANALISTA_LIQUIDACOES)
+        if papel in ativas
+    }
+
+
 def grupo_do_analista(user):
-    """Grupo de atuação do analista, ou None se o usuário não for analista."""
-    return PAPEL_PARA_GRUPO.get(get_papel(user))
+    """Um grupo, ou None. Se a conta analisa os dois, devolve Licitações."""
+    grupos = grupos_do_analista(user)
+    if GRUPO_LICITACOES in grupos:
+        return GRUPO_LICITACOES
+    if GRUPO_LIQUIDACOES in grupos:
+        return GRUPO_LIQUIDACOES
+    return None
 
 
 def nome_usuario(user):
@@ -128,6 +210,28 @@ def ids_com_sessao_ativa():
     return ativos
 
 
+def _q_tem_funcao(codigo):
+    """Papel principal ou função extra (Gestão/admin).
+
+    Não usa JSONField `__contains`: o SQLite local não implementa esse
+    lookup. As contas que escolhem extras são poucas (Gestão/admin).
+    """
+    from django.contrib.auth.models import User
+    from django.db.models import Q
+
+    q = Q(profile__papel=codigo)
+    candidatos = (
+        User.objects.filter(is_active=True)
+        .filter(Q(profile__papel=GESTAO) | Q(is_superuser=True))
+        .select_related('profile')
+    )
+    extras = [usuario.id for usuario in candidatos
+              if codigo in funcoes_extras(usuario)]
+    if extras:
+        q |= Q(pk__in=extras)
+    return q
+
+
 def analistas_ativos():
     """Destinatários válidos para direcionamento de assinatura (item 8).
 
@@ -137,10 +241,13 @@ def analistas_ativos():
     """
     from django.contrib.auth.models import User
     return (User.objects
-            .filter(is_active=True,
-                    profile__papel__in=[ANALISTA_LICITACOES,
-                                        ANALISTA_LIQUIDACOES])
+            .filter(is_active=True)
+            .filter(
+                _q_tem_funcao(ANALISTA_LICITACOES)
+                | _q_tem_funcao(ANALISTA_LIQUIDACOES)
+            )
             .select_related('profile')
+            .distinct()
             .order_by('first_name', 'username'))
 
 
@@ -148,13 +255,14 @@ def analistas_do_grupo(grupo):
     """Analistas ativos do grupo (Relator na planilha / tela de análise)."""
     from django.contrib.auth.models import User
     if grupo == GRUPO_LICITACOES:
-        papeis = [ANALISTA_LICITACOES]
+        codigo = ANALISTA_LICITACOES
     else:
-        # Liquidações e qualquer sequência do Controle de relatório.
-        papeis = [ANALISTA_LIQUIDACOES]
+        codigo = ANALISTA_LIQUIDACOES
     return (User.objects
-            .filter(is_active=True, profile__papel__in=papeis)
+            .filter(is_active=True)
+            .filter(_q_tem_funcao(codigo))
             .select_related('profile')
+            .distinct()
             .order_by('first_name', 'username'))
 
 
@@ -188,16 +296,16 @@ def pode_ver_grupo(user, grupo):
     if eh_administrador(user) or is_protocolo(user) or is_gestao(user):
         return True
     if is_analista(user):
-        return not grupo or grupo_do_analista(user) == grupo
+        return not grupo or grupo in grupos_do_analista(user)
     return False
 
 
 def pode_analisar_grupo(user, grupo):
     """Atos técnicos: assumir, analisar, liberar assinatura.
 
-    Só o analista do próprio grupo. Gestão e Protocolo nunca (itens 2 e 3).
+    Só quem tem a função de analista daquele grupo (papel ou extra).
     """
-    return is_analista(user) and grupo_do_analista(user) == grupo
+    return is_analista(user) and grupo in grupos_do_analista(user)
 
 
 def filtrar_por_grupo(user, queryset, campo='genero'):
@@ -214,8 +322,11 @@ def filtrar_por_grupo(user, queryset, campo='genero'):
     if eh_administrador(user) or is_protocolo(user) or is_gestao(user):
         return excluir_processos_cgm(queryset, via=via)
     if is_analista(user):
+        grupos = grupos_do_analista(user)
+        if not grupos:
+            return queryset.none()
         return excluir_processos_cgm(
-            queryset.filter(**{campo: grupo_do_analista(user)}), via=via)
+            queryset.filter(**{f'{campo}__in': grupos}), via=via)
     return queryset.none()
 
 
@@ -226,6 +337,15 @@ def filtrar_por_grupo(user, queryset, campo='genero'):
 def pode_cadastrar_processo(user):
     """item 2: a entrada do processo é do Protocolo."""
     return is_protocolo(user)
+
+
+def pode_editar_lista_protocolo(user):
+    """Edição em linha em Processos Protocolo (ativos e com saída).
+
+    Protocolo corrige o cadastro no dia a dia. O administrador também,
+    inclusive depois da saída física.
+    """
+    return is_protocolo(user) or eh_administrador(user)
 
 
 def pode_assumir_processo(user, processo):
@@ -392,7 +512,7 @@ def pode_consultar_controle_relatorio(user):
     """
     if eh_administrador(user):
         return True
-    return grupo_do_analista(user) == GRUPO_LIQUIDACOES
+    return GRUPO_LIQUIDACOES in grupos_do_analista(user)
 
 
 def pode_consultar_controle_analise(user):
@@ -405,7 +525,7 @@ def pode_nova_analise(user):
     """Nova análise pelo Controle: Liquidações, Licitações ou administrador."""
     if eh_administrador(user):
         return True
-    return grupo_do_analista(user) in (GRUPO_LIQUIDACOES, GRUPO_LICITACOES)
+    return bool(grupos_do_analista(user) & {GRUPO_LIQUIDACOES, GRUPO_LICITACOES})
 
 
 def pode_definir_ultimo_relatorio(user):
@@ -420,7 +540,7 @@ def pode_alterar_sequencia_relatorio(user):
 
 def pode_destinar_numeros_relatorio(user):
     """Administrador e analista de Liquidações guardam números para usar depois."""
-    return eh_administrador(user) or grupo_do_analista(user) == GRUPO_LIQUIDACOES
+    return eh_administrador(user) or GRUPO_LIQUIDACOES in grupos_do_analista(user)
 
 
 def pode_editar_numero_relatorio(user, processo=None):
@@ -457,7 +577,7 @@ def pode_cancelar_linha_relatorio(user):
     return (
         eh_administrador(user)
         or is_gestao(user)
-        or grupo_do_analista(user) == GRUPO_LIQUIDACOES
+        or GRUPO_LIQUIDACOES in grupos_do_analista(user)
     )
 
 
@@ -526,14 +646,19 @@ def pode_acessar_fila_gestao(user):
 
 
 def pode_anexar_arquivo(user, processo):
-    """Anexar arquivo: analista de Licitações, no processo desse grupo.
+    """Anexar arquivo: analista do grupo do processo (Licitações ou Liquidações).
 
     Não exige assumir, preencher análise, pendência ou encaminhamento.
+    Em Liquidações o anexo (relatório) é opcional para encaminhar.
     """
     if not user or not user.is_active or processo.esta_cancelado:
         return False
-    return (get_papel(user) == ANALISTA_LICITACOES
-            and processo.grupo == GRUPO_LICITACOES)
+    grupo = processo.grupo
+    if tem_funcao(user, ANALISTA_LICITACOES) and grupo == GRUPO_LICITACOES:
+        return True
+    if tem_funcao(user, ANALISTA_LIQUIDACOES) and grupo == GRUPO_LIQUIDACOES:
+        return True
+    return False
 
 
 # --------------------------------------------------------------------------
@@ -592,6 +717,8 @@ def contexto_de_permissoes(user):
         'is_analista': is_analista(user),
         'is_gestao': is_gestao(user),
         'grupo_analista': grupo_do_analista(user),
+        'grupos_analista': grupos_do_analista(user),
+        'pode_escolher_funcoes': pode_escolher_funcoes(user),
         'pode_cadastrar_processo': pode_cadastrar_processo(user),
         'pode_registrar_saida': pode_registrar_saida(user),
         'pode_alterar_destino': pode_alterar_destino(user),
@@ -629,6 +756,8 @@ def contexto_processor(request):
             'is_analista': False,
             'is_gestao': False,
             'grupo_analista': None,
+            'grupos_analista': set(),
+            'pode_escolher_funcoes': False,
             'pode_cadastrar_processo': False,
             'pode_registrar_saida': False,
             'pode_alterar_destino': False,

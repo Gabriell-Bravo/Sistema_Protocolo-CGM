@@ -1,12 +1,12 @@
 # processos_app/services/secretaria_cgm.py
-"""Processos isolados na aba Processos CGM.
+"""Processos isolados na lista Processos Contabilidade.
 
 Inclui:
 - secretaria Controladoria Geral do Município
 - espécie Contabilidade (grupo próprio, fora das filas de análise)
 
 Ficam fora das filas e listas comuns. Só Protocolo, Gestão e o
-administrador veem a aba Processos CGM.
+administrador veem a lista Processos Contabilidade.
 """
 
 from django.db.models import Q
@@ -16,6 +16,7 @@ from . import permissions as perm
 SECRETARIA_CGM = 'Controladoria Geral do Município'
 GRUPO_CONTABILIDADE = 'CONTABILIDADE'
 ESPECIE_CONTABILIDADE = 'Contabilidade'
+ROTULO_TELA = 'Processos Contabilidade'
 
 
 def _chave(texto):

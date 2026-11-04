@@ -1,4 +1,4 @@
-"""Upload, preview e download dos arquivos do processo de Licitações."""
+"""Upload, preview e download dos arquivos do processo (Licitações e Liquidações)."""
 
 import mimetypes
 from pathlib import Path

@@ -550,6 +550,24 @@ class DestinoPrioridadeCancelamentoTest(BaseProcessoTestCase):
         seguinte = self.novo_processo(numero_processo='779/2026', volume='2')
         self.assertEqual(seguinte.prioridade, 'NORMAL')
 
+    def test_n_recorrente_nao_passa_para_proxima_entrada(self):
+        processo = self.novo_processo(numero_processo='780/2026')
+        tramitacao.alterar_prioridade(
+            processo.id, self.gestao, 'N_RECORRENTE')
+        processo.refresh_from_db()
+        self.assertEqual(processo.prioridade, 'N_RECORRENTE')
+        seguinte = self.novo_processo(numero_processo='780/2026', volume='2')
+        self.assertEqual(seguinte.prioridade, 'NORMAL')
+
+    def test_n_recorrente_desfaz_urgencia_recorrente(self):
+        processo = self.novo_processo(numero_processo='781/2026')
+        tramitacao.alterar_prioridade(
+            processo.id, self.gestao, 'URGENTE', recorrente=True)
+        tramitacao.alterar_prioridade(
+            processo.id, self.gestao, 'N_RECORRENTE')
+        seguinte = self.novo_processo(numero_processo='781/2026', volume='2')
+        self.assertEqual(seguinte.prioridade, 'NORMAL')
+
     def test_prioridade_do_cadastro(self):
         processo = self.novo_processo()
         tramitacao.alterar_prioridade(processo.id, self.gestao, 'URGENTE')

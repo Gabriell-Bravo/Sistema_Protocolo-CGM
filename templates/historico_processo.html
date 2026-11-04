@@ -147,9 +147,11 @@
             </div>
         </div>
         {% endif %}
-        {% if eh_licitacao %}
+        {% if eh_licitacao or eh_liquidacao %}
         {% include "includes/anexos_processo.html" %}
-        {% elif foi_analisado %}
+        {% endif %}
+        {% if not eh_licitacao %}
+        {% if foi_analisado %}
         <div class="hist-fatos">
             <article class="fato">
                 <span class="material-symbols-rounded fato__icone">numbers</span>
@@ -220,6 +222,7 @@
             <div class="empty__title">Este processo ainda não foi analisado</div>
             <div>Quando um analista assumir e gravar a peça, os dados aparecem aqui.</div>
         </div>
+        {% endif %}
         {% endif %}
     </section>
 

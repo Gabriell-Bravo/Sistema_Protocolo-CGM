@@ -22,7 +22,7 @@ def pode_consultar(usuario):
         return False
     if perm.eh_administrador(usuario) or perm.is_gestao(usuario):
         return True
-    return perm.grupo_do_analista(usuario) == perm.GRUPO_LICITACOES
+    return perm.GRUPO_LICITACOES in perm.grupos_do_analista(usuario)
 
 
 def _ordenar_fila(consulta):

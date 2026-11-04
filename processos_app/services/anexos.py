@@ -1,7 +1,8 @@
-"""Anexos do processo de Licitações e Contratos.
+"""Anexos do processo (Licitações e Contratos, Liquidações).
 
 A análise, a pendência e o encaminhamento continuam no sistema e não são
-exigidos para anexar. Quem pode ver o processo baixa o arquivo depois.
+exigidos para anexar. Em Liquidações o relatório anexado é opcional para
+encaminhar ao Controlador. Quem pode ver o processo baixa o arquivo depois.
 """
 
 import zipfile
@@ -28,7 +29,7 @@ def anexar(processo, usuario, arquivos):
     """Grava um ou mais arquivos. Devolve (salvos, erros de arquivo)."""
     perm.assert_permissao(
         perm.pode_anexar_arquivo(usuario, processo),
-        'Somente o analista de Licitações e Contratos anexa arquivo neste processo.')
+        'Somente o analista do grupo deste processo anexa arquivo.')
 
     if not arquivos:
         raise ValidationError('Selecione ao menos um arquivo.')
@@ -51,7 +52,7 @@ def remover(anexo_id, usuario):
              .get(pk=anexo_id))
     perm.assert_permissao(
         perm.pode_anexar_arquivo(usuario, anexo.processo),
-        'Somente o analista de Licitações e Contratos remove arquivo deste processo.')
+        'Somente o analista do grupo deste processo remove arquivo.')
 
     nome = anexo.nome_original
     processo = anexo.processo

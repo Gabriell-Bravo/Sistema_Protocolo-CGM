@@ -13,7 +13,8 @@ Criação e edição de Processo (itens 17, 18, 21 e 51).
     não estão em whitelist nenhuma: só mudam pelos endpoints próprios de
     services/tramitacao.py (item 52). A prioridade na entrada é do Protocolo;
     analista e administrador também corrigem dados cadastrais (CAMPOS_CADASTRO)
-    na tela do processo.
+    na tela do processo. O administrador edita nas listas de Protocolo
+    (ativos e com saída) os mesmos campos do Protocolo, mais cadastro/análise.
 """
 
 from datetime import date, datetime, time
@@ -81,10 +82,10 @@ def _campos_analista_e_cadastro():
 
 def campos_editaveis(usuario, processo=None):
     """Campos que este usuário pode gravar neste processo."""
+    if perm.eh_administrador(usuario):
+        return set(CAMPOS_PROTOCOLO) | _campos_analista_e_cadastro()
     if perm.is_protocolo(usuario):
         return set(CAMPOS_PROTOCOLO)
-    if perm.eh_administrador(usuario):
-        return _campos_analista_e_cadastro()
     if perm.is_analista(usuario):
         if processo is None:
             return _campos_analista_e_cadastro()
@@ -273,7 +274,7 @@ def criar_processo(dados, usuario):
             'secretaria': processo.secretaria,
             'numero_processo': processo.numero_processo,
         })
-        if detectada:
+        if detectada and detectada not in prazos.SO_DESTA_ENTRADA:
             codigo_prioridade = detectada
     cadastro_prio = cadastros.resolver_prioridade(codigo_prioridade)
     if cadastro_prio is None or not cadastro_prio.ativo:

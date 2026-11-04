@@ -35,7 +35,7 @@
                 <div class="field field--required">
                     <label class="field__label" for="numeroProcesso">Número do processo</label>
                     <input type="text" id="numeroProcesso" name="numero_processo" class="input" required autocomplete="off">
-                    <span class="field__hint">Se o processo já passou pela CGM, os dados da última passagem são sugeridos.</span>
+                    <span class="field__hint" id="sugestaoPassagem">Se este número já passou pela CGM, secretaria, espécie, objeto e os demais dados da última passagem são preenchidos. O volume desta entrada fica em branco. Data e hora de saída não são copiadas.</span>
                     <div class="field__error" id="numeroProcessoError">Campo obrigatório</div>
                 </div>
                 <div class="field field--required">
@@ -272,9 +272,35 @@
         document.getElementById('erroMessage').classList.add('is-hidden');
     }
 
+    const HINT_PASSAGEM = 'Se este número já passou pela CGM, secretaria, espécie, objeto e os demais dados da última passagem são preenchidos. O volume desta entrada fica em branco. Data e hora de saída não são copiadas.';
+    let sugestaoAtiva = false;
+    let buscaSeq = 0;
+
+    function avisoPassagem(texto) {
+        const aviso = document.getElementById('sugestaoPassagem');
+        if (aviso) { aviso.textContent = texto || HINT_PASSAGEM; }
+    }
+
+    function limparCamposSugeridos() {
+        secretariaSelect.value = '';
+        especieSelect.value = '';
+        especieOutros.value = '';
+        grupoOutros.value = '';
+        atualizarEspecie();
+        document.getElementById('objeto').value = '';
+        contratadaInput.value = '';
+        document.getElementById('recorrente').value = 'NAO';
+        const prioridadeSelect = document.getElementById('prioridade');
+        if (prioridadeSelect) { prioridadeSelect.value = 'NORMAL'; }
+        document.getElementById('observacao_protocolo').value = '';
+        atualizarDicaPrioridade();
+    }
+
     function limparFormulario() {
         form.reset();
         limparErros();
+        sugestaoAtiva = false;
+        avisoPassagem();
         montarEspecies();
         atualizarEspecie();
         setCurrentDateTime();
@@ -294,18 +320,29 @@
         if (erro) { erro.style.display = 'block'; }
     }
 
-    // Sugestão a partir da última passagem do mesmo número (só dados de protocolo)
+    // Última passagem do mesmo número. Volume, entrada e saída não são copiados:
+    // o volume muda a cada entrada, a entrada é o momento atual e a saída
+    // ainda não existe neste cadastro.
     let debounce;
     numeroProcessoInput.addEventListener('input', function () {
         clearTimeout(debounce);
         const numero = this.value.trim();
-        if (!numero) { return; }
+        if (!numero) {
+            if (sugestaoAtiva) { limparCamposSugeridos(); sugestaoAtiva = false; }
+            avisoPassagem();
+            return;
+        }
         debounce = setTimeout(async function () {
+            const seq = ++buscaSeq;
             try {
-                const resposta = await fetch(`{% url 'get_process_by_number' numero_processo='123' %}`.replace('123', encodeURIComponent(numero)));
-                if (!resposta.ok) { return; }
+                const resposta = await fetch('{% url "get_process_by_number" %}?numero=' + encodeURIComponent(numero));
+                if (seq !== buscaSeq) { return; }
+                if (!resposta.ok) {
+                    if (sugestaoAtiva) { limparCamposSugeridos(); sugestaoAtiva = false; }
+                    avisoPassagem();
+                    return;
+                }
                 const d = await resposta.json();
-                document.getElementById('volume').value = d.volume || '';
                 if (d.secretaria && !DADOS.unidades.includes(d.secretaria)) {
                     const op = document.createElement('option');
                     op.value = d.secretaria; op.textContent = d.secretaria + ' (inativa)';
@@ -316,6 +353,17 @@
                 document.getElementById('objeto').value = d.objeto || '';
                 contratadaInput.value = d.contratada || '';
                 document.getElementById('recorrente').value = (d.recorrente === 'SIM') ? 'SIM' : 'NAO';
+                const prioridadeSelect = document.getElementById('prioridade');
+                if (prioridadeSelect) {
+                    const codigo = d.prioridade === 'N_RECORRENTE' ? 'NORMAL' : (d.prioridade || 'NORMAL');
+                    const existe = Array.prototype.some.call(prioridadeSelect.options, function (op) {
+                        return op.value === codigo;
+                    });
+                    prioridadeSelect.value = existe ? codigo : 'NORMAL';
+                }
+                document.getElementById('observacao_protocolo').value = d.observacao_protocolo || '';
+                sugestaoAtiva = true;
+                avisoPassagem('Dados da última passagem preenchidos. Informe o volume desta entrada. Data e hora de saída não foram copiadas.');
                 atualizarDicaPrioridade();
             } catch (erro) {
                 console.error('Falha ao buscar passagem anterior:', erro);

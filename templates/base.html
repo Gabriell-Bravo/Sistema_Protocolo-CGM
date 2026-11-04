@@ -31,12 +31,12 @@
         <div class="sidebar__brand">
             <span class="sidebar__logo">CGM</span>
             <span class="sidebar__brand-text">
-                {% if is_analista %}
-                    <span class="sidebar__title">Análise</span>
-                    <span class="sidebar__subtitle">{{ user.profile.get_papel_display|default:user.profile.get_level_display }}</span>
-                {% elif is_gestao %}
+                {% if is_gestao or user.is_superuser %}
                     <span class="sidebar__title">Gestão</span>
                     <span class="sidebar__subtitle">Controladoria Geral</span>
+                {% elif is_analista %}
+                    <span class="sidebar__title">Análise</span>
+                    <span class="sidebar__subtitle">{{ user.profile.get_papel_display|default:user.profile.get_level_display }}</span>
                 {% else %}
                     <span class="sidebar__title">Protocolo</span>
                     <span class="sidebar__subtitle">Controladoria Geral</span>
@@ -67,9 +67,9 @@
                 {% if pode_ver_processos_cgm %}
                 <a href="{% url 'listar_processos' %}?aba=cgm"
                    class="nav-item {% if nav == 'listar_processos' and request.GET.aba == 'cgm' %}is-active{% endif %}"
-                   title="Processos CGM">
+                   title="Processos Contabilidade">
                     <span class="material-symbols-rounded">account_balance</span>
-                    <span class="nav-item__label">Processos CGM</span>
+                    <span class="nav-item__label">Processos Contabilidade</span>
                 </a>
                 {% endif %}
             {% endif %}
@@ -105,14 +105,15 @@
                     <span class="material-symbols-rounded">campaign</span>
                     <span class="nav-item__label">Diligências</span>
                 </a>
-                {% if grupo_analista == 'LIQUIDACOES' %}
+                {% if 'LIQUIDACOES' in grupos_analista %}
                 <a href="{% url 'controle_relatorio' %}"
                    class="nav-item {% if nav == 'controle_relatorio' %}is-active{% endif %}"
                    title="Controle de relatório">
                     <span class="material-symbols-rounded">table_chart</span>
                     <span class="nav-item__label">Controle de relatório</span>
                 </a>
-                {% elif grupo_analista == 'LICITACOES_E_CONTRATOS' %}
+                {% endif %}
+                {% if 'LICITACOES_E_CONTRATOS' in grupos_analista %}
                 <a href="{% url 'controle_analise' %}"
                    class="nav-item {% if nav == 'controle_analise' %}is-active{% endif %}"
                    title="Controle de análise">
@@ -136,12 +137,14 @@
                     <span class="material-symbols-rounded">account_tree</span>
                     <span class="nav-item__label">Processos</span>
                 </a>
+                {% if not is_analista %}
                 <a href="{% url 'gestao_diligencias' %}"
                    class="nav-item {% if nav == 'gestao_diligencias' %}is-active{% endif %}"
                    title="Diligências">
                     <span class="material-symbols-rounded">campaign</span>
                     <span class="nav-item__label">Diligências</span>
                 </a>
+                {% endif %}
 
                 <div class="sidebar__group-label">Configurações</div>
                 {% if is_gestao %}
@@ -193,6 +196,14 @@
             </a>
 
             <div class="sidebar__group-label">Conta</div>
+            {% if pode_escolher_funcoes %}
+            <a href="{% url 'minhas_funcoes' %}"
+               class="nav-item {% if nav == 'minhas_funcoes' %}is-active{% endif %}"
+               title="Funções">
+                <span class="material-symbols-rounded">switch_account</span>
+                <span class="nav-item__label">Funções</span>
+            </a>
+            {% endif %}
             <a href="{% url 'password_change' %}"
                class="nav-item {% if nav == 'password_change' or nav == 'password_change_done' %}is-active{% endif %}"
                title="Alterar Senha">

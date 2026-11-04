@@ -49,7 +49,7 @@ def _ordenar_fila(consulta):
 
 
 def consultar_ativos(usuario, filtros):
-    """Mesmo universo da tela Processos Ativos / Processos CGM."""
+    """Mesmo universo da tela Processos Ativos / Processos Contabilidade."""
     from . import secretaria_cgm as svc_cgm
 
     if filtros.get('aba_cgm'):

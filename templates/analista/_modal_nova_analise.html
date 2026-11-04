@@ -25,6 +25,7 @@
                 <p class="field__hint" style="margin:0 0 14px;">
                     Informe o número do processo físico. Não depende do Protocolo ter cadastrado antes.
                     Em seguida a tela é a mesma da análise: aponte diligências,
+                    anexe o relatório se houver (opcional),
                     use <strong>Gerar número e salvar</strong> e depois
                     <strong>Encaminhar</strong> ao Controlador.
                 </p>
@@ -82,6 +83,7 @@
                         Mesmos campos da tela de análise e da planilha do Controle de Relatórios.
                         Use <strong>Gerar número e salvar</strong> para gravar na planilha;
                         depois <strong>Encaminhar</strong> ao Controlador.
+                        O relatório em arquivo é opcional.
                         {% endif %}
                     </p>
                     <div class="form-grid form-grid--full" id="novaCamposGrid">
@@ -221,10 +223,9 @@
                     </div>
                 </div>
 
-                {% if modo == 'licitacao' %}
                 <section class="card" style="margin-top:14px;" id="blocoNovaAnexos">
                     <div class="card__header">
-                        <span class="card__title">Arquivos anexados</span>
+                        <span class="card__title">{% if modo == 'licitacao' %}Arquivos anexados{% else %}Relatório anexado{% endif %}</span>
                         <span class="card__hint" id="novaAnexosHint">0 arquivos</span>
                     </div>
                     <div class="card__body">
@@ -232,10 +233,10 @@
                         <div class="empty empty--compact" id="novaAnexosVazio">
                             <span class="material-symbols-rounded">attach_file</span>
                             <div class="empty__title">Nenhum arquivo ainda</div>
-                            <div>Salve a análise uma vez para liberar o envio, ou anexe se o processo já existir.</div>
+                            <div>{% if modo == 'licitacao' %}Salve a análise uma vez para liberar o envio, ou anexe se o processo já existir.{% else %}Salve a análise uma vez para liberar o envio, ou anexe se o processo já existir. Não é obrigatório para encaminhar.{% endif %}</div>
                         </div>
                         <div style="margin-top:12px;" id="novaAnexosUpload" hidden>
-                            <label class="field__label" for="novaArquivosInput">Anexar arquivo</label>
+                            <label class="field__label" for="novaArquivosInput">{% if modo == 'licitacao' %}Anexar arquivo{% else %}Anexar relatório{% endif %}</label>
                             <div class="pendencia-add__row">
                                 <input type="file" id="novaArquivosInput" class="input" multiple
                                        accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.odt,.ods,.txt,application/pdf,image/*">
@@ -244,11 +245,10 @@
                                     Enviar
                                 </button>
                             </div>
-                            <p class="field__hint">PDF, Word, Excel ou imagem · até 15 MB. Obrigatório para encaminhar.</p>
+                            <p class="field__hint">{% if modo == 'licitacao' %}PDF, Word, Excel ou imagem · até 15 MB. Obrigatório para encaminhar.{% else %}PDF, Word, Excel ou imagem · até 15 MB. Opcional: dá para encaminhar ao Controlador sem anexo.{% endif %}</p>
                         </div>
                     </div>
                 </section>
-                {% endif %}
 
                 <section class="card" style="margin-top:14px;" id="blocoNovaDiligencias">
                     <div class="card__header">
@@ -594,20 +594,20 @@
     }
 
     function aplicarEstadoAposSalvar(res) {
-        if (ehLicitacao) {
-            processoIdAtual = res.processo_id || processoIdAtual;
-            urlAnexarAtual = res.url_anexar || urlAnexarAtual;
-            if (res.anexos) renderAnexos(res.anexos);
-            else if (typeof res.qtd_anexos === 'number') {
-                qtdAnexos = res.qtd_anexos;
-                if (uploadAnexos) uploadAnexos.hidden = !(processoIdAtual && urlAnexarAtual);
-                if (hintAnexos) {
-                    hintAnexos.textContent = qtdAnexos + ' arquivo' + (qtdAnexos === 1 ? '' : 's');
-                }
-                if (vazioAnexos) vazioAnexos.hidden = qtdAnexos > 0;
-            } else if (uploadAnexos) {
-                uploadAnexos.hidden = !(processoIdAtual && urlAnexarAtual);
+        processoIdAtual = res.processo_id || processoIdAtual;
+        urlAnexarAtual = res.url_anexar || urlAnexarAtual;
+        if (res.anexos) renderAnexos(res.anexos);
+        else if (typeof res.qtd_anexos === 'number') {
+            qtdAnexos = res.qtd_anexos;
+            if (uploadAnexos) uploadAnexos.hidden = !(processoIdAtual && urlAnexarAtual);
+            if (hintAnexos) {
+                hintAnexos.textContent = qtdAnexos + ' arquivo' + (qtdAnexos === 1 ? '' : 's');
             }
+            if (vazioAnexos) vazioAnexos.hidden = qtdAnexos > 0;
+        } else if (uploadAnexos) {
+            uploadAnexos.hidden = !(processoIdAtual && urlAnexarAtual);
+        }
+        if (ehLicitacao) {
             var hintFinalLic = document.getElementById('novaHintFinalizar');
             if (hintFinalLic) {
                 hintFinalLic.textContent = qtdAnexos > 0
@@ -672,8 +672,8 @@
         proximoCache = meta.proximo_numero;
         processoIdAtual = meta.processo_id || null;
         urlAnexarAtual = meta.url_anexar || '';
+        renderAnexos(meta.anexos || []);
         if (ehLicitacao) {
-            renderAnexos(meta.anexos || []);
             var btnGerarLic = document.getElementById('btnNovaAnaliseGerar');
             var btnEncLic = document.getElementById('btnNovaAnaliseEncaminhar');
             if (btnGerarLic) btnGerarLic.hidden = false;

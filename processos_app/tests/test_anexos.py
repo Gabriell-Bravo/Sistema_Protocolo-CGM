@@ -1,4 +1,4 @@
-"""Anexos de Licitações e Contratos: quem envia, quem baixa, o que é recusado."""
+"""Anexos de Licitações e Liquidações: quem envia, quem baixa, o que é recusado."""
 
 import io
 import shutil
@@ -163,18 +163,13 @@ class AnexoProcessoTest(BaseProcessoTestCase):
         self.assertContains(historico, 'data-anexo-preview')
         self.assertNotContains(historico, 'Arraste o arquivo para cá')
 
-    def test_liquidacao_nao_anexa_e_outro_grupo_nao_baixa(self):
+    def test_outro_grupo_nao_anexa_nem_baixa(self):
         resposta = self._post_anexo(self.analista_liq, self.processo, _pdf())
         self.assertEqual(resposta.status_code, 302)
         self.assertFalse(AnexoProcesso.objects.exists())
 
-        pagina_liq = self._post_anexo(self.analista_liq, self.liquidacao, _pdf('liq.pdf'))
-        self.assertEqual(pagina_liq.status_code, 302)
+        self._post_anexo(self.analista_lic, self.liquidacao, _pdf('liq.pdf'))
         self.assertFalse(AnexoProcesso.objects.filter(processo=self.liquidacao).exists())
-
-        self.client.force_login(self.analista_liq)
-        tela = self.client.get(reverse('analista_processo', args=[self.liquidacao.id]))
-        self.assertNotContains(tela, 'Arraste o arquivo para cá')
 
         self._post_anexo(self.analista_lic, self.processo, _pdf())
         anexo = AnexoProcesso.objects.get()
@@ -185,6 +180,44 @@ class AnexoProcessoTest(BaseProcessoTestCase):
         self.assertEqual(
             self.client.post(reverse('remover_anexo', args=[anexo.id])).status_code, 302)
         self.assertTrue(AnexoProcesso.objects.filter(id=anexo.id).exists())
+
+    def test_liquidacao_anexa_relatorio_visivel_e_encaminha_sem_arquivo(self):
+        resposta = self._post_anexo(
+            self.analista_liq, self.liquidacao, _pdf('relatorio.pdf'))
+        self.assertEqual(resposta.status_code, 302)
+        anexo = AnexoProcesso.objects.get(processo=self.liquidacao)
+        self.assertEqual(anexo.nome_original, 'relatorio.pdf')
+        self.assertEqual(anexo.enviado_por, self.analista_liq)
+
+        self.client.force_login(self.analista_liq)
+        tela = self.client.get(reverse('analista_processo', args=[self.liquidacao.id]))
+        self.assertContains(tela, 'Arraste o arquivo para cá')
+        self.assertContains(tela, 'relatorio.pdf')
+        self.assertContains(tela, 'Não é obrigatório')
+        self.assertContains(tela, 'data-anexo-preview')
+        self.assertContains(tela, reverse('ver_anexo', args=[anexo.id]))
+
+        historico = self.client.get(
+            reverse('ver_historico_processo', args=[self.liquidacao.id]))
+        self.assertContains(historico, 'relatorio.pdf')
+        self.assertContains(historico, 'data-anexo-preview')
+
+        outro = self.novo_processo(self.especie_liq, numero_processo='10/2026')
+        tramitacao.assumir(outro.id, self.analista_liq)
+        outro.refresh_from_db()
+        self.preencher_analise(outro, numero_despacho=None)
+        self.assertFalse(AnexoProcesso.objects.filter(processo=outro).exists())
+        self.client.force_login(self.analista_liq)
+        pagina = self.client.get(reverse('analista_processo', args=[outro.id]))
+        self.assertContains(pagina, 'A análise está pronta.')
+        self.assertNotContains(pagina, 'anexe ao menos um arquivo')
+        resp = self.client.post(
+            reverse('analista_processo', args=[outro.id]),
+            {'acao': 'concluir'},
+        )
+        self.assertEqual(resp.status_code, 302)
+        outro.refresh_from_db()
+        self.assertEqual(outro.situacao_tramite, 'AGUARDANDO_ASSINATURA')
 
     def test_recusa_tipo_e_tamanho(self):
         resposta = self._post_anexo(

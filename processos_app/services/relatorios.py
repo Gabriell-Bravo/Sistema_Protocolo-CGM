@@ -1931,8 +1931,8 @@ def listar(usuario, sequencia=None):
     if perm.eh_administrador(usuario) or perm.is_gestao(usuario):
         pass
     elif perm.is_analista(usuario):
-        grupo = perm.grupo_do_analista(usuario)
-        if grupo == GRUPO_PADRAO:
+        grupos = perm.grupos_do_analista(usuario)
+        if GRUPO_PADRAO in grupos:
             # Liquidações vê toda a planilha (todas as sequências).
             # Inclui histórico antigo importado com grupo vazio.
             consulta = consulta.filter(
@@ -1940,8 +1940,8 @@ def listar(usuario, sequencia=None):
                 | Q(grupo='')
                 | Q(sequencia__in=SEQUENCIAS_ATIVAS)
             )
-        elif grupo:
-            consulta = consulta.filter(grupo=grupo)
+        elif grupos:
+            consulta = consulta.filter(grupo__in=grupos)
         else:
             return consulta.none()
     else:
@@ -3406,6 +3406,22 @@ def processo_tem_analise_registrada(processo):
     ).filter(Q(sem_relatorio=True) | ~Q(numero_relatorio='')).exists()
 
 
+def _payload_anexos(processo):
+    from django.urls import reverse
+    return {
+        'anexos': [
+            {
+                'id': a.id,
+                'nome': a.nome_original,
+                'tamanho': a.tamanho_legivel,
+            }
+            for a in processo.anexos.all().order_by('-id')[:20]
+        ],
+        'url_anexar': reverse('anexar_arquivo', args=[processo.id]),
+        'qtd_anexos': processo.anexos.count(),
+    }
+
+
 def buscar_para_nova_analise(usuario, numero_processo, grupo=GRUPO_PADRAO):
     """Resolve o nº do processo para auto-preencher o modal Nova análise."""
     perm.assert_permissao(
@@ -3536,17 +3552,8 @@ def buscar_para_nova_analise(usuario, numero_processo, grupo=GRUPO_PADRAO):
     base['especie'] = processo.especie or ''
     base['situacao'] = processo.situacao_exibicao
     base['pendencias'] = _pendencias_resumo(processo)
+    base.update(_payload_anexos(processo))
     if licitacao:
-        from django.urls import reverse
-        base['anexos'] = [
-            {
-                'id': a.id,
-                'nome': a.nome_original,
-                'tamanho': a.tamanho_legivel,
-            }
-            for a in processo.anexos.all().order_by('-id')[:20]
-        ]
-        base['url_anexar'] = reverse('anexar_arquivo', args=[processo.id])
         base['aviso'] = (
             'Processo encontrado. Em Licitações o registro principal é o '
             'arquivo anexado; observação e diligências são opcionais. '
@@ -3556,7 +3563,8 @@ def buscar_para_nova_analise(usuario, numero_processo, grupo=GRUPO_PADRAO):
         base['aviso'] = (
             'Processo encontrado. Dados preenchidos automaticamente. '
             'Aponte diligências e use Gerar número e salvar '
-            '(grava na planilha e evita dois usuários pegarem o mesmo nº).'
+            '(grava na planilha e evita dois usuários pegarem o mesmo nº). '
+            'O relatório em arquivo é opcional.'
         )
     return base
 
@@ -3661,7 +3669,6 @@ def salvar_nova_analise(usuario, dados):
         processo, usuario, diligencias)
 
     if licitacao:
-        from django.urls import reverse
         from .tramitacao import liberar_assinatura
         encaminhado = False
         if encaminhar:
@@ -3677,7 +3684,7 @@ def salvar_nova_analise(usuario, dados):
             partes.append('Encaminhado ao Controlador.')
         elif not processo.anexos.exists():
             partes.append('Anexe o arquivo antes de encaminhar.')
-        return {
+        payload = {
             'linha_id': None,
             'processo_id': processo.id,
             'so_linha': False,
@@ -3688,10 +3695,10 @@ def salvar_nova_analise(usuario, dados):
             'gerou_numero': False,
             'encaminhado': encaminhado,
             'modo': 'licitacao',
-            'url_anexar': reverse('anexar_arquivo', args=[processo.id]),
-            'qtd_anexos': processo.anexos.count(),
             'mensagem': ' '.join(partes),
         }
+        payload.update(_payload_anexos(processo))
+        return payload
 
     linha = None
     numero_relatorio = (processo.numero_relatorio or '').strip()
@@ -3808,7 +3815,7 @@ def salvar_nova_analise(usuario, dados):
     if encaminhado:
         partes.append('Encaminhado ao Controlador.')
 
-    return {
+    payload = {
         'linha_id': linha.id if linha else None,
         'processo_id': processo.id,
         'so_linha': False,
@@ -3820,3 +3827,5 @@ def salvar_nova_analise(usuario, dados):
         'encaminhado': encaminhado,
         'mensagem': ' '.join(partes),
     }
+    payload.update(_payload_anexos(processo))
+    return payload

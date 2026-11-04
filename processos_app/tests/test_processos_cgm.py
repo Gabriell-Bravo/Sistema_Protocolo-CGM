@@ -43,12 +43,12 @@ class ProcessosCgmTest(BaseProcessoTestCase):
         pagina = self.client.get(reverse('listar_processos'))
         self.assertContains(pagina, 'cgm-1/2026')
         self.assertNotContains(pagina, 'cgm-2/2026')
-        self.assertContains(pagina, 'Processos CGM')
+        self.assertContains(pagina, 'Processos Contabilidade')
 
         aba = self.client.get(reverse('listar_processos') + '?aba=cgm')
         self.assertContains(aba, 'cgm-2/2026')
         self.assertNotContains(aba, 'cgm-1/2026')
-        self.assertContains(aba, 'Processos CGM')
+        self.assertContains(aba, 'Processos Contabilidade')
 
     def test_contabilidade_vai_para_aba_cgm_nao_para_analistas(self):
         comum = self.novo_processo(numero_processo='cont-1/2026')

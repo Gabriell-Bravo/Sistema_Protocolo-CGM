@@ -57,6 +57,22 @@
                                 <button type="submit" class="btn btn--sm btn--primary is-hidden">Salvar</button>
                             </form>
 
+                            {% if u.pode_escolher_funcoes %}
+                            <form action="{% url 'update_user_funcoes' u.id %}" method="post" class="funcoes-user">
+                                {% csrf_token %}
+                                {% for codigo, rotulo in funcoes_escolhiveis %}
+                                    {% if u.profile.papel != codigo %}
+                                    <label class="check">
+                                        <input type="checkbox" name="funcoes" value="{{ codigo }}"
+                                               {% if codigo in u.funcoes_marcadas %}checked{% endif %}>
+                                        {{ rotulo }}
+                                    </label>
+                                    {% endif %}
+                                {% endfor %}
+                                <button type="submit" class="btn btn--sm btn--primary">Salvar funções</button>
+                            </form>
+                            {% endif %}
+
                             {% if u.id != request.user.id %}
                                 <a href="{% url 'reset_user_password' u.id %}" class="icon-btn icon-btn--warning"
                                    title="Redefinir senha">

@@ -43,6 +43,33 @@ class PapeisTest(BaseProcessoTestCase):
     def test_rota_inicial(self):
         self.assertEqual(perm.rota_inicial(self.gestao), 'gestao_dashboard')
 
+    def test_gestao_escolhe_protocolo_e_liquidacao(self):
+        gestora = criar_usuario('gestora_extra', 'GESTAO')
+        self.assertFalse(perm.is_protocolo(gestora))
+        self.assertFalse(perm.is_analista(gestora))
+        perm.gravar_funcoes_extras(
+            gestora,
+            ['PROTOCOLO', 'ANALISTA_LIQUIDACOES'],
+            gestora)
+        gestora.profile.refresh_from_db()
+        self.assertTrue(perm.is_gestao(gestora))
+        self.assertTrue(perm.is_protocolo(gestora))
+        self.assertTrue(perm.is_analista(gestora))
+        self.assertEqual(
+            perm.grupos_do_analista(gestora), {LIQ})
+        self.assertTrue(perm.pode_cadastrar_processo(gestora))
+        lic = self.novo_processo()
+        liq = self.novo_processo(self.especie_liq, numero_processo='liq-extra/2026')
+        self.assertFalse(perm.pode_assumir_processo(gestora, lic))
+        self.assertTrue(perm.pode_assumir_processo(gestora, liq))
+        self.assertIn(gestora, perm.analistas_do_grupo(LIQ))
+        self.assertNotIn(gestora, perm.analistas_do_grupo(LIC))
+
+    def test_analista_nao_escolhe_funcoes(self):
+        with self.assertRaises(PermissionDenied):
+            perm.gravar_funcoes_extras(
+                self.analista_lic, ['PROTOCOLO'], self.analista_lic)
+
 
 class CriacaoTest(BaseProcessoTestCase):
 
@@ -167,6 +194,26 @@ class WhitelistEdicaoTest(BaseProcessoTestCase):
     def test_gestao_nao_edita_nada(self):
         processo = self.novo_processo()
         self.assertEqual(svc_processos.campos_editaveis(self.gestao, processo), set())
+
+    def test_admin_edita_cadastro_e_saida(self):
+        admin = criar_usuario('admin_edita_lista', 'GESTAO', is_superuser=True)
+        processo = self.novo_processo()
+        self.assertIn('objeto', svc_processos.campos_editaveis(admin, processo))
+        self.assertIn('data_saida', svc_processos.campos_editaveis(admin, processo))
+        self.assertIn('hora_saida', svc_processos.campos_editaveis(admin, processo))
+        alteracoes, recusados = svc_processos.aplicar_edicao(
+            processo, {
+                'objeto': 'Corrigido pelo admin',
+                'data_saida': '2026-10-16',
+                'hora_saida': '14:30',
+                'destino': 'Unidade de Teste',
+            }, admin)
+        processo.refresh_from_db()
+        self.assertEqual(recusados, [])
+        self.assertEqual(processo.objeto, 'Corrigido pelo admin')
+        self.assertEqual(processo.data_saida.isoformat(), '2026-10-16')
+        self.assertEqual(processo.hora_saida.strftime('%H:%M'), '14:30')
+        self.assertIn('data_saida', alteracoes)
 
     def test_analista_so_edita_quando_responsavel(self):
         processo = self.processo_em_analise(completo=False)

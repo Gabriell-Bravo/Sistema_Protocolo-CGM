@@ -2,6 +2,7 @@
 POST obrigatório, respostas de erro sem exceção interna)."""
 
 import json
+from datetime import date, time
 
 from django.test import override_settings
 from django.urls import reverse
@@ -74,6 +75,8 @@ class TelasPorPapelTest(BaseProcessoTestCase):
         self.assertNotContains(menu, reverse('controle_analise'))
         self.assertNotContains(menu, reverse('gestao_liberados_assinatura'))
         self.assertNotContains(menu, reverse('gestao_cadastros', kwargs={'slug': 'especies'}))
+        self.assertContains(menu, reverse('minhas_funcoes'))
+        self.assertContains(menu, 'Funções')
 
     def test_acessos_negados(self):
         self._get(self.analista_lic, 'gestao_cadastros_inicio', esperado=403)
@@ -82,6 +85,8 @@ class TelasPorPapelTest(BaseProcessoTestCase):
         # analista de outro grupo não abre o processo
         self._get(self.analista_liq, 'analista_processo', self.processo.id, esperado=403)
         self._get(self.protocolo, 'gestao_diligencias', esperado=403)
+        self._get(self.protocolo, 'minhas_funcoes', esperado=403)
+        self._get(self.analista_lic, 'minhas_funcoes', esperado=403)
         self._get(self.protocolo, 'gestao_liberados_assinatura', esperado=403)
 
     def test_analista_consulta_finalizados_assinatura_e_diligencias_sem_editar(self):
@@ -378,6 +383,40 @@ class AcoesHttpTest(BaseProcessoTestCase):
         resposta = self._post_json(self.gestao, 'atualizar_processo', [processo.id],
                                    {'objeto': 'Alterado'})
         self.assertEqual(resposta.status_code, 403)
+
+    def test_admin_edita_cadastrado_e_com_saida(self):
+        from processos_app.services import permissions as perm
+        admin = criar_usuario('admin_lista_edita', 'GESTAO', is_superuser=True)
+        perm.gravar_funcoes_extras(admin, ['ANALISTA_LIQUIDACOES'], admin)
+        ativo = self.novo_processo()
+        saida = self.novo_processo(numero_processo='saida-admin/2026')
+        tramitacao.registrar_saida_direta(saida.id, self.protocolo)
+
+        self.client.force_login(admin)
+        ativos = self.client.get(reverse('listar_processos'))
+        self.assertTrue(ativos.context['can_edit'])
+        self.assertContains(ativos, 'Editar')
+        finalizados = self.client.get(reverse('listar_finalizados'))
+        self.assertTrue(finalizados.context['can_edit'])
+        self.assertContains(finalizados, 'Editar')
+
+        resp_ativo = self._post_json(
+            admin, 'atualizar_processo', [ativo.id], {'objeto': 'Cadastrado pelo admin'})
+        self.assertEqual(resp_ativo.status_code, 200, resp_ativo.content)
+        ativo.refresh_from_db()
+        self.assertEqual(ativo.objeto, 'Cadastrado pelo admin')
+
+        resp_saida = self._post_json(admin, 'atualizar_processo', [saida.id], {
+            'objeto': 'Saída corrigida pelo admin',
+            'data_saida': '2026-10-15',
+            'hora_saida': '17:40',
+        })
+        self.assertEqual(resp_saida.status_code, 200, resp_saida.content)
+        self.assertEqual(resp_saida.json()['recusados'], [])
+        saida.refresh_from_db()
+        self.assertEqual(saida.objeto, 'Saída corrigida pelo admin')
+        self.assertEqual(saida.data_saida.isoformat(), '2026-10-15')
+        self.assertEqual(saida.hora_saida.strftime('%H:%M'), '17:40')
 
     def test_cancelar_pela_rota_antiga(self):
         processo = self.novo_processo()
@@ -1205,6 +1244,103 @@ class ProcessosProtocoloUnificadoTest(BaseProcessoTestCase):
         self.assertIn('/listar', resp['Location'])
         self.assertIn('termo=1243', resp['Location'])
 
+    def test_cadastro_puxa_ultima_passagem_sem_volume_nem_saida(self):
+        """Número com barra devolve a última passagem; o formulário não copia volume nem saída."""
+        self.novo_processo(
+            numero_processo='88.010/2026', volume='1',
+            objeto='Objeto antigo', contratada='Antiga Ltda',
+            recorrente='NAO', prioridade='NORMAL',
+            data_entrada='2026-01-10', hora_entrada='09:00',
+            observacao_protocolo='Nota antiga')
+        ultima = self.novo_processo(
+            numero_processo='88.010/2026', volume='4',
+            objeto='Objeto da última passagem', contratada='Atual Ltda',
+            recorrente='SIM', prioridade='N_RECORRENTE',
+            data_entrada='2026-03-01', hora_entrada='11:00',
+            observacao_protocolo='Nota da última')
+        ultima.data_saida = date(2026, 3, 5)
+        ultima.hora_saida = time(15, 30)
+        ultima.save(update_fields=['data_saida', 'hora_saida'])
+
+        self.client.force_login(self.protocolo)
+        resposta = self.client.get(
+            reverse('get_process_by_number') + '?numero=88.010/2026')
+        self.assertEqual(resposta.status_code, 200)
+        dados = resposta.json()
+        self.assertEqual(dados['objeto'], 'Objeto da última passagem')
+        self.assertEqual(dados['contratada'], 'Atual Ltda')
+        self.assertEqual(dados['recorrente'], 'SIM')
+        self.assertEqual(dados['observacao_protocolo'], 'Nota da última')
+        self.assertEqual(dados['prioridade'], 'N_RECORRENTE')
+        self.assertEqual(dados['volume'], '4')
+        self.assertEqual(dados['data_saida'], '2026-03-05')
+
+        pagina = self.client.get(reverse('cadastrar_processo'))
+        html = pagina.content.decode()
+        self.assertIn("?numero=' + encodeURIComponent(numero)", html)
+        self.assertIn("d.prioridade === 'N_RECORRENTE' ? 'NORMAL'", html)
+        self.assertNotIn("getElementById('volume').value =", html)
+        self.assertNotIn('d.data_saida', html)
+        self.assertNotIn('d.hora_saida', html)
+        self.assertNotIn('d.data_entrada', html)
+        self.assertNotIn('d.hora_entrada', html)
+
+    def test_busca_mesmo_numero_mostra_so_ultima_passagem(self):
+        """Várias passagens do mesmo nº: a lista mostra uma; o restante no histórico."""
+        antiga = self.novo_processo(
+            numero_processo='88.001/2026', volume='1',
+            data_entrada='2026-01-10', hora_entrada='09:00')
+        tramitacao.registrar_saida_direta(antiga.id, self.protocolo)
+        atual = self.novo_processo(
+            numero_processo='88.001/2026', volume='2',
+            data_entrada='2026-03-01', hora_entrada='11:00')
+
+        self.client.force_login(self.protocolo)
+        pagina = self.client.get(
+            reverse('listar_processos') + '?termo=88.001/2026')
+        self.assertEqual(pagina.status_code, 200)
+        processos = list(pagina.context['processos'])
+        self.assertEqual([p.id for p in processos], [atual.id])
+        self.assertEqual(processos[0].volume, '2')
+        self.assertEqual(processos[0].escopo_protocolo_item, 'ativo')
+        self.assertEqual(processos[0].total_passagens, 2)
+        self.assertEqual(pagina.context['total_processos'], 1)
+        self.assertEqual(pagina.context['total_aba_ativos'], 1)
+        self.assertEqual(pagina.context['total_aba_finalizados'], 0)
+        self.assertContains(pagina, 'volumes anteriores no Histórico')
+
+        historico = self.client.get(
+            reverse('ver_historico_processo', args=[atual.id]))
+        self.assertEqual(historico.status_code, 200)
+        self.assertEqual(historico.context['total_passagens'], 2)
+        ids_passagens = [p['process_id'] for p in historico.context['passagens']]
+        self.assertEqual(set(ids_passagens), {antiga.id, atual.id})
+
+    def test_busca_mesmo_numero_so_finalizados_mostra_ultima_saida(self):
+        primeira = self.novo_processo(
+            numero_processo='88.002/2026', volume='1',
+            data_entrada='2026-01-05', hora_entrada='08:00')
+        segunda = self.novo_processo(
+            numero_processo='88.002/2026', volume='3',
+            data_entrada='2026-02-20', hora_entrada='14:00')
+        tramitacao.registrar_saida_direta(primeira.id, self.protocolo)
+        tramitacao.registrar_saida_direta(segunda.id, self.protocolo)
+        primeira.data_saida = date(2026, 1, 20)
+        primeira.hora_saida = time(10, 0)
+        primeira.save(update_fields=['data_saida', 'hora_saida'])
+        segunda.data_saida = date(2026, 3, 2)
+        segunda.hora_saida = time(16, 0)
+        segunda.save(update_fields=['data_saida', 'hora_saida'])
+
+        self.client.force_login(self.protocolo)
+        pagina = self.client.get(
+            reverse('listar_processos') + '?termo=88.002/2026')
+        processos = list(pagina.context['processos'])
+        self.assertEqual([p.id for p in processos], [segunda.id])
+        self.assertEqual(processos[0].volume, '3')
+        self.assertEqual(processos[0].escopo_protocolo_item, 'finalizado')
+        self.assertEqual(pagina.context['total_aba_finalizados'], 1)
+
 
 @override_settings(**STATIC)
 class AcessoAnaliseLicitacoesGestaoAdminTest(BaseProcessoTestCase):
@@ -1286,3 +1422,53 @@ class AcessoAnaliseLicitacoesGestaoAdminTest(BaseProcessoTestCase):
         self.assertEqual(admin_pagina.status_code, 200)
         self.assertContains(admin_pagina, 'lic-ver/2026')
         self.assertContains(admin_pagina, url_analise)
+
+
+@override_settings(**STATIC)
+class FuncoesExtrasGestaoTest(BaseProcessoTestCase):
+
+    def _get(self, usuario, nome, *args, esperado=200, query=''):
+        self.client.force_login(usuario)
+        resposta = self.client.get(reverse(nome, args=args) + query)
+        self.assertEqual(resposta.status_code, esperado,
+                         f'{nome} com {usuario.username}: {resposta.status_code}')
+        return resposta
+
+    def test_gestao_marca_protocolo_e_liquidacao(self):
+        self.client.force_login(self.gestao)
+        pagina = self.client.get(reverse('minhas_funcoes'))
+        self.assertEqual(pagina.status_code, 200)
+        self.assertContains(pagina, 'Protocolo')
+        self.assertContains(pagina, 'Liquidações')
+        self.assertContains(pagina, 'Licitações e Contratos')
+
+        resposta = self.client.post(reverse('minhas_funcoes'), {
+            'funcoes': ['PROTOCOLO', 'ANALISTA_LIQUIDACOES'],
+        })
+        self.assertRedirects(resposta, reverse('minhas_funcoes'))
+        self.gestao.profile.refresh_from_db()
+        self.assertEqual(
+            set(self.gestao.profile.funcoes_extras),
+            {'PROTOCOLO', 'ANALISTA_LIQUIDACOES'})
+
+        self._get(self.gestao, 'cadastrar_processo')
+        self._get(self.gestao, 'area_analista')
+        self._get(self.gestao, 'controle_relatorio')
+        self._get(self.gestao, 'controle_analise')
+        menu = self._get(self.gestao, 'gestao_dashboard')
+        self.assertContains(menu, reverse('cadastrar_processo'))
+        self.assertContains(menu, reverse('area_analista'))
+        self.assertContains(menu, reverse('controle_relatorio'))
+        self.assertNotContains(menu, reverse('controle_analise'))
+
+    def test_admin_grava_funcoes_de_outra_gestao(self):
+        admin = criar_usuario('admin_funcoes', 'GESTAO', is_superuser=True)
+        self.client.force_login(admin)
+        pagina = self.client.get(reverse('manage_users'))
+        self.assertContains(pagina, 'Salvar funções')
+        resposta = self.client.post(
+            reverse('update_user_funcoes', args=[self.gestao.id]),
+            {'funcoes': ['ANALISTA_LICITACOES']})
+        self.assertRedirects(resposta, reverse('manage_users'))
+        self.gestao.profile.refresh_from_db()
+        self.assertEqual(self.gestao.profile.funcoes_extras, ['ANALISTA_LICITACOES'])

@@ -29,8 +29,12 @@ PRAZO_POR_PRIORIDADE = {
     'URGENTE': 1,
     'PRIORITARIO': 2,
     'RECORRENTE': 3,
+    'N_RECORRENTE': 3,
     'NORMAL': 7,
 }
+
+# Não nasce de palavra-chave nem de urgência recorrente: vale só nesta entrada.
+SO_DESTA_ENTRADA = frozenset({'N_RECORRENTE'})
 
 PRAZO_PADRAO = 7
 

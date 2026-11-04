@@ -129,7 +129,10 @@ class ChecklistNaFilaTest(BaseProcessoTestCase):
         self.assertContains(pagina, '233, 234, 235 e 239')
         self.assertContains(pagina, 'dil-preview')
         self.assertContains(pagina, 'data-dil-resumo')
-        self.assertNotContains(pagina, 'data-dil-mais')
+        self.assertContains(pagina, 'Ver mais')
+        preview = pagina.content.decode().split('class="dil-preview"', 1)[1]
+        preview = preview.split('</td>', 1)[0]
+        self.assertNotIn('data-dil-mais', preview)
         self.assertContains(pagina, 'Concluir diligência')
         self.assertContains(pagina, '0/2 itens')
 

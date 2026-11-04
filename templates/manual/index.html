@@ -1,23 +1,620 @@
 {% load static %}
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Manual de Operação · Protocolo CGM Saquarema</title><link rel="stylesheet" href="{% static 'manual/manual.css' %}"></head><body>
-<a class="skip" href="#conteudo">Ir ao conteúdo</a><header class="masthead"><div class="brand">CONTROLADORIA GERAL DO MUNICÍPIO · SAQUAREMA</div><h1>Manual de operação<br>do Sistema de Protocolo</h1><p>Procedimentos por perfil, fluxo completo de tramitação e orientações para resolver dúvidas durante o trabalho.</p><span class="edition">Versão 1.0 · 24 setembro 2026 · Minuta para homologação institucional</span></header>
-<div class="shell"><aside class="sidebar"><a class="home" href="{% url 'index' %}">← Voltar ao sistema</a><a class="home" href="#inicio">Escolher perfil e pesquisar</a><h2>Índice de procedimentos</h2><nav aria-label="Procedimentos"><a href="#acesso">01 · Acesso, identificação e encerramento</a><a href="#senha">02 · Alteração e recuperação de senha</a><a href="#fluxo">03 · Fluxo institucional de tramitação</a><a href="#responsabilidades">04 · Responsabilidades e situações</a><a href="#entrada">05 · Protocolo: registrar uma entrada</a><a href="#especie-outros">06 · Protocolo: espécie ausente, retorno e duplicidade</a><a href="#ativos">07 · Protocolo: pesquisar e corrigir dados</a><a href="#retirada">08 · Protocolo: retorno assinado e retirada</a><a href="#destino">09 · Protocolo: alteração excepcional do destino</a><a href="#finalizados">10 · Consulta de finalizados, histórico e exportação</a><a href="#historico">11 · Interpretação do histórico</a><a href="#fila-lic">12 · Licitações e Contratos: assumir um processo</a><a href="#fila-liq">13 · Liquidações: assumir e conferir o relatório</a><a href="#analise">14 · Analistas: registrar e salvar a análise</a><a href="#encaminhar">15 · Analistas: encaminhar ao Controlador ou a outro analista</a><a href="#devolver-fila">16 · Analistas e Gestão: devolver à fila sem análise</a><a href="#pendencias">17 · Analistas: registrar e avaliar pendências</a><a href="#dashboard">18 · Gestão: acompanhar o estoque e os prazos</a><a href="#priorizar">19 · Gestão: prioridades e consulta técnica</a><a href="#assinatura">20 · Gestão: organizar a assinatura física</a><a href="#diligencias">21 · Gestão: indicar atendimento de diligência</a><a href="#cancelamento">22 · Gestão: cancelar cadastro indevido</a><a href="#monitoramento">23 · Gestão: acompanhamento e conclusão do monitoramento</a><a href="#pessoas">24 · Gestão: disponibilidade da equipe</a><a href="#cadastros">25 · Gestão: espécies de processo</a><a href="#unidades">26 · Gestão: unidades, prioridades e tipos</a><a href="#duvidas">27 · Solução de dúvidas e problemas</a><a href="#chamado">28 · Como solicitar suporte</a><a href="#rotinas">29 · Conferência de início e fim do expediente</a></nav><p class="small">Consulta local, sem envio de pesquisas a serviços externos.</p></aside>
-<main class="main" id="conteudo"><section class="intro" id="inicio"><h2>Qual é a sua função?</h2><p>Selecione o perfil para consultar os procedimentos correspondentes. As orientações comuns e a solução de problemas permanecem disponíveis.</p><div class="cards"><button type="button" class="role" data-role="todos" aria-pressed="true"><strong>Visão completa</strong><span>Todos os procedimentos e dúvidas.</span></button><button type="button" class="role" data-role="protocolo" aria-pressed="false"><strong>Protocolo</strong><span>Entrada, conferência, retirada e saída.</span></button><button type="button" class="role" data-role="licitacoes" aria-pressed="false"><strong>Licitações e Contratos</strong><span>Fila, despacho e análise técnica.</span></button><button type="button" class="role" data-role="liquidacoes" aria-pressed="false"><strong>Liquidações</strong><span>Relatório, valor analisado e pendências.</span></button><button type="button" class="role" data-role="gestao" aria-pressed="false"><strong>Gestão</strong><span>Prioridades, diligências, pessoas e cadastros.</span></button></div>
-<div class="searchbox"><label for="search">Pesquisar tarefa, dúvida ou mensagem</label><div class="searchrow"><input type="search" id="search" placeholder="Ex.: saída, senha, relatório, atendimento insuficiente"><button type="button" class="button" id="clear">Limpar</button></div><div class="meta"><p id="status" role="status" aria-live="polite"></p><button class="button" type="button" id="all">Buscar em todos os perfis</button></div></div>
-<div class="notice"><strong>Referência de operação: fluxo completo.</strong> Entrada → análise → encaminhamento ao Controlador → retorno assinado → retirada → saída. Esta minuta deve ser homologada pela CGM após a adequação do fluxo pelo TI. Não orienta saída antecipada sem análise.</div>
-<p class="small">As imagens foram capturadas no sistema executado localmente, com dados fictícios, na cópia de revisão de 24/09/2026. O acesso ao direcionamento entre grupos já considera a correção proposta. O link para este manual é uma integração proposta e pode não aparecer nas capturas anteriores à sua inclusão.</p>
-<div class="toolbar"><button type="button" class="button primary" id="print">Imprimir manual completo / salvar PDF</button></div></section>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Guia de uso · Protocolo CGM Saquarema</title>
+<link rel="stylesheet" href="{% static 'manual/manual.css' %}">
+</head>
+<body>
+<a class="skip" href="#conteudo">Ir ao conteúdo</a>
+<header class="masthead">
+  <div class="brand">CONTROLADORIA GERAL DO MUNICÍPIO · SAQUAREMA</div>
+  <h1>Guia de uso<br>do Sistema de Protocolo</h1>
+  <p>Passo a passo do dia a dia, por perfil. Escolha o seu papel, pesquise uma tarefa e faça o que a tela pedir.</p>
+  <span class="edition">Versão 2.0 · outubro 2026 · alinhado ao sistema atual</span>
+</header>
+<div class="shell">
+<aside class="sidebar">
+  <a class="home" href="{% url 'index' %}">← Voltar ao sistema</a>
+  <a class="home" href="#inicio">Escolher perfil e pesquisar</a>
+  <h2>Índice</h2>
+  <nav aria-label="Procedimentos">
+    <a href="#acesso">01 · Entrar, sair e menu</a>
+    <a href="#senha">02 · Alterar senha</a>
+    <a href="#fluxo">03 · Como o processo anda</a>
+    <a href="#responsabilidades">04 · Quem faz o quê</a>
+    <a href="#entrada">05 · Protocolo: cadastrar entrada</a>
+    <a href="#ativos">06 · Protocolo: Processos Protocolo</a>
+    <a href="#saida">07 · Protocolo: registrar saída</a>
+    <a href="#cgm">08 · Protocolo e Gestão: Processos Contabilidade</a>
+    <a href="#planilha-protocolo">09 · Protocolo: gerar planilha</a>
+    <a href="#fila-lic">10 · Licitações: fila de análise</a>
+    <a href="#controle-analise">11 · Licitações: Controle de análise</a>
+    <a href="#anexos">12 · Anexar arquivos (Licitações e Liquidações)</a>
+    <a href="#fila-liq">13 · Liquidações: fila de análise</a>
+    <a href="#controle-relatorio">14 · Liquidações: Controle de relatório</a>
+    <a href="#nova-analise">15 · Liquidações: nova análise e número</a>
+    <a href="#analise">16 · Analistas: salvar a análise</a>
+    <a href="#encaminhar">17 · Analistas: encaminhar</a>
+    <a href="#pendencias">18 · Analistas: diligências na ficha</a>
+    <a href="#atendimentos">19 · Analistas: atendimentos indicados</a>
+    <a href="#dashboard">20 · Gestão: Dashboard</a>
+    <a href="#gestao-processos">21 · Gestão: Processos e prioridades</a>
+    <a href="#diligencias">22 · Gestão: Diligências</a>
+    <a href="#pessoas">23 · Gestão: Pessoas CGM</a>
+    <a href="#cadastros">24 · Gestão: Cadastros</a>
+    <a href="#funcoes">25 · Gestão e admin: escolher funções</a>
+    <a href="#historico">26 · Histórico do processo</a>
+    <a href="#duvidas">27 · Dúvidas frequentes</a>
+    <a href="#rotinas">28 · Rotina do dia</a>
+  </nav>
+  <p class="small">A pesquisa fica neste guia. Nada é enviado para fora.</p>
+</aside>
+<main class="main" id="conteudo">
+<section class="intro" id="inicio">
+  <h2>Qual é a sua função?</h2>
+  <p>Selecione o perfil. Aparecem só os procedimentos daquele papel. As dúvidas comuns continuam visíveis.</p>
+  <div class="cards">
+    <button type="button" class="role" data-role="todos" aria-pressed="true">
+      <strong>Visão completa</strong>
+      <span>Todos os procedimentos e dúvidas.</span>
+    </button>
+    <button type="button" class="role" data-role="protocolo" aria-pressed="false">
+      <strong>Protocolo</strong>
+      <span>Entrada, Processos Protocolo, saída e planilha.</span>
+    </button>
+    <button type="button" class="role" data-role="licitacoes" aria-pressed="false">
+      <strong>Licitações e Contratos</strong>
+      <span>Fila, anexos, Controle de análise e encaminhamento.</span>
+    </button>
+    <button type="button" class="role" data-role="liquidacoes" aria-pressed="false">
+      <strong>Liquidações</strong>
+      <span>Fila, Controle de relatório, número, anexo opcional e diligências.</span>
+    </button>
+    <button type="button" class="role" data-role="gestao" aria-pressed="false">
+      <strong>Gestão</strong>
+      <span>Dashboard, prioridades, diligências, cadastros e escolha de funções extras.</span>
+    </button>
+  </div>
+  <div class="searchbox">
+    <label for="search">Pesquisar tarefa, dúvida ou botão</label>
+    <div class="searchrow">
+      <input type="search" id="search" placeholder="Ex.: saída, anexo, relatório, checklist, planilha">
+      <button type="button" class="button" id="clear">Limpar</button>
+    </div>
+    <div class="meta">
+      <p id="status" role="status" aria-live="polite"></p>
+      <button class="button" type="button" id="all">Buscar em todos os perfis</button>
+    </div>
+  </div>
+  <div class="notice">
+    <strong>Como usar.</strong> Não precisa ler tudo. Escolha o perfil e vá ao item do índice. As palavras em negrito são os nomes dos botões e dos menus, do jeito que aparecem na tela. Em quase todas as listas, o <strong>número do processo é um link</strong> — clique para abrir a ficha.
+  </div>
+  <div class="toolbar">
+    <button type="button" class="button primary" id="print">Imprimir guia completo / salvar PDF</button>
+  </div>
+</section>
 <p id="empty" class="noresults" hidden>Nenhum procedimento encontrado. Tente palavras mais curtas ou selecione “Buscar em todos os perfis”.</p>
-<article class="chapter" id="acesso" data-roles="todos"><h2>01 · Acesso, identificação e encerramento</h2><p class="lead">Utilize a conta individual fornecida pela administração do sistema. O menu e a página inicial são definidos pelo papel atribuído à conta.</p><ol><li>Acesse o endereço institucional informado pelo TI. Informe usuário e senha e selecione <strong>Entrar</strong>.</li><li>Confira o nome e o papel no rodapé do menu. Protocolo abre Processos Ativos; Analistas abrem Fila de análise; Gestão abre Dashboard.</li><li>Utilize o botão de menu para recolher a navegação. O controle de lua/sol alterna a aparência.</li><li>Ao concluir o expediente ou utilizar computador compartilhado, selecione <strong>Sair</strong>.</li></ol><div class="result"><strong>Resultado esperado</strong>A sessão é encerrada e a tela de acesso volta a ser apresentada.</div><div class="note"><strong>Atenção operacional.</strong> Não compartilhe credenciais. Se o papel estiver incorreto, solicite ajuste ao administrador antes de registrar operações.</div><figure class="figure"><a href="{% static 'manual/imagens/01-acesso.png' %}" target="_blank" rel="noopener" aria-label="Ampliar: Tela de acesso ao sistema. A conta utilizada determina as funções disponíveis."><img loading="lazy" src="{% static 'manual/imagens/01-acesso.png' %}" alt="Tela de acesso ao sistema. A conta utilizada determina as funções disponíveis."></a><figcaption>Tela de acesso ao sistema. A conta utilizada determina as funções disponíveis. Dados fictícios de capacitação.</figcaption><a class="zoom" href="{% static 'manual/imagens/01-acesso.png' %}" target="_blank" rel="noopener">Ampliar imagem em nova aba ↗</a></figure><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="senha" data-roles="todos"><h2>02 · Alteração e recuperação de senha</h2><p class="lead">A alteração da própria senha está disponível no menu Conta.</p><ol><li>Selecione <strong>Alterar Senha</strong>.</li><li>Informe a senha atual e digite a nova senha nos dois campos de confirmação.</li><li>Observe os requisitos exibidos na tela e selecione <strong>Alterar senha</strong>.</li><li>Se não souber a senha atual, solicite redefinição ao administrador. Informe apenas a identificação da conta.</li></ol><div class="result"><strong>Resultado esperado</strong>O sistema confirma a alteração. Na redefinição administrativa, as sessões anteriores são encerradas.</div><div class="note"><strong>Atenção operacional.</strong> O sistema recebido não oferece recuperação de senha por e-mail na tela de entrada.</div><figure class="figure"><a href="{% static 'manual/imagens/08-senha.png' %}" target="_blank" rel="noopener" aria-label="Ampliar: Alteração de senha pelo próprio operador."><img loading="lazy" src="{% static 'manual/imagens/08-senha.png' %}" alt="Alteração de senha pelo próprio operador."></a><figcaption>Alteração de senha pelo próprio operador. Dados fictícios de capacitação.</figcaption><a class="zoom" href="{% static 'manual/imagens/08-senha.png' %}" target="_blank" rel="noopener">Ampliar imagem em nova aba ↗</a></figure><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="fluxo" data-roles="todos"><h2>03 · Fluxo institucional de tramitação</h2><p class="lead">Este manual orienta a operação com análise técnica e encaminhamento para assinatura. O registro de saída deve corresponder à entrega física do processo.</p><ol><li><strong>Protocolo:</strong> registra a entrada e confere a classificação. O processo fica Disponível para análise.</li><li><strong>Analista do grupo:</strong> assume o processo, registra a análise e trata as pendências técnicas.</li><li><strong>Analista responsável ou destinatário da assinatura:</strong> encaminha o processo ao Controlador após completar as informações exigidas.</li><li><strong>Gestão:</strong> consulta Para assinar e organiza o encaminhamento físico ao Controlador.</li><li><strong>Controlador:</strong> assina o documento físico. Não há assinatura digital do Controlador nesta aplicação.</li><li><strong>Protocolo:</strong> após receber o processo assinado, disponibiliza para retirada; quando houver entrega física, registra a saída.</li></ol><div class="result"><strong>Resultado esperado</strong>O processo passa para Saída concluída e fica disponível em Finalizados.</div><div class="note"><strong>Atenção operacional.</strong> Na versão recebida existe um atalho de saída antes da análise. Ele não integra o procedimento deste manual. O TI deverá desativar essa exceção antes da adoção do fluxo completo, conforme o ajuste já previsto pela CGM.</div><div class="flow"><span>Entrada</span><b>→</b><span>Análise</span><b>→</b><span>Controlador</span><b>→</b><span>Retirada</span><b>→</b><span>Saída</span></div><p>O Controlador e as unidades externas não constituem perfis próprios de acesso no código recebido. Sua participação ocorre pelo trâmite físico e pelas comunicações institucionais.</p><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="responsabilidades" data-roles="todos"><h2>04 · Responsabilidades e situações</h2><p class="lead">Cada operador deve atuar dentro das atribuições do seu papel. Consultar um processo não autoriza a praticar todos os atos de sua tramitação.</p>
-<div class="table-wrap"><table><thead><tr><th>Papel</th><th>Responsabilidades no sistema</th><th>Encaminhamento seguinte</th></tr></thead><tbody>
-<tr><td>Protocolo</td><td>Entrada, correções cadastrais, disponibilização para retirada, destino excepcional e saída física.</td><td>Fila de análise ou entrega à unidade de destino.</td></tr>
-<tr><td>Analista · Licitações e Contratos</td><td>Análise do grupo, despacho, pendências e encaminhamento para assinatura.</td><td>Controlador ou analista destinatário.</td></tr>
-<tr><td>Analista · Liquidações</td><td>Análise do grupo, relatório, valor analisado, pendências e encaminhamento.</td><td>Controlador ou analista destinatário.</td></tr>
-<tr><td>Gestão</td><td>Prioridades, acompanhamento, diligências, cancelamento, pessoas e cadastros.</td><td>Organização do trabalho e retorno das diligências.</td></tr>
-</tbody></table></div>
-<dl><dt>Disponível para análise</dt><dd>Entrada registrada; aguardando assunção.</dd><dt>Em análise</dt><dd>Há um analista responsável.</dd><dt>Direcionado para assinatura</dt><dd>Situação antiga de encaminhamento. O encaminhamento atual transfere o processo ao colega, que passa a ser o responsável.</dd><dt>Com o Controlador</dt><dd>Liberação registrada; a assinatura física deve ser providenciada.</dd><dt>Disponível para retirada</dt><dd>Retorno do processo assinado registrado pelo Protocolo.</dd><dt>Saída concluída</dt><dd>Entrega física registrada.</dd><dt>Cancelado</dt><dd>Registro preservado com motivo; não equivale à saída.</dd></dl><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="entrada" data-roles="protocolo"><h2>05 · Protocolo: registrar uma entrada</h2><p class="lead">Antes de cadastrar, confira o processo físico, o número, os volumes e a unidade de origem.</p><ol><li>Abra <strong>Novo Processo</strong>. Informe <strong>Número do processo</strong> e <strong>Volume</strong>.</li><li>Selecione a <strong>Secretaria</strong>. Confira <strong>Data</strong> e <strong>Hora de entrada</strong>; ajuste-as quando o lançamento for posterior ao recebimento físico.</li><li>Escolha a <strong>Espécie</strong>. Confira o grupo e o monitoramento apresentados. A espécie determina a fila de análise.</li><li>Descreva o <strong>Objeto</strong> de forma objetiva. Preencha <strong>Contratada / Favorecido / Interessado</strong> quando aplicável ou exigido.</li><li>Informe se o processo <strong>É recorrente?</strong>. Revise os campos e selecione <strong>Salvar Processo</strong>.</li><li>Confirme a mensagem de sucesso e localize o registro em <strong>Processos Ativos</strong>.</li></ol><div class="result"><strong>Resultado esperado</strong>A entrada é registrada com prioridade Normal e sem analista responsável. A Gestão define eventual prioridade; o analista assume posteriormente.</div><div class="note"><strong>Atenção operacional.</strong> Dados sugeridos de uma passagem anterior devem ser conferidos. Não confirme informações antigas sem comparar com o processo recebido.</div><figure class="figure"><a href="{% static 'manual/imagens/02-entrada.png' %}" target="_blank" rel="noopener" aria-label="Ampliar: Formulário real de entrada. Os campos de análise e de saída são preenchidos em etapas posteriores."><img loading="lazy" src="{% static 'manual/imagens/02-entrada.png' %}" alt="Formulário real de entrada. Os campos de análise e de saída são preenchidos em etapas posteriores."></a><figcaption>Formulário real de entrada. Os campos de análise e de saída são preenchidos em etapas posteriores. Dados fictícios de capacitação.</figcaption><a class="zoom" href="{% static 'manual/imagens/02-entrada.png' %}" target="_blank" rel="noopener">Ampliar imagem em nova aba ↗</a></figure><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="especie-outros" data-roles="protocolo"><h2>06 · Protocolo: espécie ausente, retorno e duplicidade</h2><p class="lead">A classificação deve permitir que o processo chegue à equipe competente.</p><ol><li>Se a espécie não estiver cadastrada, utilize <strong>Outros (espécie não cadastrada)</strong>, informe a denominação e selecione o grupo correto.</li><li>Para processos sujeitos à análise, selecione Licitações e Contratos ou Liquidações. Solicite à Gestão a inclusão da espécie quando ela for utilizada regularmente.</li><li>Em um retorno físico, confira o histórico antes de registrar a nova passagem. Use o mesmo número oficial do processo e os dados da nova entrada.</li><li>Em caso de possível duplicidade, pesquise número e volume. Se houver cadastro indevido, solicite cancelamento à Gestão com a justificativa.</li></ol><div class="result"><strong>Resultado esperado</strong>A passagem correta é identificada e a fila competente recebe o processo.</div><div class="note"><strong>Atenção operacional.</strong> A opção “Outros (fora das filas de análise)” não encaminha a nenhum dos dois grupos. Seu uso depende de procedimento específico aprovado pela CGM; não a utilize para contornar uma análise.</div><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="ativos" data-roles="protocolo"><h2>07 · Protocolo: pesquisar e corrigir dados</h2><p class="lead">Processos Ativos reúne os registros que permanecem na CGM e não foram cancelados.</p><ol><li>Abra <strong>Processos Ativos</strong>. Pesquise pelo número, secretaria, objeto ou interessado e aplique os filtros necessários.</li><li>Confira a coluna <strong>Situação</strong> e o responsável. Em tabelas largas, utilize a rolagem horizontal para alcançar as ações.</li><li>Para corrigir informação de protocolo, selecione o ícone de lápis da linha, ajuste os campos permitidos e salve. Utilize Cancelar para descartar a edição.</li><li>Consulte o <strong>Histórico</strong> para conferir passagens e alterações antes de efetuar nova correção.</li></ol><div class="result"><strong>Resultado esperado</strong>O dado corrigido aparece na lista; as alterações efetivamente gravadas são registradas no histórico.</div><div class="note"><strong>Atenção operacional.</strong> Não altere espécie ou grupo de um processo já assumido sem alinhamento com a Gestão. O ícone de saída antecipada visível na versão recebida não faz parte do fluxo deste manual.</div><figure class="figure"><a href="{% static 'manual/imagens/03-ativos.png' %}" target="_blank" rel="noopener" aria-label="Ampliar: Lista de processos ativos com dados fictícios. A captura preserva a interface da versão em revisão."><img loading="lazy" src="{% static 'manual/imagens/03-ativos.png' %}" alt="Lista de processos ativos com dados fictícios. A captura preserva a interface da versão em revisão."></a><figcaption>Lista de processos ativos com dados fictícios. A captura preserva a interface da versão em revisão. Dados fictícios de capacitação.</figcaption><a class="zoom" href="{% static 'manual/imagens/03-ativos.png' %}" target="_blank" rel="noopener">Ampliar imagem em nova aba ↗</a></figure><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="retirada" data-roles="protocolo"><h2>08 · Protocolo: retorno assinado e retirada</h2><p class="lead">São dois registros diferentes: disponibilizar o processo após o retorno assinado e registrar a saída quando a unidade o retirar.</p><ol><li>Abra <strong>Retirada</strong>. No quadro <strong>Aguardando assinatura do Controlador</strong>, localize o processo que retornou fisicamente.</li><li>Confira o número, os volumes e a assinatura no documento. Somente após essa conferência selecione <strong>Disponibilizar para retirada</strong>.</li><li>No quadro <strong>Processos disponíveis para retirada</strong>, confira o destino e marque apenas os processos que serão entregues.</li><li>No momento da entrega física, selecione <strong>Registrar saída</strong> e confirme a quantidade.</li><li>Confira a mensagem de sucesso e consulte os registros em <strong>Finalizados</strong>.</li></ol><div class="result"><strong>Resultado esperado</strong>A saída é registrada com operador, data e hora. Em lote, se um item estiver inválido, nenhum item do lote deve ser finalizado.</div><div class="note"><strong>Atenção operacional.</strong> O estado “Com o Controlador” não comprova assinatura realizada. A comprovação é feita no documento físico. Não disponibilize para retirada apenas porque o processo aparece nesse quadro.</div><figure class="figure"><a href="{% static 'manual/imagens/04-retirada.png' %}" target="_blank" rel="noopener" aria-label="Ampliar: Parte superior: retorno assinado. Parte inferior: seleção e registro da entrega física."><img loading="lazy" src="{% static 'manual/imagens/04-retirada.png' %}" alt="Parte superior: retorno assinado. Parte inferior: seleção e registro da entrega física."></a><figcaption>Parte superior: retorno assinado. Parte inferior: seleção e registro da entrega física. Dados fictícios de capacitação.</figcaption><a class="zoom" href="{% static 'manual/imagens/04-retirada.png' %}" target="_blank" rel="noopener">Ampliar imagem em nova aba ↗</a></figure><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="destino" data-roles="protocolo"><h2>09 · Protocolo: alteração excepcional do destino</h2><p class="lead">O destino é definido na análise. Sua alteração excepcional exige identificação de quem autorizou.</p><ol><li>Em <strong>Retirada</strong>, selecione <strong>Alterar destino</strong> na linha do processo.</li><li>Confira o destino atual. Informe o <strong>Novo destino</strong> e <strong>Quem autorizou</strong>, utilizando identificação suficiente do responsável.</li><li>Registre a observação quando necessária, salve e confira o destino antes da entrega.</li></ol><div class="result"><strong>Resultado esperado</strong>O histórico registra o destino anterior, o novo destino e os dados da autorização informada.</div><div class="note"><strong>Atenção operacional.</strong> O campo de autorização é um registro declaratório; ele não envia pedido de aprovação a outro usuário. Após a saída, encaminhe eventual necessidade de correção à Gestão e ao TI.</div><figure class="figure"><a href="{% static 'manual/imagens/05-destino.png' %}" target="_blank" rel="noopener" aria-label="Ampliar: Alteração excepcional de destino pelo Protocolo."><img loading="lazy" src="{% static 'manual/imagens/05-destino.png' %}" alt="Alteração excepcional de destino pelo Protocolo."></a><figcaption>Alteração excepcional de destino pelo Protocolo. Dados fictícios de capacitação.</figcaption><a class="zoom" href="{% static 'manual/imagens/05-destino.png' %}" target="_blank" rel="noopener">Ampliar imagem em nova aba ↗</a></figure><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="finalizados" data-roles="protocolo gestao"><h2>10 · Consulta de finalizados, histórico e exportação</h2><p class="lead">Finalizados permite consultar processos que já tiveram saída e gerar a planilha de acompanhamento.</p><ol><li>Abra <strong>Finalizados</strong> e utilize os filtros de pesquisa.</li><li>Para exportar, informe <strong>Data Inicial</strong> e <strong>Data Final</strong> do período de saída e selecione <strong>Exportar Excel</strong>.</li><li>Abra a planilha e confira o período, a quantidade e os filtros aplicados. Se não houver registros, revise a pesquisa.</li><li>Utilize <strong>Histórico</strong> para acompanhar as passagens do número do processo.</li></ol><div class="result"><strong>Resultado esperado</strong>A planilha contém os registros abrangidos pelo período e pelos filtros selecionados.</div><div class="note"><strong>Atenção operacional.</strong> Não confunda período de saída com período de entrada. A exportação não altera o cadastro.</div><figure class="figure"><a href="{% static 'manual/imagens/06-finalizados.png' %}" target="_blank" rel="noopener" aria-label="Ampliar: Finalizados e filtros de consulta. A exportação exige período de saída."><img loading="lazy" src="{% static 'manual/imagens/06-finalizados.png' %}" alt="Finalizados e filtros de consulta. A exportação exige período de saída."></a><figcaption>Finalizados e filtros de consulta. A exportação exige período de saída. Dados fictícios de capacitação.</figcaption><a class="zoom" href="{% static 'manual/imagens/06-finalizados.png' %}" target="_blank" rel="noopener">Ampliar imagem em nova aba ↗</a></figure><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="historico" data-roles="protocolo licitacoes liquidacoes gestao"><h2>11 · Interpretação do histórico</h2><p class="lead">O histórico apoia a conferência de passagens e alterações do processo. Consulte sempre o número e a passagem a que o evento se refere.</p><ol><li>Abra a ação <strong>Histórico</strong> disponível nas listas; na análise, consulte também o quadro <strong>Passagens pela CGM</strong>.</li><li>Compare entrada, saída, volumes e situação de cada passagem.</li><li>Leia os registros de alteração antes de comunicar uma divergência à Gestão. Informe número, passagem e horário observado.</li></ol><div class="result"><strong>Resultado esperado</strong>O operador identifica a passagem correta e dispõe de elementos para solicitar a apuração de divergências.</div><div class="note"><strong>Atenção operacional.</strong> O histórico é apoio de consulta; não substitui os documentos integrantes do processo administrativo.</div><figure class="figure"><a href="{% static 'manual/imagens/07-historico.png' %}" target="_blank" rel="noopener" aria-label="Ampliar: Histórico de processo fictício com uma passagem concluída."><img loading="lazy" src="{% static 'manual/imagens/07-historico.png' %}" alt="Histórico de processo fictício com uma passagem concluída."></a><figcaption>Histórico de processo fictício com uma passagem concluída. Dados fictícios de capacitação.</figcaption><a class="zoom" href="{% static 'manual/imagens/07-historico.png' %}" target="_blank" rel="noopener">Ampliar imagem em nova aba ↗</a></figure><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="fila-lic" data-roles="licitacoes"><h2>12 · Licitações e Contratos: assumir um processo</h2><p class="lead">A Fila de análise organiza os processos do grupo e os encaminhamentos destinados ao operador.</p><ol><li>Abra <strong>Fila de análise</strong> e selecione <strong>Disponíveis</strong> ou utilize a busca.</li><li>Confira o número, a origem, o objeto, a prioridade e o prazo.</li><li>Selecione <strong>Assumir processo</strong> somente quando for iniciar a análise sob sua responsabilidade.</li><li>Para retomar o trabalho, selecione <strong>Comigo</strong> e depois <strong>Analisar</strong>.</li></ol><div class="result"><strong>Resultado esperado</strong>O processo passa a Em análise e identifica o responsável.</div><div class="note"><strong>Atenção operacional.</strong> Se outro analista já tiver assumido, atualize a fila. A prioridade é definida pela Gestão.</div><figure class="figure"><a href="{% static 'manual/imagens/09-fila-licitacoes.png' %}" target="_blank" rel="noopener" aria-label="Ampliar: Fila do grupo Licitações e Contratos. Os filtros separam processos disponíveis, assumidos e direcionados."><img loading="lazy" src="{% static 'manual/imagens/09-fila-licitacoes.png' %}" alt="Fila do grupo Licitações e Contratos. Os filtros separam processos disponíveis, assumidos e direcionados."></a><figcaption>Fila do grupo Licitações e Contratos. Os filtros separam processos disponíveis, assumidos e direcionados. Dados fictícios de capacitação.</figcaption><a class="zoom" href="{% static 'manual/imagens/09-fila-licitacoes.png' %}" target="_blank" rel="noopener">Ampliar imagem em nova aba ↗</a></figure><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="fila-liq" data-roles="liquidacoes"><h2>13 · Liquidações: assumir e conferir o relatório</h2><p class="lead">O procedimento de assunção é o mesmo da fila de Licitações; os campos técnicos são adequados ao grupo de Liquidações.</p><ol><li>Abra <strong>Fila de análise</strong>. Confira os processos do grupo e selecione <strong>Assumir processo</strong>.</li><li>Confira o <strong>Número do relatório</strong> gerado quando a espécie estiver configurada para gerar relatório.</li><li>Informe <strong>Valor analisado</strong>, destino, período, status e observação conforme os documentos da análise.</li><li>Selecione <strong>Salvar análise</strong> e confira a confirmação.</li></ol><div class="result"><strong>Resultado esperado</strong>A análise fica vinculada ao operador. O número do relatório é apresentado como campo de leitura.</div><div class="note"><strong>Atenção operacional.</strong> Se o número do relatório não for gerado e impedir o encaminhamento, solicite verificação do cadastro da espécie à Gestão. Não utilize o campo de despacho como substituto.</div><figure class="figure"><a href="{% static 'manual/imagens/13-liquidacao.png' %}" target="_blank" rel="noopener" aria-label="Ampliar: Tela de análise de Liquidações com número do relatório e valor analisado."><img loading="lazy" src="{% static 'manual/imagens/13-liquidacao.png' %}" alt="Tela de análise de Liquidações com número do relatório e valor analisado."></a><figcaption>Tela de análise de Liquidações com número do relatório e valor analisado. Dados fictícios de capacitação.</figcaption><a class="zoom" href="{% static 'manual/imagens/13-liquidacao.png' %}" target="_blank" rel="noopener">Ampliar imagem em nova aba ↗</a></figure><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="analise" data-roles="licitacoes liquidacoes"><h2>14 · Analistas: registrar e salvar a análise</h2><p class="lead">As informações devem refletir a conclusão técnica registrada nos documentos do processo.</p><ol><li>Confira os dados do processo e a indicação de responsabilidade no topo da tela.</li><li>Em Licitações e Contratos, informe <strong>Nº de despacho</strong>; em Liquidações, confira o número do relatório. Preencha destino e os demais campos aplicáveis.</li><li>Selecione o <strong>Status da análise</strong>: Prosseguimento sem ressalva, Prosseguimento com ressalva, Não Prosseguimento ou Devolução para saneamento, conforme a conclusão técnica.</li><li>Registre observação objetiva e selecione <strong>Salvar análise</strong>. Aguarde a mensagem antes de sair da página.</li><li>Antes de encaminhar, confira os campos obrigatórios sinalizados pelo sistema.</li></ol><div class="result"><strong>Resultado esperado</strong>A análise é gravada. Salvar não equivale a encaminhar ao Controlador.</div><div class="note"><strong>Atenção operacional.</strong> “Não Aplicável” não satisfaz a conclusão exigida para encaminhamento. O valor também será obrigatório nas espécies assim parametrizadas. A seleção do status é responsabilidade técnica do analista.</div><figure class="figure"><a href="{% static 'manual/imagens/10-analise.png' %}" target="_blank" rel="noopener" aria-label="Ampliar: Campos de análise, botões Salvar análise e Encaminhar e quadro de pendências."><img loading="lazy" src="{% static 'manual/imagens/10-analise.png' %}" alt="Campos de análise, botões Salvar análise e Encaminhar e quadro de pendências."></a><figcaption>Campos de análise, botões Salvar análise e Encaminhar e quadro de pendências. Dados fictícios de capacitação.</figcaption><a class="zoom" href="{% static 'manual/imagens/10-analise.png' %}" target="_blank" rel="noopener">Ampliar imagem em nova aba ↗</a></figure><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="encaminhar" data-roles="licitacoes liquidacoes"><h2>15 · Analistas: encaminhar ao Controlador ou a outro analista</h2><p class="lead">Conclua e salve a análise antes do encaminhamento. A autoria permanece com o analista responsável, mesmo quando houver direcionamento de assinatura.</p><ol><li>Selecione <strong>Encaminhar</strong>. Para a tramitação usual, escolha <strong>Para o Controlador</strong> e confirme.</li><li>Quando houver necessidade de direcionamento, escolha <strong>Para outro analista</strong>, confira a disponibilidade e selecione o destinatário.</li><li>Se você for o destinatário, consulte <strong>Direcionados para mim</strong>. Confira as informações e utilize a ação de encaminhamento ao Controlador.</li><li>Após o encaminhamento, consulte o cartão <strong>Com o Controlador</strong> para localizar o processo. Ele deixa a lista padrão Para trabalhar.</li></ol><div class="result"><strong>Resultado esperado</strong>O processo fica Com o Controlador, ou Direcionado para assinatura até a atuação do destinatário.</div><div class="note"><strong>Atenção operacional.</strong> Disponibilidade da equipe é informação de apoio e não bloqueio automático. O direcionamento entre grupos depende da correção de acesso incluída na proposta técnica desta entrega.</div><figure class="figure"><a href="{% static 'manual/imagens/14-direcionamento.png' %}" target="_blank" rel="noopener" aria-label="Ampliar: Consulta de assinatura direcionada ao analista de outro grupo na cópia corrigida. O destinatário não edita a análise."><img loading="lazy" src="{% static 'manual/imagens/14-direcionamento.png' %}" alt="Consulta de assinatura direcionada ao analista de outro grupo na cópia corrigida. O destinatário não edita a análise."></a><figcaption>Consulta de assinatura direcionada ao analista de outro grupo na cópia corrigida. O destinatário não edita a análise. Dados fictícios de capacitação.</figcaption><a class="zoom" href="{% static 'manual/imagens/14-direcionamento.png' %}" target="_blank" rel="noopener">Ampliar imagem em nova aba ↗</a></figure><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="devolver-fila" data-roles="licitacoes liquidacoes gestao"><h2>16 · Analistas e Gestão: devolver à fila sem análise</h2><p class="lead">Utilize esta ação quando for necessário desfazer a assunção e tornar o processo novamente disponível. A Gestão também pode utilizá-la para destravar um registro em análise.</p><ol><li>Confira se o processo está <strong>Em análise</strong> e se a devolução foi alinhada com a Gestão.</li><li>Selecione <strong>Fila sem análise</strong> na lista, ou <strong>Para a fila (sem análise)</strong> no encaminhamento.</li><li>Leia a confirmação e confirme apenas se for necessário reiniciar a análise.</li><li>Confira o retorno a <strong>Disponível para análise</strong> e a retirada do responsável.</li></ol><div class="result"><strong>Resultado esperado</strong>O registro de devolução permanece no histórico. Uma nova assunção poderá ser feita.</div><div class="note"><strong>Atenção operacional.</strong> A ação limpa os dados da tentativa de análise, inclusive despacho/relatório, valor, destino e observação, e cancela as pendências abertas dessa tentativa. Não a utilize apenas para passar um processo parcialmente analisado a um colega. A interface recebida registra motivo padronizado.</div><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="pendencias" data-roles="licitacoes liquidacoes"><h2>17 · Analistas: registrar e avaliar pendências</h2><p class="lead">Pendência é uma exigência técnica vinculada ao processo e ao responsável que a registrou.</p><ol><li>Na tela de análise, descreva objetivamente a exigência em <strong>Nova pendência</strong> e selecione <strong>Adicionar</strong>.</li><li>Acompanhe a situação <strong>Aguardando atendimento</strong>. A Gestão providencia a diligência pelos canais institucionais.</li><li>Abra <strong>Atendimentos indicados</strong> quando a Gestão sinalizar o recebimento. Confira os documentos efetivamente apresentados.</li><li>Se suficiente, selecione <strong>Confirmar resolução</strong>. Se insuficiente, informe o que falta e selecione <strong>Atendimento insuficiente</strong>.</li><li>Em cadastro indevido, utilize o cancelamento da pendência e informe o motivo.</li></ol><div class="result"><strong>Resultado esperado</strong>A pendência passa a Resolvida ou retorna à fila da Gestão. O histórico da avaliação é preservado.</div><div class="note"><strong>Atenção operacional.</strong> Uma pendência pode continuar aberta após a saída física. Pendências de outras passagens aparecem para consulta; não crie uma cópia apenas para reproduzir o histórico.</div><figure class="figure"><a href="{% static 'manual/imagens/11-atendimentos.png' %}" target="_blank" rel="noopener" aria-label="Ampliar: Atendimentos indicados para avaliação pelo responsável técnico."><img loading="lazy" src="{% static 'manual/imagens/11-atendimentos.png' %}" alt="Atendimentos indicados para avaliação pelo responsável técnico."></a><figcaption>Atendimentos indicados para avaliação pelo responsável técnico. Dados fictícios de capacitação.</figcaption><a class="zoom" href="{% static 'manual/imagens/11-atendimentos.png' %}" target="_blank" rel="noopener">Ampliar imagem em nova aba ↗</a></figure><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="dashboard" data-roles="gestao"><h2>18 · Gestão: acompanhar o estoque e os prazos</h2><p class="lead">O Dashboard oferece visão gerencial dos dois grupos. Os indicadores devem ser interpretados com os filtros em uso.</p><ol><li>Abra <strong>Dashboard</strong>. Confira o período e os filtros de grupo, analista, secretaria e espécie.</li><li>Selecione os cartões para abrir as listas relacionadas a disponíveis, em análise, assinatura, retirada, vencidos ou diligências.</li><li>Consulte a distribuição da equipe e os tempos apresentados para organizar o trabalho.</li><li>Abra <strong>Gestão de Processos</strong> para examinar os registros que justificam o indicador.</li></ol><div class="result"><strong>Resultado esperado</strong>A Gestão identifica demandas e direciona as providências operacionais.</div><div class="note"><strong>Atenção operacional.</strong> Os indicadores dependem da qualidade e da atualização dos registros. O painel da equipe é apresentado em ordem alfabética; não constitui avaliação individual de desempenho.</div><figure class="figure"><a href="{% static 'manual/imagens/15-dashboard.png' %}" target="_blank" rel="noopener" aria-label="Ampliar: Dashboard gerencial com dados exclusivamente demonstrativos."><img loading="lazy" src="{% static 'manual/imagens/15-dashboard.png' %}" alt="Dashboard gerencial com dados exclusivamente demonstrativos."></a><figcaption>Dashboard gerencial com dados exclusivamente demonstrativos. Dados fictícios de capacitação.</figcaption><a class="zoom" href="{% static 'manual/imagens/15-dashboard.png' %}" target="_blank" rel="noopener">Ampliar imagem em nova aba ↗</a></figure><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="priorizar" data-roles="gestao"><h2>19 · Gestão: prioridades e consulta técnica</h2><p class="lead">A Gestão organiza a prioridade; os atos de análise permanecem com os analistas.</p><ol><li>Abra <strong>Gestão de Processos</strong>. Localize o processo e confira a situação.</li><li>Altere o seletor de <strong>Prioridade</strong> quando houver determinação gerencial. A alteração é enviada imediatamente.</li><li>Confira a confirmação e o prazo aplicado. Utilize <strong>Ver</strong> para consultar a análise.</li><li>Se a assunção tiver de ser desfeita, consulte as orientações de <a href="#devolver-fila">devolução à fila</a> antes da ação.</li></ol><div class="result"><strong>Resultado esperado</strong>A prioridade é atualizada e registrada no histórico.</div><div class="note"><strong>Atenção operacional.</strong> A Gestão não deve assumir processos, preencher conclusões técnicas nem liberar assinatura em nome de analista.</div><figure class="figure"><a href="{% static 'manual/imagens/16-gestao-processos.png' %}" target="_blank" rel="noopener" aria-label="Ampliar: Gestão de Processos: seletor de prioridade e ações de consulta."><img loading="lazy" src="{% static 'manual/imagens/16-gestao-processos.png' %}" alt="Gestão de Processos: seletor de prioridade e ações de consulta."></a><figcaption>Gestão de Processos: seletor de prioridade e ações de consulta. Dados fictícios de capacitação.</figcaption><a class="zoom" href="{% static 'manual/imagens/16-gestao-processos.png' %}" target="_blank" rel="noopener">Ampliar imagem em nova aba ↗</a></figure><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="assinatura" data-roles="gestao"><h2>20 · Gestão: organizar a assinatura física</h2><p class="lead">A tela Para assinar relaciona processos liberados pela análise para encaminhamento ao Controlador.</p><ol><li>Abra <strong>Para assinar</strong>. Confira número, volumes e responsável pela liberação.</li><li>Organize o recolhimento e o encaminhamento físico dos documentos.</li><li>Após a assinatura, encaminhe o processo ao Protocolo para conferência e disponibilização para retirada.</li></ol><div class="result"><strong>Resultado esperado</strong>O Protocolo recebe o processo assinado e executa a próxima etapa no sistema.</div><div class="note"><strong>Atenção operacional.</strong> Esta tela não contém ato de assinatura digital nem botão de confirmação de assinatura pelo Controlador.</div><figure class="figure"><a href="{% static 'manual/imagens/17-assinatura.png' %}" target="_blank" rel="noopener" aria-label="Ampliar: Relação de processos liberados para assinatura física."><img loading="lazy" src="{% static 'manual/imagens/17-assinatura.png' %}" alt="Relação de processos liberados para assinatura física."></a><figcaption>Relação de processos liberados para assinatura física. Dados fictícios de capacitação.</figcaption><a class="zoom" href="{% static 'manual/imagens/17-assinatura.png' %}" target="_blank" rel="noopener">Ampliar imagem em nova aba ↗</a></figure><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="diligencias" data-roles="gestao"><h2>21 · Gestão: indicar atendimento de diligência</h2><p class="lead">A diligência é conduzida pelos canais institucionais. O sistema registra a indicação de atendimento e a avaliação técnica subsequente.</p><ol><li>Abra <strong>Diligências</strong> e consulte <strong>Aguardando atendimento</strong>.</li><li>Confira a exigência e providencie a comunicação com a unidade responsável fora do sistema.</li><li>Ao receber o atendimento, selecione <strong>Indicar atendimento</strong> no item correspondente.</li><li>Acompanhe a avaliação do analista. Se houver insuficiência, a pendência volta a aguardar atendimento.</li></ol><div class="result"><strong>Resultado esperado</strong>O item aparece em Atendimentos indicados para o responsável técnico.</div><div class="note"><strong>Atenção operacional.</strong> A Gestão não confirma a resolução técnica. Contatos intermediários por telefone, ofício ou e-mail não possuem registro próprio neste módulo.</div><figure class="figure"><a href="{% static 'manual/imagens/18-diligencias.png' %}" target="_blank" rel="noopener" aria-label="Ampliar: Fila de diligências da Gestão e ação de indicação de atendimento."><img loading="lazy" src="{% static 'manual/imagens/18-diligencias.png' %}" alt="Fila de diligências da Gestão e ação de indicação de atendimento."></a><figcaption>Fila de diligências da Gestão e ação de indicação de atendimento. Dados fictícios de capacitação.</figcaption><a class="zoom" href="{% static 'manual/imagens/18-diligencias.png' %}" target="_blank" rel="noopener">Ampliar imagem em nova aba ↗</a></figure><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="cancelamento" data-roles="gestao"><h2>22 · Gestão: cancelar cadastro indevido</h2><p class="lead">O cancelamento preserva o registro e sua justificativa. Deve ser utilizado para situações em que o cadastro não deva continuar em tramitação.</p><ol><li>Identifique o processo correto em <strong>Processos Ativos</strong> ou <strong>Finalizados</strong>. Confira número e passagem.</li><li>Selecione a ação de cancelamento, descreva o motivo de forma suficiente e confirme.</li><li>Comunique a providência aos operadores envolvidos e preserve a referência do processo cancelado.</li></ol><div class="result"><strong>Resultado esperado</strong>O processo é retirado das listas usuais de ativos e finalizados, mas seus registros são preservados.</div><div class="note"><strong>Atenção operacional.</strong> Cancelamento não significa saída física. A versão recebida não oferece uma rotina própria de reativação de processo cancelado; solicite avaliação do TI se houver erro.</div><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="monitoramento" data-roles="gestao"><h2>23 · Gestão: acompanhamento e conclusão do monitoramento</h2><p class="lead">Algumas espécies exigem acompanhamento periódico. Esse controle é independente da retirada e das pendências de diligência.</p><ol><li>Abra <strong>Finalizados</strong> e filtre a situação do monitoramento: Pendente, Atrasado, Concluído ou Não Aplicável.</li><li>Confira a próxima data e os documentos do acompanhamento.</li><li>Quando houver fundamento para encerrar o ciclo, utilize <strong>Concluir monitoramento</strong> e confirme.</li><li>Confira o registro de conclusão no histórico.</li></ol><div class="result"><strong>Resultado esperado</strong>O monitoramento é encerrado; a conclusão não registra uma nova saída física.</div><div class="note"><strong>Atenção operacional.</strong> A data pode ter sido calculada a partir da entrada nesta versão. Não presuma que o prazo começou na saída. A definição da data-base deverá ser validada pela CGM. Analistas têm permissão técnica para concluir, mas o menu recebido não oferece acesso direto a Finalizados; a rotina ilustrada aqui é da Gestão.</div><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="pessoas" data-roles="gestao"><h2>24 · Gestão: disponibilidade da equipe</h2><p class="lead">Gestão de Pessoas CGM registra disponibilidade operacional, sem substituir os controles formais de pessoal.</p><ol><li>Abra <strong>Gestão de Pessoas CGM</strong> e confira <strong>Equipe hoje</strong>.</li><li>Em Registrar indisponibilidade, selecione servidor e tipo. Informe início e fim; sem fim, o registro vale para o dia inicial.</li><li>Para ocorrência recorrente, marque a opção, escolha o dia da semana e informe a vigência.</li><li>Inclua observação quando necessária e selecione <strong>Registrar</strong>.</li><li>Se o registro deixar de ser aplicável, utilize <strong>Desativar</strong>; confira a atualização do quadro.</li></ol><div class="result"><strong>Resultado esperado</strong>A disponibilidade é apresentada ao selecionar destinatários de assinatura.</div><div class="note"><strong>Atenção operacional.</strong> A indisponibilidade informa a equipe, mas não bloqueia automaticamente o acesso ou o direcionamento.</div><figure class="figure"><a href="{% static 'manual/imagens/19-pessoas.png' %}" target="_blank" rel="noopener" aria-label="Ampliar: Quadro da equipe e formulário de indisponibilidade."><img loading="lazy" src="{% static 'manual/imagens/19-pessoas.png' %}" alt="Quadro da equipe e formulário de indisponibilidade."></a><figcaption>Quadro da equipe e formulário de indisponibilidade. Dados fictícios de capacitação.</figcaption><a class="zoom" href="{% static 'manual/imagens/19-pessoas.png' %}" target="_blank" rel="noopener">Ampliar imagem em nova aba ↗</a></figure><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="cadastros" data-roles="gestao"><h2>25 · Gestão: espécies de processo</h2><p class="lead">As espécies controlam grupo de análise, monitoramento e exigências. Alterações têm efeito operacional e devem seguir a padronização da CGM.</p><ol><li>Abra <strong>Cadastros → Espécies de Processo</strong>. Pesquise os registros existentes antes de adicionar outro.</li><li>Informe nome, grupo, tipo de monitoramento e as opções aplicáveis: geração de relatório, exigência de contratada/valor e encerramento de monitoramento anterior.</li><li>Selecione <strong>Adicionar</strong> para novo cadastro ou <strong>Salvar</strong> na linha alterada.</li><li>Para retirar uma opção das novas seleções, utilize <strong>Inativar</strong>; utilize Reativar quando cabível.</li></ol><div class="result"><strong>Resultado esperado</strong>As espécies ativas ficam disponíveis para o cadastro de processos.</div><div class="note"><strong>Atenção operacional.</strong> O grupo da espécie fica protegido quando o cadastro já está vinculado a processos. Espécies de Liquidações sem geração de relatório podem impedir o encaminhamento, pois a análise exige esse número. Valide a combinação com o TI antes de usá-la.</div><figure class="figure"><a href="{% static 'manual/imagens/20-cadastros.png' %}" target="_blank" rel="noopener" aria-label="Ampliar: Cadastro de espécies. Amplie a imagem para consultar os campos e as opções."><img loading="lazy" src="{% static 'manual/imagens/20-cadastros.png' %}" alt="Cadastro de espécies. Amplie a imagem para consultar os campos e as opções."></a><figcaption>Cadastro de espécies. Amplie a imagem para consultar os campos e as opções. Dados fictícios de capacitação.</figcaption><a class="zoom" href="{% static 'manual/imagens/20-cadastros.png' %}" target="_blank" rel="noopener">Ampliar imagem em nova aba ↗</a></figure><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="unidades" data-roles="gestao"><h2>26 · Gestão: unidades, prioridades e tipos</h2><p class="lead">Os demais cadastros padronizam as listas de seleção e os prazos.</p><ol><li>Em <strong>Unidades Administrativas</strong>, cadastre nome e demais dados apresentados, respeitando a denominação institucional.</li><li>Em <strong>Prioridades</strong>, confira código, denominação, prazo em dias e ordem. O código fica protegido quando a prioridade já está vinculada a processos.</li><li>Em <strong>Tipos de Indisponibilidade</strong>, mantenha os tipos utilizados pela Gestão de Pessoas.</li><li>Use Adicionar, Salvar, Inativar e Reativar conforme a necessidade; não crie duplicatas para corrigir grafia.</li></ol><div class="result"><strong>Resultado esperado</strong>As opções são disponibilizadas nas rotinas correspondentes.</div><div class="note"><strong>Atenção operacional.</strong> Após alterar prazos, valide com o TI o efeito sobre processos já cadastrados. O sistema mantém informações de prazo no próprio processo.</div><div class="related-images"><a href="{% static 'manual/imagens/22-prioridades.png' %}" target="_blank" rel="noopener">Abrir tela de Prioridades</a><a href="{% static 'manual/imagens/23-indisponibilidade.png' %}" target="_blank" rel="noopener">Abrir Tipos de Indisponibilidade</a></div><figure class="figure"><a href="{% static 'manual/imagens/21-unidades.png' %}" target="_blank" rel="noopener" aria-label="Ampliar: Unidades administrativas cadastradas."><img loading="lazy" src="{% static 'manual/imagens/21-unidades.png' %}" alt="Unidades administrativas cadastradas."></a><figcaption>Unidades administrativas cadastradas. Dados fictícios de capacitação.</figcaption><a class="zoom" href="{% static 'manual/imagens/21-unidades.png' %}" target="_blank" rel="noopener">Ampliar imagem em nova aba ↗</a></figure><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="duvidas" data-roles="todos"><h2>27 · Solução de dúvidas e problemas</h2><p class="lead">Pesquise palavras da mensagem ou da tarefa no campo de busca deste manual. As orientações abaixo ajudam a identificar a providência adequada.</p><details><summary>Não consigo entrar / senha incorreta</summary><p>Confira usuário e teclado. Se persistir, solicite redefinição ao administrador. Informe a mensagem apresentada, sem enviar sua senha. <a href="#senha">Consultar procedimento</a>.</p></details><details><summary>Meu menu está diferente ou faltam opções</summary><p>Confira o papel no rodapé. Menus dependem da função da conta. Solicite ajuste ao administrador quando a atribuição estiver incorreta. <a href="#responsabilidades">Consultar procedimento</a>.</p></details><details><summary>O processo não aparece na fila</summary><p>Remova filtros, pesquise o número e confira o grupo da espécie e a situação. Processos com o Controlador saem da lista Para trabalhar. “Outros” pode ficar fora das filas. <a href="#especie-outros">Consultar procedimento</a>.</p></details><details><summary>O processo foi assumido por outra pessoa</summary><p>Atualize a fila. Não tente alterar o responsável por edição cadastral. Se necessário, a Gestão avalia a devolução à fila. <a href="#devolver-fila">Consultar procedimento</a>.</p></details><details><summary>Não consigo encaminhar / faltam campos</summary><p>Salve a análise e confira status, despacho ou relatório e destino. Nas espécies que exigem valor, confira esse campo. <a href="#analise">Consultar procedimento</a>.</p></details><details><summary>Número do relatório não foi gerado</summary><p>Solicite à Gestão e ao TI a revisão da opção Gera relatório da espécie de Liquidações. Não invente número nem tente usar despacho. <a href="#fila-liq">Consultar procedimento</a>.</p></details><details><summary>Assinatura direcionada não aparece</summary><p>Confira destinatário e filtro Direcionados para mim. O acesso entre grupos exige a correção proposta ao TI. <a href="#encaminhar">Consultar procedimento</a>.</p></details><details><summary>Posso dar saída antes da análise?</summary><p>No fluxo institucional deste manual, não. Utilize Retirada após análise, encaminhamento ao Controlador e retorno físico assinado. <a href="#retirada">Consultar procedimento</a>.</p></details><details><summary>A saída em lote não foi concluída</summary><p>Atualize a lista e confira a situação de todos os itens. Se um processo não puder sair, o lote inteiro deve ser recusado. Confira Finalizados antes de repetir. <a href="#retirada">Consultar procedimento</a>.</p></details><details><summary>Registrei uma entrada duplicada</summary><p>Confira número, volume e passagem. Solicite à Gestão o cancelamento do cadastro indevido com motivo. <a href="#cancelamento">Consultar procedimento</a>.</p></details><details><summary>A diligência foi atendida, mas continua aberta</summary><p>A indicação da Gestão precisa ser avaliada pelo responsável técnico em Atendimentos indicados. <a href="#pendencias">Consultar procedimento</a>.</p></details><details><summary>A exportação pede período ou vem vazia</summary><p>Informe início e fim das datas de saída. Revise filtros e a existência de registros nesse período. <a href="#finalizados">Consultar procedimento</a>.</p></details><details><summary>Monitoramento atrasado antes da data esperada</summary><p>Confira a data-base e a espécie. A implementação recebida pode contar da entrada; solicite verificação, sem alterar datas para eliminar o aviso. <a href="#monitoramento">Consultar procedimento</a>.</p></details><details><summary>Processo cancelado desapareceu da lista</summary><p>O cancelamento retira o registro das listas usuais. Informe número e passagem à Gestão para localizar o histórico e avaliar a providência. <a href="#cancelamento">Consultar procedimento</a>.</p></details><details><summary>Sem permissão / acesso negado / erro 403</summary><p>Confirme a conta e o papel, atualize a página e entre novamente se a sessão expirou. Persistindo, encaminhe o contexto ao TI. <a href="#acesso">Consultar procedimento</a>.</p></details><details><summary>Tela não responde ou conexão caiu</summary><p>Antes de repetir Salvar ou Registrar saída, consulte a lista para verificar se a operação foi concluída. Informe horário e mensagem ao TI se houver dúvida. <a href="#chamado">Consultar procedimento</a>.</p></details><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="chamado" data-roles="todos"><h2>28 · Como solicitar suporte</h2><p class="lead">Utilize o canal de atendimento definido pela CGM e pelo TI. O endereço do suporte deverá ser informado na publicação institucional deste manual.</p><ol><li>Informe seu nome, unidade e papel no sistema.</li><li>Informe número do processo e passagem, quando houver.</li><li>Descreva a tela, o horário, os passos executados e a mensagem apresentada.</li><li>Informe se a operação chegou a aparecer na lista ou no histórico. Encaminhe imagem da mensagem quando necessário, preservando dados sem relação com o problema.</li></ol><div class="result"><strong>Resultado esperado</strong>O TI recebe informações suficientes para reproduzir e avaliar a ocorrência.</div><div class="note"><strong>Atenção operacional.</strong> Não inclua senha no chamado. Este manual não envia mensagens automaticamente.</div><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article><article class="chapter" id="rotinas" data-roles="todos"><h2>29 · Conferência de início e fim do expediente</h2><p class="lead">Adote uma conferência breve para manter a tramitação atualizada.</p><div class="routine">
-<div><h3>Protocolo</h3><p>Conferir entradas pendentes de lançamento; processos assinados recebidos; itens disponíveis para retirada; entregas físicas ainda não registradas.</p></div>
-<div><h3>Analistas</h3><p>Conferir Comigo e Direcionados para mim; verificar Atendimentos indicados; salvar a análise antes de sair; encaminhar somente após revisar os campos.</p></div>
-<div><h3>Gestão</h3><p>Conferir prazos e prioridades; organizar assinatura; tratar diligências; manter disponibilidade e cadastros; verificar monitoramentos.</p></div>
-<div><h3>Todos</h3><p>Comunicar divergências com identificação do processo e encerrar a sessão ao deixar o posto de trabalho.</p></div></div><p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p></article>
-<footer><strong>Controle do documento</strong><br>Elaboração: avaliação técnica e documentação do projeto fornecido. Validação institucional: CGM (a designar). Validação técnica: TI (a designar). Canal de suporte: a informar pela CGM/TI antes da publicação.<br>Base: Sistema_Protocolo-CGM-main – atualizado.rar. Este material não estabelece competências legais nem substitui os atos normativos da instituição.</footer></main></div><script src="{% static 'manual/manual.js' %}"></script></body></html>
+
+<article class="chapter" id="acesso" data-roles="todos">
+  <h2>01 · Entrar, sair e menu</h2>
+  <p class="lead">Use a conta individual. O menu e a tela inicial dependem do papel da conta.</p>
+  <ol>
+    <li>Abra o endereço do sistema. Digite usuário e senha e clique em <strong>Entrar</strong>.</li>
+    <li>Confira o nome e o papel no rodapé do menu. Protocolo abre <strong>Processos Protocolo</strong>. Analistas abrem <strong>Fila de análise</strong>. Gestão abre <strong>Dashboard</strong>.</li>
+    <li>O botão de menu (três linhas) recolhe a navegação. O ícone de lua/sol troca o modo claro e o modo escuro.</li>
+    <li>Ao terminar o expediente ou usar computador compartilhado, clique em <strong>Sair</strong>.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>A sessão encerra e volta a tela de acesso.</div>
+  <div class="note"><strong>Atenção.</strong> Não compartilhe senha. Se o papel estiver errado, peça ajuste a quem passou o acesso, antes de registrar operações.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="senha" data-roles="todos">
+  <h2>02 · Alterar senha</h2>
+  <p class="lead">A alteração da própria senha está no menu Conta.</p>
+  <ol>
+    <li>Clique em <strong>Alterar Senha</strong>.</li>
+    <li>Informe a senha atual e a nova senha duas vezes.</li>
+    <li>Clique em <strong>Alterar senha</strong>.</li>
+    <li>Se não souber a senha atual, peça redefinição a quem administra as contas. Informe só o usuário.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>O sistema confirma a alteração. Na redefinição feita pelo administrador, as sessões anteriores são encerradas.</div>
+  <div class="note"><strong>Atenção.</strong> Não há recuperação de senha por e-mail na tela de entrada.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="fluxo" data-roles="todos">
+  <h2>03 · Como o processo anda</h2>
+  <p class="lead">O sistema acompanha a passagem física do processo pela CGM. A assinatura do Controlador é no papel, não na tela.</p>
+  <ol>
+    <li><strong>Protocolo</strong> registra a entrada. O processo fica pendente, disponível para análise.</li>
+    <li><strong>Analista do grupo</strong> assume, analisa, anexa arquivo (obrigatório em Licitações; opcional o relatório em Liquidações), gera número de relatório quando for o caso e trata diligências.</li>
+    <li><strong>Analista</strong> encaminha para o Controlador.</li>
+    <li><strong>Controlador</strong> assina o documento físico.</li>
+    <li><strong>Protocolo</strong> registra a saída. O processo vai para Finalizados.</li>
+  </ol>
+  <div class="flow">
+    <span>Entrada</span><b>→</b>
+    <span>Análise</span><b>→</b>
+    <span>Controlador</span><b>→</b>
+    <span>Saída</span>
+  </div>
+  <div class="result"><strong>Resultado esperado</strong>O processo aparece em Finalizados, com a saída registrada.</div>
+  <div class="note"><strong>Na prática de hoje.</strong> O Protocolo não precisa esperar a análise para dar saída. Em Processos Protocolo, o botão de saída registra a saída na hora.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="responsabilidades" data-roles="todos">
+  <h2>04 · Quem faz o quê</h2>
+  <p class="lead">Cada pessoa atua no seu papel. Ver um processo não autoriza a praticar todos os atos.</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Papel</th>
+          <th>No sistema</th>
+          <th>Menu principal</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Protocolo</td>
+          <td>Entrada, correção cadastral, saída física e planilhas.</td>
+          <td>Novo Processo · Processos Protocolo · Processos Contabilidade</td>
+        </tr>
+        <tr>
+          <td>Analista · Licitações e Contratos</td>
+          <td>Fila, anexos, diligências e encaminhamento.</td>
+          <td>Fila · Controle de análise · Para assinar · Diligências</td>
+        </tr>
+        <tr>
+          <td>Analista · Liquidações</td>
+          <td>Fila, relatório, números e diligências.</td>
+          <td>Fila · Controle de relatório · Para assinar · Diligências</td>
+        </tr>
+        <tr>
+          <td>Gestão</td>
+          <td>Prioridades, acompanhamento, conclusão de diligências, pessoas e cadastros. Funções extras somam Protocolo e/ou análise.</td>
+          <td>Dashboard · Processos · Diligências · Cadastros · Funções</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <dl>
+    <dt>Disponível para análise</dt>
+    <dd>Entrou e ainda ninguém assumiu.</dd>
+    <dt>Em análise</dt>
+    <dd>Há um analista responsável.</dd>
+    <dt>Direcionado para [nome]</dt>
+    <dd>Foi encaminhado para outro analista.</dd>
+    <dt>Com o Controlador</dt>
+    <dd>Pronto para assinar no papel.</dd>
+    <dt>Saída concluída</dt>
+    <dd>Já saiu da CGM.</dd>
+    <dt>Cancelado</dt>
+    <dd>Registro preservado com motivo. Não é saída.</dd>
+  </dl>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="entrada" data-roles="protocolo">
+  <h2>05 · Protocolo: cadastrar uma entrada</h2>
+  <p class="lead">Antes de cadastrar, confira o processo físico, o número, os volumes e a unidade de origem.</p>
+  <ol>
+    <li>Abra <strong>Novo Processo</strong>.</li>
+    <li>Informe o <strong>Número do processo</strong>. Se ele já passou pela CGM, secretaria, espécie, objeto e os demais dados da última passagem são preenchidos. O <strong>volume</strong> fica em branco, porque pode mudar. Data e hora de saída não são copiadas. Confira antes de salvar.</li>
+    <li>Selecione a <strong>Secretaria</strong>. Confira data e hora de entrada; só mude se o lançamento for depois da chegada física.</li>
+    <li>Escolha a <strong>Espécie</strong>. O sistema mostra o grupo (Licitações ou Liquidações). A espécie define a fila de análise.</li>
+    <li>Descreva o <strong>Objeto</strong>. Preencha contratada, favorecido ou interessado quando a espécie exigir.</li>
+    <li>Informe se é <strong>recorrente</strong> e clique em <strong>Salvar Processo</strong>.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>A entrada aparece em Processos Protocolo, sem analista responsável.</div>
+  <div class="note"><strong>Espécie ausente.</strong> Use Outros (espécie não cadastrada), digite o nome e escolha o grupo. Peça à Gestão para cadastrar a espécie se ela for recorrente. Não preencha analista, despacho nem destino de saída na entrada.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="ativos" data-roles="protocolo">
+  <h2>06 · Protocolo: Processos Protocolo</h2>
+  <p class="lead">Esta é a tela principal. Junta Ativos (ainda na CGM) e Finalizados (já saíram). A busca cobre as duas abas.</p>
+  <ol>
+    <li>Abra <strong>Processos Protocolo</strong>.</li>
+    <li>Use as abas <strong>Ativos</strong> e <strong>Finalizados</strong>. A busca mistura as duas e lista os ativos primeiro. Se o mesmo número já passou várias vezes, aparece só a última passagem; volumes anteriores ficam no <strong>Histórico</strong>.</li>
+    <li>Filtros comuns: <strong>Pendentes</strong> (o que a fila dos analistas vê), <strong>Com análise</strong> e <strong>Todos</strong>.</li>
+    <li>Para corrigir dado de protocolo, clique no lápis, ajuste e salve.</li>
+    <li>Clique no <strong>número do processo</strong> para abrir a ficha, ou no relógio para o histórico.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>Você localiza o processo, corrige o cadastro quando preciso e vê quantas vezes ele já passou pela CGM.</div>
+  <div class="note"><strong>Atenção.</strong> Protocolo não cancela processo, não assume análise e não muda prioridade. Use a aba Todos no dia a dia para registrar a saída.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="saida" data-roles="protocolo">
+  <h2>07 · Protocolo: registrar a saída</h2>
+  <p class="lead">A saída registra a entrega física. Não é obrigatório esperar a análise.</p>
+  <ol>
+    <li>Abra <strong>Processos Protocolo</strong> e use a aba <strong>Todos</strong> (ou Ativos).</li>
+    <li>Localize o processo. Confira número e volumes no papel.</li>
+    <li>Clique no botão de saída (ícone de seta para fora) e confirme.</li>
+    <li>O processo passa para a aba <strong>Finalizados</strong>.</li>
+    <li>Se precisar da planilha das saídas, em Finalizados clique em <strong>Exportar saídas</strong> e informe o período.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>A saída fica registrada com data, hora e operador. O processo some dos Ativos.</div>
+  <div class="note"><strong>Atenção.</strong> Não confunda período de saída com período de entrada na exportação. A exportação não altera o cadastro.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="cgm" data-roles="protocolo gestao">
+  <h2>08 · Processos Contabilidade</h2>
+  <p class="lead">Lista à parte, só para Protocolo, Gestão e administrador. Esses processos não entram na fila dos analistas.</p>
+  <ol>
+    <li>Abra <strong>Processos Contabilidade</strong>.</li>
+    <li>Aqui estão os processos da secretaria Controladoria Geral do Município e os da espécie Contabilidade.</li>
+    <li>Use a tela para acompanhar, buscar e, se for o caso, registrar a saída.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>O processo da CGM não se mistura com a fila de Licitações ou Liquidações.</div>
+  <div class="note"><strong>Se a busca de Processos Protocolo não achar o número.</strong> Confira também esta tela.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="planilha-protocolo" data-roles="protocolo">
+  <h2>09 · Protocolo: gerar planilha dos ativos</h2>
+  <p class="lead">Baixa um Excel dos processos ainda em tramitação, com os filtros da tela.</p>
+  <ol>
+    <li>Em <strong>Processos Protocolo</strong>, aplique os filtros que quiser.</li>
+    <li>Clique em <strong>Gerar planilha</strong> no topo da página.</li>
+    <li>Abra o arquivo e confira o conteúdo.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>A planilha traz os processos ainda na CGM, conforme os filtros.</div>
+  <div class="note"><strong>Saídas.</strong> A planilha das saídas é outra: aba Finalizados → Exportar saídas, com período obrigatório.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="fila-lic" data-roles="licitacoes">
+  <h2>10 · Licitações: fila de análise</h2>
+  <p class="lead">A fila mostra o mesmo conjunto da aba Pendentes de Processos Protocolo, no seu grupo.</p>
+  <ol>
+    <li>Abra <strong>Fila de análise</strong>.</li>
+    <li>Os cards mostram disponíveis, com você, com o Controlador, vencidos e atendimentos indicados.</li>
+    <li>Clique em <strong>Assumir processo</strong> só quando for começar a análise.</li>
+    <li>Para retomar, use <strong>Em análise por você</strong> e depois <strong>Analisar</strong>.</li>
+    <li>Clique no <strong>número do processo</strong> para abrir a ficha.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>O processo fica Em análise, com o seu nome.</div>
+  <div class="note"><strong>Assumiu por engano?</strong> Use Devolver à fila. A análise em andamento é limpa. A prioridade é definida pela Gestão.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="controle-analise" data-roles="licitacoes">
+  <h2>11 · Licitações: Controle de análise</h2>
+  <p class="lead">Tela do grupo: disponíveis, em análise e para assinar. Nova análise abre a lista Assumir.</p>
+  <ol>
+    <li>Abra <strong>Controle de análise</strong>.</li>
+    <li>Clique em <strong>Nova análise</strong>. Aparecem os pendentes ainda disponíveis, por prioridade.</li>
+    <li>Clique em <strong>Assumir</strong> no processo escolhido. A ficha abre na hora.</li>
+    <li>O registro principal desta análise é o <strong>arquivo anexado</strong>. Observação e diligências são opcionais.</li>
+    <li>Quando estiver pronto, <strong>Encaminhar</strong> para o Controlador. O processo vai para <strong>Para assinar</strong>.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>O processo sai da lista de disponíveis e entra na sua análise, com o arquivo na ficha.</div>
+  <div class="note"><strong>Nova análise não depende</strong> de preencher relatório como em Liquidações. Aqui o centro é o anexo.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="anexos" data-roles="licitacoes liquidacoes">
+  <h2>12 · Anexar arquivos (Licitações e Liquidações)</h2>
+  <p class="lead">Na ficha do processo, o bloco de anexos guarda a peça. O arquivo também aparece no histórico, com preview.</p>
+  <ol>
+    <li>Abra o processo. Role até <strong>Arquivos anexados</strong> (Licitações) ou <strong>Relatório anexado</strong> (Liquidações).</li>
+    <li>Arraste o arquivo para a área pontilhada ou clique para escolher. Aceita PDF, Word, Excel, imagem ou texto, até 15 MB cada.</li>
+    <li>Clique em <strong>Anexar</strong>.</li>
+    <li>Para ver, use o preview. Se for Word (.docx), baixe o original ou a cópia em <strong>PDF</strong> — o preview também mostra o PDF.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>O arquivo fica na ficha e no histórico, inclusive depois da análise.</div>
+  <div class="note"><strong>Obrigatório só em Licitações.</strong> Em Liquidações o relatório em arquivo é opcional: dá para encaminhar ao Controlador sem anexar. Anexar nunca substitui o encaminhamento.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="fila-liq" data-roles="liquidacoes">
+  <h2>13 · Liquidações: fila de análise</h2>
+  <p class="lead">O procedimento de assunção é o mesmo da fila de Licitações. Os campos técnicos são de relatório.</p>
+  <ol>
+    <li>Abra <strong>Fila de análise</strong> e clique em <strong>Assumir processo</strong> ou <strong>Analisar</strong>.</li>
+    <li>A fila também mostra processos que você já analisou e ainda estão na casa (depois de emitir o relatório, por exemplo).</li>
+    <li>Na ficha, use <strong>Gerar número e salvar</strong> para gravar na planilha do Controle de relatório.</li>
+    <li>Se quiser, anexe o relatório no bloco <strong>Relatório anexado</strong> (não é obrigatório para encaminhar).</li>
+    <li>Informe valor, destino, período, status e observação conforme os documentos.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>A análise fica com você e o número do relatório aparece na planilha.</div>
+  <div class="note"><strong>Número não gerado.</strong> Não invente número nem use o campo de despacho. Use Gerar número e salvar ou vincule a linha no Controle de relatório.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="controle-relatorio" data-roles="liquidacoes">
+  <h2>14 · Liquidações: Controle de relatório</h2>
+  <p class="lead">Esta é a planilha das análises: cada linha tem número de relatório, processo, valor e destino.</p>
+  <ol>
+    <li>Abra <strong>Controle de relatório</strong>.</li>
+    <li>A aba <strong>Análises</strong> é a planilha. Há também <strong>Números destinados</strong> (separados para usar depois) e, para quem tem permissão, <strong>Numeração</strong>.</li>
+    <li>Busque em qualquer campo. Clique no número do processo para abrir a ficha. O lápis edita a linha.</li>
+    <li><strong>Importar Excel</strong> atualiza o grupo. Confirme com atenção: a importação substitui as linhas ativas daquele grupo.</li>
+    <li>Linha amarela: o processo saiu sem relatório. O número pode ficar reservado e ser reaproveitado no mesmo dia.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>A planilha reflete as análises e a numeração do grupo.</div>
+  <div class="note"><strong>Destinar números.</strong> Use quando precisar separar números para uma análise que ainda vai acontecer. Não crie linha duplicada à mão se o sistema já reservou o número.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="nova-analise" data-roles="liquidacoes">
+  <h2>15 · Liquidações: nova análise e gerar número</h2>
+  <p class="lead">Você pode começar a análise pelo número do processo, mesmo que o Protocolo ainda não tenha cadastrado.</p>
+  <ol>
+    <li>No Controle de relatório, clique em <strong>Nova análise</strong>.</li>
+    <li>Informe o nº do processo e o grupo de numeração. Clique em <strong>Continuar</strong>.</li>
+    <li>Preencha a análise. Se houver processo de origem/pagamento diferente, informe nesse campo — as diligências usam os dois números para achar o processo.</li>
+    <li>Em Bolsa Atleta: na concessão o nº já vem preenchido; na prestação de contas o campo de prestação começa vazio.</li>
+    <li>Se houver relatório em arquivo, anexe no bloco da tela. Não é obrigatório: dá para encaminhar sem anexo.</li>
+    <li>Clique em <strong>Gerar número e salvar</strong>. Depois use <strong>Encaminhar</strong> para o Controlador.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>O sequencial entra na planilha. Você ainda pode conferir antes de encaminhar.</div>
+  <div class="note"><strong>Sem relatório.</strong> Marque a opção se não houve peça. Mesmo assim o sistema pede número e data para encaminhar. Se o número estiver reservado, o sistema pergunta se você quer reutilizar.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="analise" data-roles="licitacoes liquidacoes">
+  <h2>16 · Analistas: salvar a análise</h2>
+  <p class="lead">Salvar grava o andamento. Não é o mesmo que encaminhar ao Controlador.</p>
+  <ol>
+    <li>Abra o processo por <strong>Assumir</strong> ou <strong>Analisar</strong>.</li>
+    <li>Em Licitações, anexe o arquivo e, se quiser, preencha observação. Em Liquidações, gere o número, preencha valor, destino e status, e anexe o relatório se houver (opcional).</li>
+    <li>Escolha o <strong>Status da análise</strong> (Prosseguimento com ou sem ressalva, Não Prosseguimento, Devolução para saneamento…).</li>
+    <li>Clique em <strong>Salvar análise</strong> sempre que quiser gravar. Espere a mensagem antes de sair da página.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>Os dados ficam gravados. O processo ainda não foi ao Controlador.</div>
+  <div class="note"><strong>Atenção.</strong> “Não Aplicável” não vale para encaminhar. Algumas espécies também exigem valor. Em Liquidações, use Gerar número e salvar antes do encaminhamento.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="encaminhar" data-roles="licitacoes liquidacoes">
+  <h2>17 · Analistas: encaminhar</h2>
+  <p class="lead">Conclua e salve a análise antes. A autoria permanece com quem analisou, mesmo se outro colega só encaminhar ao Controlador.</p>
+  <ol>
+    <li>Clique em <strong>Encaminhar</strong>.</li>
+    <li><strong>Para o Controlador</strong> — tramitação usual, quando a análise está pronta.</li>
+    <li><strong>Para outro analista</strong> — escolha o colega. A disponibilidade da equipe é só informação; não bloqueia.</li>
+    <li><strong>Para a fila (sem análise)</strong> — o processo volta a ficar disponível e os dados da tentativa são limpos. Não use isso para passar um processo pela metade.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>O processo fica Com o Controlador, ou com o colega, ou de novo na fila.</div>
+  <div class="note"><strong>Para assinar.</strong> Depois do encaminhamento ao Controlador, o processo aparece no menu Para assinar. A assinatura em si é no papel.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="pendencias" data-roles="licitacoes liquidacoes">
+  <h2>18 · Analistas: diligências na ficha</h2>
+  <p class="lead">Diligência é o que falta no processo. O texto vira checklist. Cada diligência é uma linha; um processo pode ter várias.</p>
+  <ol>
+    <li>Na ficha, escreva em <strong>Nova pendência</strong> e clique em <strong>Adicionar</strong>.</li>
+    <li>O sistema separa o texto em itens de checklist. O progresso mostra itens feitos / total.</li>
+    <li>Clique em <strong>Imprimir checklist</strong> para a folha no padrão visual da CGM (imprimir ou salvar PDF).</li>
+    <li>A Gestão trata fora do sistema e conclui no módulo Diligências, marcando os itens atendidos daquela linha.</li>
+    <li>Se cadastrou por engano, cancele e informe o motivo. O registro não é apagado.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>A exigência fica registrada, imprimível e acompanhável por item.</div>
+  <div class="note"><strong>Consulta.</strong> O menu Diligências do analista é para ver. Quem conclui é a Gestão ou o administrador. Pendências de passagens anteriores aparecem só para leitura.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="atendimentos" data-roles="licitacoes liquidacoes">
+  <h2>19 · Analistas: atendimentos indicados</h2>
+  <p class="lead">Aqui estão as diligências suas que a Gestão já sinalizou como atendidas.</p>
+  <ol>
+    <li>Abra <strong>Atendimentos indicados</strong>.</li>
+    <li>Confira o checklist e os documentos.</li>
+    <li>Se resolveu, clique em <strong>Confirmar resolução</strong>.</li>
+    <li>Se ainda falta, descreva o que falta e clique em <strong>Atendimento insuficiente</strong>.</li>
+    <li>Use <strong>Imprimir checklist</strong> ou abra o processo pelo número.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>A pendência fica resolvida ou volta para a Gestão.</div>
+  <div class="note"><strong>Olhe esta tela no começo do dia.</strong> O card na fila também mostra a quantidade.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="dashboard" data-roles="gestao">
+  <h2>20 · Gestão: Dashboard</h2>
+  <p class="lead">Visão da casa. Os números dependem dos filtros em uso.</p>
+  <ol>
+    <li>Abra <strong>Dashboard</strong>. Ajuste período, grupo, analista, secretaria e espécie, se precisar.</li>
+    <li>Clique nos cards para abrir as listas (disponíveis, em análise, assinatura, vencidos, diligências…).</li>
+    <li>O quadro da equipe vem em ordem alfabética — não é ranking.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>Você vê o estoque e os prazos para organizar o trabalho.</div>
+  <div class="note"><strong>Atenção.</strong> Sem funções extras, a Gestão não assume processo, não preenche análise e não libera assinatura. Para operar como Protocolo ou analista, use o menu Funções.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="gestao-processos" data-roles="gestao">
+  <h2>21 · Gestão: Processos e prioridades</h2>
+  <p class="lead">Fila dos dois grupos. A ação da linha é consultar. A prioridade grava na hora.</p>
+  <ol>
+    <li>Abra <strong>Processos</strong>.</li>
+    <li>Altere a <strong>Prioridade</strong> no seletor da linha, quando houver determinação gerencial. <strong>Prioridade N/Recorrente</strong> vale só nesta entrada — a próxima não herda.</li>
+    <li>Clique no número do processo para ver a ficha (somente consulta).</li>
+    <li>O card <strong>Com o Controlador</strong> lista o que recolher para assinatura física.</li>
+    <li>Se o processo ficou preso com um analista, use <strong>Devolver à fila</strong>.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>A prioridade muda e o histórico registra. O processo com o Controlador fica visível para recolhimento.</div>
+  <div class="note"><strong>Cancelar.</strong> Em Processos Protocolo, a Gestão pode cancelar com motivo. O registro não é apagado. Cancelar não é saída física.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="diligencias" data-roles="gestao">
+  <h2>22 · Gestão: Diligências</h2>
+  <p class="lead">Cada linha é uma diligência. Concluir vale só para aquela linha, não para o processo inteiro.</p>
+  <ol>
+    <li>Abra <strong>Diligências</strong>. Filtre por situação e por grupo (Licitações ou Liquidações).</li>
+    <li>Clique no texto para ver o checklist. O selo mostra itens feitos / total daquela diligência.</li>
+    <li>Trate a exigência fora do sistema (telefone, ofício, e-mail).</li>
+    <li>Clique em <strong>Concluir diligência</strong> e marque só os itens <em>desta</em> linha que foram atendidos.</li>
+    <li><strong>Imprimir checklist</strong> abre a folha no padrão da CGM.</li>
+    <li><strong>Importar Excel</strong> da planilha CONTROLE DE PENDÊNCIAS: não cria processo novo; ignora linha sem processo já cadastrado e diligência repetida (mesmo texto). Localiza o processo pelo número ou pelo processo de origem/pagamento.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>A diligência daquela linha fica concluída. O processo só entra no conjunto de concluídos quando todas as diligências dele estiverem prontas.</div>
+  <div class="note"><strong>Atenção.</strong> Não marque itens de outra diligência nesta tela. O administrador pode desfazer uma indicação de atendimento feita cedo demais.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="pessoas" data-roles="gestao">
+  <h2>23 · Gestão: Pessoas CGM</h2>
+  <p class="lead">Registra férias, cursos e outras indisponibilidades. Não substitui o controle formal de pessoal.</p>
+  <ol>
+    <li>Abra <strong>Pessoas CGM</strong>.</li>
+    <li>Escolha servidor, tipo e período (ou o dia da semana, se for recorrente).</li>
+    <li>Clique em <strong>Registrar</strong>.</li>
+    <li>Se deixar de valer, use <strong>Desativar</strong> — o histórico permanece.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>A informação aparece quando o analista encaminha para um colega.</div>
+  <div class="note"><strong>Atenção.</strong> Indisponibilidade informa; não bloqueia acesso nem o encaminhamento.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="cadastros" data-roles="gestao">
+  <h2>24 · Gestão: Cadastros</h2>
+  <p class="lead">Listas do sistema: unidades, espécies, prioridades e tipos de indisponibilidade. Não se exclui — inativa e reativa.</p>
+  <ol>
+    <li>Abra <strong>Cadastros</strong> e escolha a aba.</li>
+    <li><strong>Unidades</strong> — secretarias da entrada.</li>
+    <li><strong>Espécies</strong> — nome, grupo, se gera relatório, se exige contratada ou valor.</li>
+    <li><strong>Prioridades</strong> — prazos. <strong>Tipos de indisponibilidade</strong> — férias, curso etc.</li>
+    <li>Para incluir: preencha Novo registro e <strong>Adicionar</strong>. Para ajustar: altere e <strong>Salvar</strong>.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>As opções ativas aparecem nos formulários do dia a dia.</div>
+  <div class="note"><strong>Atenção.</strong> Grupo da espécie e código da prioridade ficam travados depois de usados, para não bagunçar processos antigos. Não crie duplicata só para corrigir grafia — inative e cadastre o nome certo.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="funcoes" data-roles="gestao">
+  <h2>25 · Gestão e admin: escolher funções</h2>
+  <p class="lead">A conta de Gestão (e a de administrador) soma funções operacionais sem perder o papel principal.</p>
+  <ol>
+    <li>Abra <strong>Funções</strong>, no grupo Conta do menu.</li>
+    <li>O papel principal permanece marcado e não se desmarca nesta tela.</li>
+    <li>Marque <strong>Protocolo</strong>, <strong>Licitações e Contratos</strong> e/ou <strong>Liquidações</strong>, conforme o trabalho do dia.</li>
+    <li>Clique em <strong>Salvar funções</strong>. O menu passa a mostrar as áreas marcadas.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>Exemplo: Protocolo + Liquidações. Aparecem Novo Processo, Fila de análise e Controle de relatório, junto com o Dashboard da Gestão.</div>
+  <div class="note"><strong>Administrador.</strong> Também ajusta as funções extras de outra conta de Gestão na tela Usuários, com as caixas ao lado do papel.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="historico" data-roles="todos">
+  <h2>26 · Histórico do processo</h2>
+  <p class="lead">O relógio nas listas abre o histórico em blocos, do cadastro até as passagens pela CGM.</p>
+  <ol>
+    <li>Clique no ícone de histórico na linha do processo.</li>
+    <li><strong>Informações</strong> — número, volume, secretaria, espécie, entrada, saída, destino.</li>
+    <li><strong>Análise</strong> — relatório, valor, origem, observação. Em Licitações e Liquidações, os arquivos anexados, com preview e PDF do Word.</li>
+    <li><strong>Eventos da tramitação</strong> — quem assumiu, encaminhou, deu saída.</li>
+    <li><strong>Diligências</strong> — checklist e o que já foi concluído. Em seguida, as <strong>passagens pela CGM</strong>.</li>
+  </ol>
+  <div class="result"><strong>Resultado esperado</strong>Você confere a passagem certa antes de comunicar divergência.</div>
+  <div class="note"><strong>Dica.</strong> Passe o mouse (ou toque) nos cartões de informação para ler o que cada campo significa. O histórico não substitui os documentos do processo.</div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="duvidas" data-roles="todos">
+  <h2>27 · Dúvidas frequentes</h2>
+  <p class="lead">Pesquise a palavra da tela ou da tarefa no campo acima. Abaixo, as situações mais comuns.</p>
+  <details>
+    <summary>Não consigo entrar / senha incorreta</summary>
+    <p>Confira usuário e teclado. Se persistir, peça redefinição ao administrador. Não envie a senha. <a href="#senha">Ver procedimento</a>.</p>
+  </details>
+  <details>
+    <summary>Meu menu está diferente</summary>
+    <p>Confira o papel no rodapé. Gestão e administrador somam Protocolo, Licitações e Liquidações no menu Funções. Peça ajuste se o papel estiver errado. <a href="#funcoes">Ver escolher funções</a>.</p>
+  </details>
+  <details>
+    <summary>O processo não aparece na fila</summary>
+    <p>Remova filtros e confira o grupo da espécie. Processos da CGM e da espécie Contabilidade ficam em Processos Contabilidade, fora da fila. <a href="#cgm">Ver Processos Contabilidade</a>.</p>
+  </details>
+  <details>
+    <summary>A busca de Processos Protocolo não achou</summary>
+    <p>A busca olha Ativos e Finalizados juntos. Veja se já saiu (Finalizados) ou se está em Processos Contabilidade. Se o número tem várias passagens, a lista mostra só a última; as anteriores estão no Histórico. <a href="#ativos">Ver Processos Protocolo</a>.</p>
+  </details>
+  <details>
+    <summary>O processo precisa ser analisado para dar saída?</summary>
+    <p>Não. Em Processos Protocolo, o Protocolo registra a saída na hora. <a href="#saida">Ver saída</a>.</p>
+  </details>
+  <details>
+    <summary>Não consigo encaminhar</summary>
+    <p>Salve a análise. Confira status (não use Não Aplicável), destino e, em Liquidações, o número do relatório. <a href="#analise">Ver análise</a>.</p>
+  </details>
+  <details>
+    <summary>Como vejo um Word anexado?</summary>
+    <p>Na ficha ou no histórico de Licitações e de Liquidações. O sistema mostra o preview em PDF e deixa baixar o Word ou a cópia em PDF. <a href="#anexos">Ver anexos</a>.</p>
+  </details>
+  <details>
+    <summary>Para que serve o Controle de relatório?</summary>
+    <p>É a planilha das Liquidações: números, valores, destinos. Dá para importar Excel, gerar número e destinar números. <a href="#controle-relatorio">Ver controle</a>.</p>
+  </details>
+  <details>
+    <summary>Concluir diligência finaliza o processo inteiro?</summary>
+    <p>Não. Conclui só aquela linha. O processo fica concluído no módulo quando todas as diligências dele estiverem prontas. <a href="#diligencias">Ver diligências</a>.</p>
+  </details>
+  <details>
+    <summary>Cadastrei a diligência. E agora?</summary>
+    <p>A Gestão trata fora do sistema e conclui no módulo Diligências, item a item. Se houver indicação, o analista confirma em Atendimentos indicados. <a href="#pendencias">Ver diligências do analista</a>.</p>
+  </details>
+  <details>
+    <summary>Onde assino o despacho no sistema?</summary>
+    <p>Em lugar nenhum. A assinatura do Controlador é no papel. O analista encaminha para o Controlador. <a href="#encaminhar">Ver encaminhar</a>.</p>
+  </details>
+  <details>
+    <summary>Posso apagar um processo?</summary>
+    <p>Não no dia a dia. A Gestão cancela com motivo; o registro continua no histórico. <a href="#gestao-processos">Ver Gestão</a>.</p>
+  </details>
+  <details>
+    <summary>A exportação pede período ou vem vazia</summary>
+    <p>Informe início e fim das datas de saída. Revise os filtros. <a href="#saida">Ver saída e exportação</a>.</p>
+  </details>
+  <details>
+    <summary>Tela não responde ou a conexão caiu</summary>
+    <p>Antes de repetir Salvar ou Registrar saída, olhe a lista para ver se a operação já gravou. Informe horário e mensagem ao suporte, sem enviar senha.</p>
+  </details>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<article class="chapter" id="rotinas" data-roles="todos">
+  <h2>28 · Rotina do dia</h2>
+  <p class="lead">Uma conferência curta no começo e no fim do expediente evita atraso no registro.</p>
+  <div class="routine">
+    <div>
+      <h3>Protocolo</h3>
+      <p>Lançar as entradas do dia. Acompanhar Processos Protocolo. Registrar a saída na aba Todos. Gerar planilha se a casa pedir. Conferir Processos Contabilidade.</p>
+    </div>
+    <div>
+      <h3>Licitações</h3>
+      <p>Olhar a fila e o Controle de análise. Assumir, anexar o arquivo, registrar diligência se faltar documento, encaminhar ao Controlador. Conferir Atendimentos indicados.</p>
+    </div>
+    <div>
+      <h3>Liquidações</h3>
+      <p>Olhar a fila e o Controle de relatório. Nova análise ou Assumir, gerar número, diligência se faltar, encaminhar. Conferir Atendimentos indicados.</p>
+    </div>
+    <div>
+      <h3>Gestão</h3>
+      <p>Dashboard e prazos. Ajustar prioridades. Recolher o que está Com o Controlador. Concluir diligências item a item ou importar a planilha de pendências. Manter cadastros e Pessoas CGM. Se for operar Protocolo ou análise, marcar as funções no menu Funções.</p>
+    </div>
+  </div>
+  <p class="end"><a href="#inicio">Voltar à escolha de perfil ↑</a></p>
+</article>
+
+<footer>
+  <strong>Sistema de Protocolo e Gestão de Processos</strong><br>
+  Controladoria Geral do Município de Saquarema. Guia de uso — versão 2.0, outubro de 2026.
+  Este material explica as telas; não substitui atos normativos da instituição. Canal de suporte: quem administra as contas na CGM/TI.
+</footer>
+</main>
+</div>
+<script src="{% static 'manual/manual.js' %}"></script>
+</body>
+</html>

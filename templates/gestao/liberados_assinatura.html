@@ -139,7 +139,7 @@
                     <select id="analistaDevolverLista" name="destinatario" class="select">
                         <option value="">Fila do grupo</option>
                         {% for a in analistas %}
-                            <option value="{{ a.id }}" data-grupo="{{ a.grupo }}">{{ a.nome }}</option>
+                            <option value="{{ a.id }}" data-grupo="{{ a.grupos|join:',' }}">{{ a.nome }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -161,7 +161,8 @@
         var grupo = botao.getAttribute('data-grupo');
         var opcoes = form.querySelectorAll('option[data-grupo]');
         for (var i = 0; i < opcoes.length; i++) {
-            opcoes[i].hidden = opcoes[i].getAttribute('data-grupo') !== grupo;
+            var grupos = (opcoes[i].getAttribute('data-grupo') || '').split(',');
+            opcoes[i].hidden = grupos.indexOf(grupo) === -1;
         }
         form.querySelector('[name="destinatario"]').value = '';
         form.querySelector('[name="motivo"]').value = '';

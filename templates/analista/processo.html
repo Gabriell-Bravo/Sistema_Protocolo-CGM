@@ -289,7 +289,7 @@
                             <select id="analistaDevolucao" name="destinatario" class="select">
                                 <option value="">Fila do grupo</option>
                                 {% for a in analistas %}
-                                    {% if a.grupo == processo.genero %}
+                                    {% if processo.genero in a.grupos %}
                                         <option value="{{ a.id }}">{{ a.nome }}</option>
                                     {% endif %}
                                 {% endfor %}
@@ -377,6 +377,11 @@
             <p class="field__hint" style="margin:-6px 0 14px;">
                 Campos iguais à planilha de <strong>{{ sequencia_relatorio_nome }}</strong>
                 (Controle de Relatórios). Número e data do relatório ficam acima; o restante alimenta a planilha.
+                O arquivo do relatório, se houver, vai no bloco anexado acima — não é obrigatório para encaminhar.
+            </p>
+            {% elif eh_liquidacao %}
+            <p class="field__hint" style="margin:-6px 0 14px;">
+                O arquivo do relatório, se houver, vai no bloco anexado acima. Não é obrigatório para encaminhar ao Controlador.
             </p>
             {% endif %}
             <div class="form-grid form-grid--full">
@@ -782,7 +787,7 @@
                         <span class="material-symbols-rounded">draw</span>
                         <div class="encaminhamento__texto">
                             <div class="encaminhamento__titulo">Encaminhar para o Controlador</div>
-                            <div class="encaminhamento__hint">{% if eh_licitacao %}O arquivo anexado segue para assinatura.{% else %}A análise está pronta. Segue para assinatura.{% endif %}</div>
+                            <div class="encaminhamento__hint">{% if eh_licitacao %}O arquivo anexado segue para assinatura.{% else %}A análise está pronta. Segue para assinatura. O relatório em arquivo é opcional.{% endif %}</div>
                         </div>
                     </button>
                     {% endif %}

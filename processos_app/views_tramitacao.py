@@ -298,6 +298,7 @@ def opcoes_de_analistas(usuario_atual=None):
         'id': analista.id,
         'nome': perm.nome_usuario(analista),
         'grupo': perm.grupo_do_analista(analista),
+        'grupos': sorted(perm.grupos_do_analista(analista)),
         'disponibilidade': disponibilidade.get(analista.id, gestao_pessoas.DISPONIVEL),
         'disponivel': disponibilidade.get(analista.id) == gestao_pessoas.DISPONIVEL,
     } for analista in analistas]

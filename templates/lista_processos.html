@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 
-{% block title %}{% if aba_cgm %}Processos CGM{% elif processos_protocolo_unificado %}Processos Protocolo{% else %}Processos Ativos{% endif %}{% endblock %}
-{% block page_title %}{% if aba_cgm %}Processos CGM{% elif processos_protocolo_unificado %}Processos Protocolo{% else %}Processos Ativos{% endif %}{% endblock %}
-{% block page_subtitle %}{% if aba_cgm %}Processos da {{ secretaria_cgm }} e da espécie Contabilidade — só Protocolo e Gestão{% elif processos_protocolo_unificado %}Ativos (ainda na CGM) e Finalizados (com saída). A busca cobre as duas abas.{% else %}Fonte da verdade do que ainda está na CGM. Pendentes = o que a fila dos analistas e a Gestão veem. Saída física remove daqui e das filas.{% endif %}{% endblock %}
+{% block title %}{% if aba_cgm %}Processos Contabilidade{% elif processos_protocolo_unificado %}Processos Protocolo{% else %}Processos Ativos{% endif %}{% endblock %}
+{% block page_title %}{% if aba_cgm %}Processos Contabilidade{% elif processos_protocolo_unificado %}Processos Protocolo{% else %}Processos Ativos{% endif %}{% endblock %}
+{% block page_subtitle %}{% if aba_cgm %}Processos da Contabilidade — só Protocolo e Gestão{% elif processos_protocolo_unificado %}Ativos (ainda na CGM) e Finalizados (com saída). A busca cobre as duas abas.{% else %}Fonte da verdade do que ainda está na CGM. Pendentes = o que a fila dos analistas e a Gestão veem. Saída física remove daqui e das filas.{% endif %}{% endblock %}
 
 {% block topbar_actions %}
     {% if can_export_ativos %}
@@ -34,7 +34,7 @@
             </a>
             <a href="{% url 'listar_processos' %}?aba=cgm&fase={{ fase|default:'pendentes' }}"
                class="chip chip--ativo">
-                Processos CGM
+                Processos Contabilidade
             </a>
         </div>
     </section>
@@ -47,7 +47,7 @@
             </a>
             <a href="{% url 'listar_processos' %}?aba=cgm&fase={{ fase|default:'pendentes' }}"
                class="chip">
-                Processos CGM
+                Processos Contabilidade
             </a>
         </div>
     </section>
@@ -504,7 +504,9 @@
                 inputElement.className = 'edit-field';
                 const prioridadeOptions = [
                     {value: 'NORMAL', text: 'Normal'},
-                    {value: 'PRIORITARIO', text: 'Prioritário'},
+                    {value: 'N_RECORRENTE', text: 'Prioridade N/Recorrente'},
+                    {value: 'RECORRENTE', text: 'Prioridade recorrente'},
+                    {value: 'PRIORITARIO', text: 'Prioridade de obras'},
                     {value: 'URGENTE', text: 'Urgente'}
                 ];
                 prioridadeOptions.forEach(optionData => {

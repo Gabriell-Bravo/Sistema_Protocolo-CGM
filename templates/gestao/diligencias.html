@@ -1,5 +1,25 @@
 {% extends "base.html" %}
 
+{% block extra_css %}
+<style>
+.table--diligencias .dil-preview .dil-check {
+    max-height: 4.2em;
+    overflow: hidden;
+    min-height: 0;
+}
+.table--diligencias .dil-preview.is-expanded .dil-check {
+    max-height: none;
+    overflow: visible;
+}
+.table--diligencias .dil-preview.is-expanded .dil-check__text--clamp {
+    display: block;
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+    overflow: visible;
+}
+</style>
+{% endblock %}
+
 {% block title %}Diligências{% endblock %}
 {% block page_title %}Diligências{% endblock %}
 {% block page_subtitle %}{% if is_analista %}Consulta das diligências de Licitação e Liquidação. A conclusão é da Gestão ou do administrador.{% elif status_atual == 'RESOLVIDA' %}Processos em que todas as diligências foram concluídas.{% else %}Diligências abertas. Conclua cada uma; o processo vai para Finalizados quando todas estiverem completas.{% endif %}{% endblock %}
@@ -236,6 +256,38 @@ Processos criados por engano em importação antiga serão removidos."
 {% block extra_js %}
 <script>
 (function () {
+    function recortarLista() {
+        document.querySelectorAll('.table--diligencias [data-dil-resumo]').forEach(function (btn) {
+            var caixa = btn.closest('.dil-preview') || btn.parentElement;
+            if (!caixa) return;
+            if (caixa.classList.contains('is-expanded')) {
+                btn.hidden = false;
+                return;
+            }
+            var lista = caixa.querySelector('.dil-check');
+            btn.hidden = !(lista && lista.scrollHeight > lista.clientHeight + 2);
+        });
+    }
+    document.addEventListener('click', function (event) {
+        var btn = event.target.closest('.table--diligencias [data-dil-resumo]');
+        if (!btn) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+        var caixa = btn.closest('.dil-preview') || btn.parentElement;
+        if (!caixa) return;
+        var aberto = caixa.classList.toggle('is-expanded');
+        btn.textContent = aberto ? 'Ver menos' : 'Ver mais';
+        btn.setAttribute('aria-expanded', aberto ? 'true' : 'false');
+    }, true);
+    recortarLista();
+    requestAnimationFrame(recortarLista);
+    window.addEventListener('load', recortarLista);
+    window.addEventListener('resize', recortarLista);
+})();
+</script>
+<script>
+(function () {
     var modal = document.getElementById('modalChecklist');
     var form = document.getElementById('formChecklist');
     var lista = document.getElementById('checklistLista');
@@ -308,6 +360,7 @@ Processos criados por engano em importação antiga serão removidos."
     }
 
     document.addEventListener('click', function (event) {
+        if (event.target.closest('[data-dil-resumo], [data-dil-mais]')) return;
         var ver = event.target.closest('[data-checklist-ver]');
         if (ver) {
             event.preventDefault();

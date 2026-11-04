@@ -157,7 +157,10 @@ def equipe(inicio, fim, referencia=None):
             liberado_assinatura_em__date__lte=fim).count()
         linhas.append({
             'nome': perm.nome_usuario(analista),
-            'grupo': Processo.GENERO_LABELS.get(perm.grupo_do_analista(analista) or '', '—'),
+            'grupo': ' / '.join(
+                Processo.GENERO_LABELS.get(g, g)
+                for g in sorted(perm.grupos_do_analista(analista))
+            ) or '—',
             'disponibilidade': disponibilidade.get(analista.id, gestao_pessoas.DISPONIVEL),
             'disponivel': disponibilidade.get(analista.id) == gestao_pessoas.DISPONIVEL,
             'em_analise': len(em_analise),
