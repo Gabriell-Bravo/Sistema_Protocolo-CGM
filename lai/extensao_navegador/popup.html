@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<style>
+  body { font: 14px/1.4 system-ui, sans-serif; margin: 0; padding: 14px; width: 280px; color: #1a2b3c; }
+  h1 { font-size: 15px; margin: 0 0 8px; }
+  .linha { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+  .ponto { width: 10px; height: 10px; border-radius: 50%; background: #c0392b; flex: none; }
+  .ponto.on { background: #1e9e55; }
+  small { color: #5b6b7b; display: block; margin-top: 8px; }
+</style>
+</head>
+<body>
+<h1>LAI CGM</h1>
+<div class="linha"><span class="ponto" id="p-fala"></span><span id="t-fala">Verificando o Fala.BR…</span></div>
+<small id="servidor"></small>
+<small>Entre no Fala.BR com o gov.br numa aba normal. Depois use a aba LAI do sistema.</small>
+<script src="popup.js"></script>
+</body>
+</html>

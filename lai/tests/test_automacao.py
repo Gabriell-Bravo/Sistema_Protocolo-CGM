@@ -11,7 +11,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from openpyxl import Workbook, load_workbook
 
-from lai import automacao_falabr, pastas_pedidos, planilha_controle
+from lai import automacao_falabr, pastas_pedidos, planilha_controle, ponte_extensao
 from lai.models import ManifestacaoFalabr, Operador
 from lai.navegador_falabr import NavegadorError
 
@@ -285,22 +285,23 @@ class RotasDaAutomacaoTest(TestCase):
 
     def test_inicia_com_os_marcados_usando_o_tema(self):
         registro = self._registro(tema='Tema corrigido')
-        with patch('lai.views.automacao_falabr.iniciar') as iniciar:
+        with patch('lai.views.ponte_extensao.iniciar_pastas', return_value={'total': 1, 'ja_prontos': 0, 'pendentes': []}) as iniciar:
             resp = self.client.post(reverse('lai:automacao_iniciar'), {'selecionados': [registro.pk, 'abc']})
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json(), {'ok': True, 'total': 1})
+        self.assertTrue(resp.json()['ok'])
+        self.assertEqual(resp.json()['total'], 1)
         item = iniciar.call_args.args[0][0]
         self.assertEqual((item['nup'], item['tema'], item['prazo']), ('03996.2026.000936-10', 'Tema corrigido', date(2026, 11, 3)))
 
     def test_sem_tema_editado_usa_o_assunto(self):
         registro = self._registro()
-        with patch('lai.views.automacao_falabr.iniciar') as iniciar:
+        with patch('lai.views.ponte_extensao.iniciar_pastas', return_value={'total': 1, 'ja_prontos': 0, 'pendentes': []}) as iniciar:
             self.client.post(reverse('lai:automacao_iniciar'), {'selecionados': [registro.pk]})
         self.assertEqual(iniciar.call_args.args[0][0]['tema'], 'Quadro de cargos')
 
     def test_erro_do_navegador_vira_mensagem(self):
         registro = self._registro()
-        with patch('lai.views.automacao_falabr.iniciar', side_effect=NavegadorError('Janela fechada')):
+        with patch('lai.views.ponte_extensao.iniciar_pastas', side_effect=ponte_extensao.ExtensaoError('Janela fechada')):
             resp = self.client.post(reverse('lai:automacao_iniciar'), {'selecionados': [registro.pk]})
         self.assertEqual(resp.status_code, 409)
         self.assertEqual(resp.json()['erro'], 'Janela fechada')
@@ -317,6 +318,7 @@ class RotasDaAutomacaoTest(TestCase):
         self.assertIn('Concluído!', texto)
         self.assertIn('name="selecionados"', texto)
         self.assertIn('Iniciando automatização', texto)
+        self.assertIn('Baixar pastas (.zip)', texto)
         self.assertIn('Tema da pasta: QUADRO DE CARGOS', texto)
 
     def test_editar_tema(self):

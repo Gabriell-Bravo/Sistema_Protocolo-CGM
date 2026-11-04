@@ -35,3 +35,4 @@
 .lai-auto--indeterminado .lai-auto__barra span{width:38%!important;animation:lai-auto-vai 1.3s ease-in-out infinite alternate}
 @keyframes lai-dot-pulsa{0%,100%{box-shadow:0 0 0 3px rgba(22,163,74,.28)}50%{box-shadow:0 0 0 7px rgba(22,163,74,.1)}}@keyframes lai-auto-vai{from{margin-left:0}to{margin-left:62%}}
 @media(prefers-reduced-motion:reduce){.lai-dot--online,.lai-auto--indeterminado .lai-auto__barra span{animation:none}}.lai-auto [hidden]{display:none!important}
+.lai-passos{padding-left:22px;line-height:1.75;margin:10px 0}.lai-passos li{margin-bottom:6px}

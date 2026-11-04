@@ -1,6 +1,6 @@
 import csv
 import os
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from django import forms
 import uuid
 from io import BytesIO
@@ -23,7 +23,7 @@ from .forms import *
 from .permissions import exigir, visiveis
 from .arquivos import guardar, validar
 from .extracao import extrair
-from . import acompanhamento, automacao_falabr, falabr, navegador_falabr, services
+from . import acompanhamento, automacao_falabr, falabr, navegador_falabr, ponte_extensao, services
 from .prazos import somar, marco
 from .pdf import gerar_memorando
 
@@ -73,39 +73,17 @@ def pendentes(request):
     erro = None
     if request.method == 'POST':
         acao = request.POST.get('acao')
-        try:
-            if acao == 'logar':
-                navegador_falabr.abrir()
-            elif acao == 'trazer':
-                lido = navegador_falabr.trazer()
-                gravado = acompanhamento.sincronizar_leitura(lido)
-                aviso = (f'{gravado["abertas"]} aberta(s) e {gravado["encerradas"]} encerrada(s) lida(s) do Fala.BR: '
-                         f'{gravado["novas"]} nova(s) e {gravado["alteradas"]} com prazo ou situação alterados.')
-                if gravado['saiu']:
-                    aviso += f' {gravado["saiu"]} saiu(ram) da fila aberta desde a última leitura.'
-                if gravado['incompleta']:
-                    aviso += ' O Fala.BR informou mais registros do que foram lidos; leia de novo para completar.'
-                messages.success(request, aviso)
-            elif acao == 'sair':
-                navegador_falabr.fechar()
-            elif acao == 'tema':
-                pk = request.POST.get('pk', '')
-                tema = ' '.join((request.POST.get('tema') or '').split())[:200]
-                if pk.isdigit() and ManifestacaoFalabr.objects.filter(pk=pk).update(tema=tema):
-                    messages.success(request, 'Tema atualizado. Ele vale para a próxima vez que a pasta for criada ou conferida.')
-                else:
-                    messages.error(request, 'Pedido não encontrado.')
-                filtro_volta = acompanhamento.filtro_valido(request.POST.get('filtro'))
-                busca_volta = (request.POST.get('q') or '').strip()[:80]
-                return redirect(reverse('lai:pendentes') + '?' + urlencode({'filtro': filtro_volta, 'q': busca_volta}))
+        if acao == 'tema':
+            pk = request.POST.get('pk', '')
+            tema = ' '.join((request.POST.get('tema') or '').split())[:200]
+            if pk.isdigit() and ManifestacaoFalabr.objects.filter(pk=pk).update(tema=tema):
+                messages.success(request, 'Tema atualizado. Ele vale para a próxima vez que a pasta for criada ou conferida.')
             else:
-                erro = 'Ação desconhecida.'
-        except navegador_falabr.NavegadorError as exc:
-            erro = str(exc)
-        if not erro:
-            return redirect('lai:pendentes')
-    conexao = navegador_falabr.sessao_guardada()
-    estado_sessao = 'verificando' if not conexao['verificado'] else ('online' if conexao['online'] else 'offline')
+                messages.error(request, 'Pedido não encontrado.')
+            filtro_volta = acompanhamento.filtro_valido(request.POST.get('filtro'))
+            busca_volta = (request.POST.get('q') or '').strip()[:80]
+            return redirect(reverse('lai:pendentes') + '?' + urlencode({'filtro': filtro_volta, 'q': busca_volta}))
+        erro = 'Ação desconhecida.'
     registros = list(ManifestacaoFalabr.objects.all())
     if not registros and falabr.configurado():
         try:
@@ -118,7 +96,7 @@ def pendentes(request):
     rows = acompanhamento.filtrar(todos, filtro, busca)
     return render(request, 'lai/pendentes.html', {
         'rows': rows, 'cards': acompanhamento.resumo(todos), 'erro': erro,
-        'estado_sessao': estado_sessao, 'sessao': conexao,
+        'versao_extensao': ponte_extensao.VERSAO, 'base_guardada': navegador_falabr._base_guardada(),
         'planilha_ativa': bool(getattr(settings, 'LAI_PLANILHA_ATIVA', False)),
         'pode_abrir_pasta': _acesso_local(request), 'pasta_pedidos': str(automacao_falabr.pasta_base()),
         'filtro': filtro, 'busca': busca, 'filtros': acompanhamento.FILTROS,
@@ -127,18 +105,42 @@ def pendentes(request):
         'ultima_leitura': max((r['lida_em'] for r in todos if r['lida_em']), default=None),
     })
 
+def _origem_do_sistema(request):
+    """Endereço (https://servidor) que a extensão vai usar. Atrás de proxy, o esquema pode chegar como http."""
+    publica = urlsplit(getattr(settings, 'LAI_PUBLIC_URL', '') or '')
+    host = request.get_host()
+    if publica.scheme and publica.netloc == host:
+        return f'{publica.scheme}://{publica.netloc}'
+    encaminhado = (request.headers.get('X-Forwarded-Proto') or '').split(',')[0].strip()
+    esquema = encaminhado or ('https' if request.is_secure() else 'http')
+    return f'{esquema}://{host}'
+
 @privado
-def falabr_sessao(request):
-    """Diz à tela se a pessoa está online no Fala.BR (nome e bolinha verde ou vermelha)."""
+def extensao(request):
+    """Como instalar a extensão do navegador e o botão para baixá-la."""
     exigir(request.user, 'operar')
-    if automacao_falabr.estado().get('rodando'):
-        # Durante a automação o navegador está ocupado: vale a última leitura.
-        dados = navegador_falabr.sessao_guardada()
-        dados['ocupado'] = True
-    else:
-        dados = navegador_falabr.sessao()
-    return JsonResponse({'online': dados['online'], 'nome': dados['nome'], 'perfil': dados['perfil'],
-                         'janela': dados['janela'], 'ocupado': bool(dados.get('ocupado'))})
+    return render(request, 'lai/extensao.html', {'versao': ponte_extensao.VERSAO, 'origem': _origem_do_sistema(request)})
+
+@privado
+def extensao_baixar(request):
+    """ZIP da extensão já apontando para este sistema e com o código de quem baixa."""
+    exigir(request.user, 'operar')
+    pacote = ponte_extensao.montar_pacote(_origem_do_sistema(request), request.user)
+    resposta = HttpResponse(pacote, content_type='application/zip')
+    resposta['Content-Disposition'] = 'attachment; filename="lai-cgm-extensao.zip"'
+    return resposta
+
+@privado
+def trazer_iniciar(request):
+    """A tela vai pedir à extensão que leia o Fala.BR; aqui nasce o andamento que ela acompanha."""
+    exigir(request.user, 'operar')
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'erro': 'Use o botão da tela.'}, status=405)
+    try:
+        dados = ponte_extensao.iniciar_trazer()
+    except ponte_extensao.ExtensaoError as exc:
+        return JsonResponse({'ok': False, 'erro': str(exc)}, status=409)
+    return JsonResponse(dict(dados, ok=True))
 
 @privado
 def automacao_iniciar(request):
@@ -152,10 +154,37 @@ def automacao_iniciar(request):
               'cadastro': r.cadastro, 'prazo': r.prazo}
              for r in ManifestacaoFalabr.objects.filter(pk__in=ids).order_by('nup')]
     try:
-        automacao_falabr.iniciar(itens)
-    except navegador_falabr.NavegadorError as exc:
+        preparo = ponte_extensao.iniciar_pastas(itens)
+    except ponte_extensao.ExtensaoError as exc:
         return JsonResponse({'ok': False, 'erro': str(exc)}, status=409)
-    return JsonResponse({'ok': True, 'total': len(itens)})
+    return JsonResponse(dict(preparo, ok=True))
+
+@privado
+def automacao_cancelar(request):
+    exigir(request.user, 'operar')
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'erro': 'Use o botão da tela.'}, status=405)
+    ponte_extensao.cancelar((request.POST.get('motivo') or 'Cancelado.')[:300])
+    return JsonResponse({'ok': True})
+
+@privado
+def automacao_zip(request):
+    """Baixa, num ZIP, as pastas dos pedidos da última tarefa (a pasta fica no servidor)."""
+    exigir(request.user, 'operar')
+    if not ponte_extensao.pastas_da_tarefa():
+        return HttpResponse('Nenhuma pasta pronta para baixar.', status=404, content_type='text/plain; charset=utf-8')
+    caminho = ponte_extensao.zip_das_pastas()
+    arquivo = open(caminho, 'rb')
+
+    class _ApagaDepois(FileResponse):
+        def close(self):
+            super().close()
+            try:
+                os.unlink(caminho)
+            except OSError:
+                pass
+    resposta = _ApagaDepois(arquivo, as_attachment=True, filename='pastas-lai.zip', content_type='application/zip')
+    return resposta
 
 def _acesso_local(request):
     """Abrir pasta só faz sentido quando quem clica está no mesmo computador do sistema (Windows)."""
@@ -164,8 +193,9 @@ def _acesso_local(request):
 @privado
 def automacao_estado(request):
     exigir(request.user, 'operar')
-    dados = automacao_falabr.estado()
+    dados = ponte_extensao.estado()
     dados['pode_abrir_pasta'] = _acesso_local(request)
+    dados['pode_baixar_zip'] = bool(ponte_extensao.pastas_da_tarefa()) and not dados.get('rodando')
     return JsonResponse(dados)
 
 @privado

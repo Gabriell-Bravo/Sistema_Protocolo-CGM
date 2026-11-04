@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 import threading
 import time
@@ -240,7 +241,11 @@ def abrir():
         return
     executavel = _executavel()
     if not executavel:
-        raise NavegadorError('Não encontrei o Edge nem o Chrome neste computador.')
+        raise NavegadorError(
+            'Não encontrei o Edge nem o Chrome neste computador. '
+            'Se o sistema roda em servidor ou Docker, o Logar só funciona no computador da pessoa. '
+            'Se está no seu computador, informe o caminho em LAI_NAVEGADOR (ex.: C:\\...\\msedge.exe).'
+        )
     _encerrar_perfil()
     time.sleep(0.8)
     pasta = _perfil()
@@ -463,19 +468,53 @@ def _perfil():
     return str(pasta)
 
 
-def _executavel():
+def _do_registro():
+    """Caminhos que o próprio Windows guarda para o Edge e o Chrome."""
+    try:
+        import winreg
+    except ImportError:
+        return []
+    achados = []
+    for raiz in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+        for exe in ('msedge.exe', 'chrome.exe'):
+            chave = rf'SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{exe}'
+            for acesso in (winreg.KEY_READ | winreg.KEY_WOW64_64KEY, winreg.KEY_READ | winreg.KEY_WOW64_32KEY):
+                try:
+                    with winreg.OpenKey(raiz, chave, 0, acesso) as aberta:
+                        achados.append(winreg.QueryValueEx(aberta, '')[0])
+                except OSError:
+                    continue
+    return achados
+
+
+def _candidatos():
     programas_x86 = os.environ.get('PROGRAMFILES(X86)', r'C:\Program Files (x86)')
     programas = os.environ.get('PROGRAMFILES', r'C:\Program Files')
-    local = os.environ.get('LOCALAPPDATA', '')
-    candidatos = [
-        Path(programas_x86) / 'Microsoft' / 'Edge' / 'Application' / 'msedge.exe',
-        Path(programas) / 'Microsoft' / 'Edge' / 'Application' / 'msedge.exe',
-        Path(local) / 'Google' / 'Chrome' / 'Application' / 'chrome.exe',
-        Path(programas) / 'Google' / 'Chrome' / 'Application' / 'chrome.exe',
-    ]
-    for caminho in candidatos:
-        if caminho.is_file():
-            return str(caminho)
+    programas_w6432 = os.environ.get('PROGRAMW6432', programas)
+    local = os.environ.get('LOCALAPPDATA') or str(Path.home() / 'AppData' / 'Local')
+    lista = [getattr(settings, 'LAI_NAVEGADOR', '') or os.environ.get('LAI_NAVEGADOR', '')]
+    for base in (programas_x86, programas, programas_w6432, local):
+        lista.append(str(Path(base) / 'Microsoft' / 'Edge' / 'Application' / 'msedge.exe'))
+        lista.append(str(Path(base) / 'Google' / 'Chrome' / 'Application' / 'chrome.exe'))
+    lista.extend(_do_registro())
+    for nome in ('msedge', 'chrome'):
+        lista.append(shutil.which(nome) or '')
+    vistos = []
+    for item in lista:
+        item = (item or '').strip().strip('"')
+        if item and item not in vistos:
+            vistos.append(item)
+    return vistos
+
+
+def _executavel():
+    for caminho in _candidatos():
+        try:
+            if Path(caminho).is_file():
+                return caminho
+        except OSError:
+            continue
+    log.warning('Navegador não encontrado. Procurei em: %s', _candidatos())
     return None
 
 

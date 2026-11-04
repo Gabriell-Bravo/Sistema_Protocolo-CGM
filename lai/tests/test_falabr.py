@@ -8,6 +8,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from lai import acompanhamento, falabr
 from lai.models import ManifestacaoFalabr, Operador
+from lai import ponte_extensao
 from lai.navegador_falabr import _linhas_da_tabela, protocolos_no_texto
 
 CREDENCIAIS = dict(
@@ -90,8 +91,9 @@ class FalabrPaginaTest(TestCase):
         resp = self.client.get(reverse('lai:pendentes'))
         self.assertEqual(resp.status_code, 200)
         texto = resp.content.decode()
-        self.assertIn('>Logar<', texto)
+        self.assertIn('Instalar a extensão', texto)
         self.assertIn('Trazer NUPs', texto)
+        self.assertNotIn('>Logar<', texto)
         self.assertNotIn('Buscar NUPs', texto)
         self.assertNotIn('00000.2026.000099-00', texto)
     def test_abrir_usa_navegador_comum(self):
@@ -107,46 +109,6 @@ class FalabrPaginaTest(TestCase):
         self.assertTrue(any(item.startswith('--user-data-dir=') for item in linha))
         self.assertNotIn('--enable-automation', linha)
         self.assertNotIn('--headless', linha)
-    def test_botao_logar_nao_abre_navegador_de_verdade(self):
-        with patch('lai.views.navegador_falabr.abrir') as abrir:
-            resp = self.client.post(reverse('lai:pendentes'), {'acao': 'logar'})
-        self.assertEqual(resp.status_code, 302)
-        abrir.assert_called_once()
-    def test_leitura_recusa_sem_janela(self):
-        with patch('lai.navegador_falabr._porta_responde', return_value=False):
-            resp = self.client.post(reverse('lai:pendentes'), {'acao': 'trazer'})
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn('Clique em Logar', resp.content.decode())
-    def test_leitura_recusa_quando_esta_offline(self):
-        offline = {'online': False, 'nome': '', 'perfil': '', 'janela': True, 'verificado': True}
-        with patch('lai.navegador_falabr._porta_responde', return_value=True), \
-             patch('lai.navegador_falabr.sessao', return_value=offline):
-            resp = self.client.post(reverse('lai:pendentes'), {'acao': 'trazer'})
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn('ainda não está online', resp.content.decode())
-    def test_status_online_mostra_nome_e_offline_sem_janela(self):
-        online = {'online': True, 'nome': 'MARIA TESTE', 'perfil': 'Respondente', 'janela': True, 'verificado': True}
-        with patch('lai.views.navegador_falabr.sessao', return_value=online):
-            dados = self.client.get(reverse('lai:falabr_sessao')).json()
-        self.assertEqual((dados['online'], dados['nome']), (True, 'MARIA TESTE'))
-        with patch('lai.navegador_falabr._porta_responde', return_value=False):
-            dados = self.client.get(reverse('lai:falabr_sessao')).json()
-        self.assertEqual((dados['online'], dados['nome'], dados['janela']), (False, '', False))
-    def test_pagina_ja_sabendo_que_esta_online_mostra_trazer_e_nome(self):
-        online = {'online': True, 'nome': 'MARIA TESTE', 'perfil': '', 'janela': True, 'verificado': True}
-        with patch('lai.views.navegador_falabr.sessao_guardada', return_value=online):
-            texto = self.client.get(reverse('lai:pendentes')).content.decode()
-        self.assertIn('MARIA TESTE', texto)
-        self.assertIn('lai-dot--online', texto)
-        self.assertNotIn('id="btn-trazer" name="acao" value="trazer" type="submit" hidden', texto)
-        self.assertIn('id="btn-logar" name="acao" value="logar" type="submit" hidden', texto)
-    def test_pagina_offline_mostra_logar_e_esconde_trazer(self):
-        offline = {'online': False, 'nome': '', 'perfil': '', 'janela': False, 'verificado': True}
-        with patch('lai.views.navegador_falabr.sessao_guardada', return_value=offline):
-            texto = self.client.get(reverse('lai:pendentes')).content.decode()
-        self.assertIn('lai-dot--offline', texto)
-        self.assertIn('id="btn-trazer" name="acao" value="trazer" type="submit" hidden', texto)
-        self.assertNotIn('id="btn-logar" name="acao" value="logar" type="submit" hidden', texto)
     def test_sessao_online_so_com_nome_no_botao_do_falabr(self):
         from lai import navegador_falabr
         self.assertIn('#avatar-sign-in', navegador_falabr._USUARIO_JS)
@@ -246,22 +208,20 @@ class AcompanhamentoFalabrTest(TestCase):
             'encerradas': {'linhas': list(encerradas), 'total': len(encerradas), 'completa': True},
         }}
 
-    def test_botao_trazer_grava_e_mostra_prazo(self):
+    def test_leitura_gravada_mostra_prazo(self):
         lido = self._leitura(abertas=[dict(self._linha(), nup_normalizada='03996202600093610')])
-        with patch('lai.views.navegador_falabr.trazer', return_value=lido):
-            resp = self.client.post(reverse('lai:pendentes'), {'acao': 'trazer'}, follow=True)
-        texto = resp.content.decode()
+        gravado = acompanhamento.sincronizar_leitura(lido)
+        self.assertIn('1 aberta(s) e 0 encerrada(s) lida(s)', ponte_extensao.resumo_da_leitura(gravado))
+        texto = self.client.get(reverse('lai:pendentes')).content.decode()
         self.assertIn('03996.2026.000936-10', texto)
         self.assertIn('03/11/2026', texto)
-        self.assertIn('1 aberta(s) e 0 encerrada(s) lida(s)', texto)
         self.assertIn('Ainda não importada', texto)
         self.assertIn('Cadastrar', texto)
 
     def test_aviso_quando_lista_incompleta(self):
         lido = self._leitura(abertas=[self._linha()], completa=False)
-        with patch('lai.views.navegador_falabr.trazer', return_value=lido):
-            resp = self.client.post(reverse('lai:pendentes'), {'acao': 'trazer'}, follow=True)
-        self.assertIn('leia de novo para completar', resp.content.decode())
+        gravado = acompanhamento.sincronizar_leitura(lido)
+        self.assertIn('leia de novo para completar', ponte_extensao.resumo_da_leitura(gravado))
 
     def test_encerradas_ficam_fora_das_abertas_e_aparecem_no_filtro(self):
         encerrada = self._linha(nup='03996.2026.000777-00', situacao='Concluída', prazo='01/10/2026')

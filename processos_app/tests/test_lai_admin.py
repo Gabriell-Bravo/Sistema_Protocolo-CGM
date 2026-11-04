@@ -13,7 +13,7 @@ from processos_app.tests.base import criar_usuario
 
 ROTAS_LAI = (
     'lai:dashboard', 'lai:pendentes', 'lai:importar', 'lai:nova', 'lai:gestao',
-    'lai:cadastros', 'lai:exportar', 'lai:exportar_falabr', 'lai:falabr_sessao',
+    'lai:cadastros', 'lai:exportar', 'lai:exportar_falabr', 'lai:extensao',
     'lai:automacao_estado',
 )
 LINK_DO_MENU = 'href="/lai/"'

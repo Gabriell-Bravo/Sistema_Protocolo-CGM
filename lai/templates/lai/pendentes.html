@@ -1,73 +1,24 @@
 {% extends 'lai/base.html' %}{% block lai_content %}
-<div class="lai-heading"><div><div class="lai-kicker">Fala.BR</div><h1>Acompanhamento do Fala.BR</h1><p class="lai-muted">Entre no Fala.BR, traga os NUPs e deixe o sistema baixar o PDF e os anexos de cada pedido em pastas organizadas.</p></div></div>
+<div class="lai-heading"><div><div class="lai-kicker">Fala.BR</div><h1>Acompanhamento do Fala.BR</h1><p class="lai-muted">Entre no Fala.BR com o gov.br, traga os NUPs e deixe o sistema baixar o PDF e os anexos de cada pedido em pastas organizadas.</p></div></div>
 {% if erro %}<div class="lai-notice lai-danger" role="alert">{{ erro }}</div>{% endif %}
-<section class="card lai-conexao" id="lai-conexao" data-url="{% url 'lai:falabr_sessao' %}" data-estado="{{ estado_sessao }}">
+<section class="card lai-conexao" id="lai-conexao" data-estado="verificando" data-versao="{{ versao_extensao }}">
 <div class="card__body lai-conexao__corpo">
 <div class="lai-sessao" role="status" aria-live="polite">
-<span class="lai-dot lai-dot--{{ estado_sessao }}" id="lai-dot" aria-hidden="true"></span>
+<span class="lai-dot" id="lai-dot" aria-hidden="true"></span>
 <div>
-<div class="lai-sessao__nome" id="lai-sessao-nome">{% if estado_sessao == 'online' %}{{ sessao.nome }}{% elif estado_sessao == 'offline' %}Ninguém logado{% else %}Verificando…{% endif %}</div>
-<div class="lai-sessao__estado" id="lai-sessao-estado">{% if estado_sessao == 'online' %}Online{% elif estado_sessao == 'offline' %}Offline{% else %}Conferindo o login no Fala.BR{% endif %}</div>
+<div class="lai-sessao__nome" id="lai-sessao-nome">Verificando…</div>
+<div class="lai-sessao__estado" id="lai-sessao-estado">Conferindo a extensão do navegador</div>
 </div>
 </div>
-<form method="post" id="form-conexao" class="lai-actions">{% csrf_token %}
-<button class="btn btn--primary" id="btn-logar" name="acao" value="logar" type="submit"{% if estado_sessao != 'offline' %} hidden{% endif %}>Logar</button>
-<button class="btn btn--primary" id="btn-trazer" name="acao" value="trazer" type="submit"{% if estado_sessao != 'online' %} hidden{% endif %}>Trazer NUPs</button>
-<button class="btn btn--ghost" id="btn-sair" name="acao" value="sair" type="submit"{% if estado_sessao != 'online' %} hidden{% endif %}>Sair</button>
-</form>
+<div class="lai-actions">
+<a class="btn btn--primary" id="btn-instalar" href="{% url 'lai:extensao' %}" hidden>Instalar a extensão</a>
+<a class="btn btn--primary" id="btn-abrir-falabr" href="https://falabr.cgu.gov.br/" target="_blank" rel="noopener noreferrer" hidden>Abrir o Fala.BR</a>
+<button class="btn btn--primary" id="btn-trazer" type="button" hidden>Trazer NUPs</button>
+<a class="btn btn--ghost" href="{% url 'lai:extensao' %}">Sobre a extensão</a>
 </div>
-<p class="card__body lai-muted lai-conexao__dica" id="lai-dica">{% if estado_sessao == 'online' %}Tudo certo. Clique em Trazer NUPs para carregar os pedidos do Fala.BR.{% elif estado_sessao == 'offline' %}Clique em Logar, entre com o gov.br na janela que abrir e volte aqui. Esta tela muda sozinha quando você entrar.{% else %}&nbsp;{% endif %}</p>
+</div>
+<p class="card__body lai-muted lai-conexao__dica" id="lai-dica">&nbsp;</p>
 </section>
-<script>
-(function () {
-  var caixa = document.getElementById('lai-conexao');
-  var url = caixa.dataset.url;
-  var el = function (id) { return document.getElementById(id); };
-  var atual = caixa.dataset.estado;
-  var textos = {
-    online: 'Tudo certo. Clique em Trazer NUPs para carregar os pedidos do Fala.BR.',
-    offline: 'Clique em Logar, entre com o gov.br na janela que abrir e volte aqui. Esta tela muda sozinha quando você entrar.'
-  };
-  window.laiOnline = atual === 'online';
-
-  function aplicar(estado, nome) {
-    el('lai-dot').className = 'lai-dot lai-dot--' + estado;
-    el('lai-sessao-nome').textContent = estado === 'online' ? nome : (estado === 'offline' ? 'Ninguém logado' : 'Verificando…');
-    el('lai-sessao-estado').textContent = estado === 'online' ? 'Online' : (estado === 'offline' ? 'Offline' : 'Conferindo o login no Fala.BR');
-    el('lai-dica').textContent = textos[estado] || '';
-    el('btn-logar').hidden = estado !== 'offline';
-    el('btn-trazer').hidden = estado !== 'online';
-    el('btn-sair').hidden = estado !== 'online';
-    window.laiOnline = estado === 'online';
-    if (estado !== atual) { atual = estado; document.dispatchEvent(new Event('lai:sessao')); }
-  }
-  function conferir() {
-    if (document.hidden) return;
-    fetch(url, {credentials: 'same-origin'}).then(function (r) { return r.json(); })
-      .then(function (j) { aplicar(j.online ? 'online' : 'offline', j.nome || ''); })
-      .catch(function () { /* mantém o que está na tela e tenta de novo */ });
-  }
-  conferir();
-  setInterval(conferir, 5000);
-  document.addEventListener('visibilitychange', conferir);
-
-  el('form-conexao').addEventListener('submit', function (e) {
-    var acao = e.submitter && e.submitter.value;
-    if (acao === 'logar') {
-      e.submitter.textContent = 'Abrindo a janela…';
-      setTimeout(function () { e.submitter.disabled = true; }, 0);
-    } else if (acao === 'trazer') {
-      var painel = el('lai-auto');
-      painel.hidden = false;
-      painel.classList.remove('lai-auto--fim');
-      painel.classList.add('lai-auto--indeterminado');
-      el('lai-auto-titulo').textContent = 'Trazendo NUPs do Fala.BR…';
-      el('lai-auto-etapa').textContent = 'Lendo os pedidos abertos e encerrados, página por página. Leva cerca de 1 minuto. Não feche a janela do Fala.BR.';
-      setTimeout(function () { document.querySelectorAll('#form-conexao button').forEach(function (b) { b.disabled = true; }); }, 0);
-    }
-  });
-})();
-</script>
 <section class="stats stats--falabr">{% for c in cards %}<a class="stat stat--link {{ c.classe }}{% if c.filtro == filtro %} is-active{% endif %}" href="?filtro={{ c.filtro }}"><div><div class="stat__value">{{ c.valor }}</div><div class="stat__label">{{ c.rotulo }}</div></div></a>{% endfor %}</section>
 <section class="card"><div class="card__header"><h2 class="card__title">{{ filtro_rotulo }} <span class="lai-muted">({{ rows|length }} de {{ total_lido }})</span></h2>{% if ultima_leitura %}<span class="lai-muted">Última leitura: {{ ultima_leitura|date:'d/m/Y H:i' }}</span>{% endif %}</div>
 <div class="card__body">
@@ -87,7 +38,7 @@
 <span class="lai-muted" id="contagem-marcados">Nenhum pedido marcado</span>
 {% if pode_abrir_pasta %}<button class="btn btn--ghost" id="abrir-pasta" type="button">Abrir pasta</button>{% endif %}
 </form>
-<p class="lai-muted">Marque os NUPs e clique em Automatizar pastas: o sistema baixa o PDF (sem os dados do manifestante) e os anexos de cada um e guarda tudo em <code>{{ pasta_pedidos }}</code>, numa pasta por NUP. Nada é alterado no Fala.BR.</p>
+<p class="lai-muted">Marque os NUPs e clique em Automatizar pastas: o sistema baixa o PDF (sem os dados do manifestante) e os anexos de cada um e guarda tudo no servidor, em <code>{{ pasta_pedidos }}</code>, numa pasta por NUP. Ao terminar, baixe tudo num ZIP. Nada é alterado no Fala.BR.</p>
 </div>
 {% endif %}
 <div class="lai-table-wrap"><table><thead><tr>{% if perms.lai.operar %}<th><span class="lai-sr">Marcar</span></th>{% endif %}<th>NUP</th><th>Assunto</th><th>Cadastro</th><th>Prazo</th><th>Situação no Fala.BR</th><th>No módulo</th></tr></thead><tbody>
@@ -106,7 +57,7 @@
 <td><span class="lai-badge">{{ row.situacao|default:'—' }}</span>{% if row.alteracao %}<small>{{ row.alteracao }}{% if row.alterado_em %} (em {{ row.alterado_em|date:'d/m/Y H:i' }}){% endif %}</small>{% endif %}</td>
 <td>{% if row.demanda %}<a href="{% url 'lai:detalhe' row.demanda.pk %}">Já cadastrada</a><small>{{ row.demanda.get_status_display }}</small>{% else %}Ainda não importada{% if row.pk and row.fila == 'ABERTA' and perms.lai.operar %}<small><a class="btn btn--ghost" href="{% url 'lai:nova' %}?falabr={{ row.pk }}">Cadastrar</a></small>{% endif %}{% endif %}{% for aviso in row.avisos %}<small class="lai-aviso">{{ aviso }}</small>{% endfor %}</td>
 </tr>
-{% empty %}<tr><td colspan="7" class="lai-empty">{% if total_lido %}Nenhuma manifestação nesta faixa{% if busca %} com essa busca{% endif %}.{% else %}Nenhum NUP trazido ainda. Clique em Logar e, depois de entrar, em Trazer NUPs.{% endif %}</td></tr>
+{% empty %}<tr><td colspan="7" class="lai-empty">{% if total_lido %}Nenhuma manifestação nesta faixa{% if busca %} com essa busca{% endif %}.{% else %}Nenhum NUP trazido ainda. Entre no Fala.BR e clique em Trazer NUPs.{% endif %}</td></tr>
 {% endfor %}
 </tbody></table></div></section>
 
@@ -120,41 +71,130 @@
     <ul id="lai-auto-resultados" class="lai-auto__lista"></ul>
     <p id="lai-auto-pasta" class="lai-muted" hidden></p>
     <button type="button" id="lai-auto-abrir" class="btn btn--primary" hidden>Abrir pasta</button>
+    <a id="lai-auto-zip" class="btn btn--primary" href="{% url 'lai:automacao_zip' %}" hidden>Baixar pastas (.zip)</a>
     <button type="button" id="lai-auto-fechar" class="btn btn--ghost" hidden>Fechar</button>
   </div>
 </div>
 <script>
 (function () {
-  var form = document.getElementById('form-auto');
-  if (!form) return;
-  var botao = document.getElementById('btn-automacao');
-  var todos = document.getElementById('marcar-todos');
-  var contagem = document.getElementById('contagem-marcados');
-  var caixas = function () { return Array.prototype.slice.call(document.querySelectorAll('.marcar-nup')); };
+  var caixa = document.getElementById('lai-conexao');
   var painel = document.getElementById('lai-auto');
+  var form = document.getElementById('form-auto');
   var el = function (id) { return document.getElementById(id); };
+  var csrf = '{{ csrf_token }}';
+  var URLS = {
+    trazer: '{% url "lai:trazer_iniciar" %}', iniciar: '{% url "lai:automacao_iniciar" %}',
+    estado: '{% url "lai:automacao_estado" %}', cancelar: '{% url "lai:automacao_cancelar" %}',
+    abrir: '{% url "lai:automacao_abrir_pasta" %}'
+  };
+  var versaoEsperada = caixa.dataset.versao;
+  var atual = 'verificando';
   var timer = null;
+  var recarregar = false;
+  window.laiOnline = false;
 
-  function atualizar() {
-    var n = caixas().filter(function (c) { return c.checked; }).length;
-    botao.disabled = n === 0 || !window.laiOnline;
-    contagem.textContent = !window.laiOnline ? 'Entre no Fala.BR (Logar) para automatizar'
-      : (n === 0 ? 'Nenhum pedido marcado' : n + ' pedido(s) marcado(s)');
+  /* ---- conversa com a extensão (ela responde pela página de conteúdo) ---- */
+  var contador = 0, esperando = {};
+  window.addEventListener('message', function (ev) {
+    if (ev.source !== window) return;
+    var d = ev.data;
+    if (!d || d.laiExt !== 1 || d.direcao !== 'extensao') return;
+    var resolver = esperando[d.id];
+    if (resolver) { delete esperando[d.id]; resolver(d.resposta); }
+  });
+  function laiExt(tipo, dados, limite) {
+    return new Promise(function (resolve) {
+      var id = ++contador;
+      var t = setTimeout(function () { delete esperando[id]; resolve(null); }, limite || 2500);
+      esperando[id] = function (r) { clearTimeout(t); resolve(r); };
+      window.postMessage({laiExt: 1, direcao: 'pagina', id: id, tipo: tipo, dados: dados || {}}, window.location.origin);
+    });
   }
-  document.addEventListener('lai:sessao', atualizar);
-  todos.addEventListener('change', function () {
-    caixas().forEach(function (c) { c.checked = todos.checked; });
-    atualizar();
-  });
-  document.addEventListener('change', function (e) {
-    if (e.target.classList && e.target.classList.contains('marcar-nup')) atualizar();
-  });
+
+  /* ---- cartão de conexão: bolinha, nome e botões ---- */
+  var TEXTOS = {
+    'sem-extensao': ['Extensão não instalada', 'Offline', 'Instale a extensão no seu navegador (leva uns 2 minutos) e recarregue esta página.'],
+    'desatualizada': ['Extensão desatualizada', 'Offline', 'Baixe a versão nova da extensão, carregue-a de novo no navegador e recarregue esta página.'],
+    'offline': ['Ninguém logado no Fala.BR', 'Offline', 'Abra o Fala.BR, entre com o gov.br e volte aqui. Esta tela muda sozinha quando você entrar.'],
+    'online': [null, 'Online', 'Tudo certo. Clique em Trazer NUPs para carregar os pedidos do Fala.BR.'],
+    'verificando': ['Verificando…', 'Conferindo a extensão do navegador', '\u00a0']
+  };
+  function aplicar(estado, nome) {
+    var t = TEXTOS[estado];
+    el('lai-dot').className = 'lai-dot' + (estado === 'online' ? ' lai-dot--online' : (estado === 'verificando' ? '' : ' lai-dot--offline'));
+    el('lai-sessao-nome').textContent = estado === 'online' ? nome : t[0];
+    el('lai-sessao-estado').textContent = t[1];
+    el('lai-dica').textContent = t[2];
+    el('btn-instalar').hidden = !(estado === 'sem-extensao' || estado === 'desatualizada');
+    el('btn-abrir-falabr').hidden = estado !== 'offline';
+    el('btn-trazer').hidden = estado !== 'online';
+    window.laiOnline = estado === 'online';
+    if (estado !== atual) { atual = estado; document.dispatchEvent(new Event('lai:sessao')); }
+  }
+  function conferir() {
+    if (document.hidden) return;
+    laiExt('status').then(function (s) {
+      if (!s || s.ok === false || !s.instalada) return aplicar('sem-extensao', '');
+      if (s.versao !== versaoEsperada) return aplicar('desatualizada', '');
+      aplicar(s.online ? 'online' : 'offline', s.nome || '');
+    });
+  }
+  conferir();
+  setInterval(conferir, 5000);
+  document.addEventListener('visibilitychange', conferir);
+
+  /* ---- janela de andamento ---- */
+  function abrirPainel(titulo, etapa, indeterminado) {
+    recarregar = false;
+    painel.hidden = false;
+    painel.classList.remove('lai-auto--fim');
+    painel.classList.toggle('lai-auto--indeterminado', !!indeterminado);
+    el('lai-auto-anel').textContent = '';
+    el('lai-auto-titulo').textContent = titulo;
+    el('lai-auto-etapa').textContent = etapa;
+    el('lai-auto-resultados').textContent = '';
+    el('lai-auto-progresso').style.width = '0%';
+    el('lai-auto-contagem').textContent = '';
+    el('lai-auto-pasta').hidden = true;
+    el('lai-auto-fechar').hidden = true;
+    el('lai-auto-abrir').hidden = true;
+    el('lai-auto-zip').hidden = true;
+  }
+  function terminar(ok, titulo, etapa) {
+    clearInterval(timer);
+    painel.classList.add('lai-auto--fim');
+    painel.classList.remove('lai-auto--indeterminado');
+    el('lai-auto-anel').textContent = ok ? '✓' : '!';
+    el('lai-auto-titulo').textContent = titulo;
+    el('lai-auto-etapa').textContent = etapa;
+    el('lai-auto-fechar').hidden = false;
+  }
+  function abortar(titulo, mensagem) {
+    var corpo = new FormData();
+    corpo.append('motivo', mensagem);
+    fetch(URLS.cancelar, {method: 'POST', body: corpo, headers: {'X-CSRFToken': csrf}, credentials: 'same-origin'})
+      .catch(function () {});
+    terminar(false, titulo, mensagem);
+  }
+  var SEM_EXTENSAO = 'A extensão não respondeu. Recarregue a página, confira se ela está ligada no navegador e tente de novo.';
 
   function mostrar(estado) {
-    var total = estado.total || 0, atual = estado.atual || 0;
+    var total = estado.total || 0, atualN = estado.atual || 0;
     var feitos = (estado.resultados || []).length;
+    if (estado.tipo === 'trazer') {
+      if (estado.rodando) {
+        el('lai-auto-titulo').textContent = 'Trazendo NUPs do Fala.BR…';
+        el('lai-auto-etapa').textContent = (estado.etapa || '') + '. Deixe a aba do Fala.BR aberta.';
+      } else if (estado.erro) {
+        terminar(false, 'Não foi possível trazer os NUPs', estado.erro);
+      } else {
+        recarregar = true;
+        terminar(true, 'Concluído!', estado.resumo || 'Leitura gravada.');
+      }
+      return;
+    }
     el('lai-auto-etapa').textContent = estado.nup ? 'NUP ' + estado.nup + ': ' + estado.etapa : (estado.etapa || '');
-    el('lai-auto-contagem').textContent = total ? 'Pedido ' + Math.min(atual, total) + ' de ' + total : '';
+    el('lai-auto-contagem').textContent = total ? 'Pedido ' + Math.min(atualN, total) + ' de ' + total : '';
     el('lai-auto-progresso').style.width = (total ? Math.round(feitos * 100 / total) : 0) + '%';
     var lista = el('lai-auto-resultados');
     lista.textContent = '';
@@ -170,76 +210,98 @@
     if (estado.rodando) {
       el('lai-auto-titulo').textContent = estado.planilha_ativa
         ? 'Baixando NUPs e preenchendo planilha' : 'Baixando NUPs e criando as pastas';
-    } else {
-      clearInterval(timer);
-      painel.classList.add('lai-auto--fim');
-      var prontas = (estado.resultados || []).filter(function (r) { return r.pdf && !r.erro; }).length;
-      var falhas = feitos - prontas;
-      var deuCerto = !estado.erro && prontas > 0;
-      el('lai-auto-anel').textContent = deuCerto ? '✓' : '!';
-      el('lai-auto-titulo').textContent = estado.erro ? 'A automação parou' : (deuCerto ? 'Concluído!' : 'Não foi possível concluir');
-      el('lai-auto-etapa').textContent = estado.erro ||
-        (prontas + ' pasta(s) pronta(s)' + (falhas ? ' e ' + falhas + ' com falha' : '') + '.');
-      var rodape = [];
-      if (estado.pasta) rodape.push('Pasta: ' + estado.pasta);
-      if (estado.planilha) rodape.push('Planilha: ' + estado.planilha);
-      if (estado.planilha_erro) rodape.push('Planilha NÃO preenchida: ' + estado.planilha_erro);
-      if (rodape.length) { el('lai-auto-pasta').hidden = false; el('lai-auto-pasta').textContent = rodape.join('  |  '); }
-      el('lai-auto-fechar').hidden = false;
-      el('lai-auto-abrir').hidden = !(estado.pode_abrir_pasta && estado.pasta);
+      return;
     }
+    var prontas = (estado.resultados || []).filter(function (r) { return r.pdf && !r.erro; }).length;
+    var falhas = feitos - prontas;
+    var deuCerto = !estado.erro && prontas > 0;
+    terminar(deuCerto,
+      estado.erro ? 'A automação parou' : (deuCerto ? 'Concluído!' : 'Não foi possível concluir'),
+      estado.erro || (prontas + ' pasta(s) pronta(s)' + (falhas ? ' e ' + falhas + ' com falha' : '') + '.'));
+    var rodape = [];
+    if (estado.pasta) rodape.push('Pasta no servidor: ' + estado.pasta);
+    if (estado.planilha) rodape.push('Planilha: ' + estado.planilha);
+    if (estado.planilha_erro) rodape.push('Planilha NÃO preenchida: ' + estado.planilha_erro);
+    if (rodape.length) { el('lai-auto-pasta').hidden = false; el('lai-auto-pasta').textContent = rodape.join('  |  '); }
+    el('lai-auto-abrir').hidden = !(estado.pode_abrir_pasta && estado.pasta);
+    el('lai-auto-zip').hidden = !estado.pode_baixar_zip;
+  }
+  function consultar() {
+    fetch(URLS.estado, {credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(mostrar)
+      .catch(function () { /* tenta de novo no próximo ciclo */ });
+  }
+  function acompanhar() {
+    clearInterval(timer);
+    timer = setInterval(consultar, 1200);
+    consultar();
   }
   function abrirPasta() {
-    var token = form.querySelector('input[name=csrfmiddlewaretoken]').value;
-    fetch('{% url "lai:automacao_abrir_pasta" %}', {method: 'POST', headers: {'X-CSRFToken': token}, credentials: 'same-origin'})
+    fetch(URLS.abrir, {method: 'POST', headers: {'X-CSRFToken': csrf}, credentials: 'same-origin'})
       .then(function (r) { return r.json(); })
       .then(function (j) { if (!j.ok) alert(j.erro || 'Não foi possível abrir a pasta.'); })
       .catch(function () { alert('Não foi possível abrir a pasta.'); });
   }
+  el('lai-auto-abrir').addEventListener('click', abrirPasta);
+  el('lai-auto-fechar').addEventListener('click', function () {
+    painel.hidden = true;
+    if (recarregar) window.location.reload();
+  });
   var botaoPasta = document.getElementById('abrir-pasta');
   if (botaoPasta) botaoPasta.addEventListener('click', abrirPasta);
-  el('lai-auto-abrir').addEventListener('click', abrirPasta);
-  function consultar() {
-    fetch(form.dataset.estado, {credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(mostrar)
-      .catch(function () { /* tenta de novo no próximo ciclo */ });
+
+  /* ---- Trazer NUPs ---- */
+  el('btn-trazer').addEventListener('click', function () {
+    if (!window.laiOnline) return;
+    abrirPainel('Trazendo NUPs do Fala.BR…', 'Preparando a extensão', true);
+    fetch(URLS.trazer, {method: 'POST', headers: {'X-CSRFToken': csrf}, credentials: 'same-origin'})
+      .then(function (r) { return r.json().then(function (j) { return {ok: r.ok, j: j}; }); })
+      .then(function (res) {
+        if (!res.ok || !res.j.ok) return terminar(false, 'Não foi possível iniciar', res.j.erro || 'Tente de novo.');
+        return laiExt('trazer', {base: res.j.base}, 6000).then(function (r) {
+          if (!r || !r.ok) return abortar('Não foi possível iniciar', (r && r.erro) || SEM_EXTENSAO);
+          acompanhar();
+        });
+      })
+      .catch(function () { terminar(false, 'Não foi possível iniciar', 'O servidor não respondeu.'); });
+  });
+
+  /* ---- Automatizar pastas ---- */
+  if (!form) return;
+  var botao = document.getElementById('btn-automacao');
+  var todos = document.getElementById('marcar-todos');
+  var contagem = document.getElementById('contagem-marcados');
+  var caixas = function () { return Array.prototype.slice.call(document.querySelectorAll('.marcar-nup')); };
+  function atualizar() {
+    var n = caixas().filter(function (c) { return c.checked; }).length;
+    botao.disabled = n === 0 || !window.laiOnline;
+    contagem.textContent = !window.laiOnline ? 'Entre no Fala.BR (e deixe a extensão ligada) para automatizar'
+      : (n === 0 ? 'Nenhum pedido marcado' : n + ' pedido(s) marcado(s)');
   }
-  form.dataset.estado = '{% url "lai:automacao_estado" %}';
+  document.addEventListener('lai:sessao', atualizar);
+  todos.addEventListener('change', function () {
+    caixas().forEach(function (c) { c.checked = todos.checked; });
+    atualizar();
+  });
+  document.addEventListener('change', function (e) {
+    if (e.target.classList && e.target.classList.contains('marcar-nup')) atualizar();
+  });
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     if (botao.disabled) return;
-    var dados = new FormData(form);
-    painel.hidden = false;
-    painel.classList.remove('lai-auto--fim', 'lai-auto--indeterminado');
-    el('lai-auto-anel').textContent = '';
-    el('lai-auto-titulo').textContent = 'Iniciando automatização…';
-    el('lai-auto-etapa').textContent = 'Preparando a janela do Fala.BR';
-    el('lai-auto-resultados').textContent = '';
-    el('lai-auto-progresso').style.width = '0%';
-    el('lai-auto-contagem').textContent = '';
-    el('lai-auto-pasta').hidden = true;
-    el('lai-auto-fechar').hidden = true;
-    el('lai-auto-abrir').hidden = true;
-    fetch('{% url "lai:automacao_iniciar" %}', {method: 'POST', body: dados, credentials: 'same-origin'})
+    abrirPainel('Iniciando automatização…', 'Preparando a extensão', false);
+    fetch(URLS.iniciar, {method: 'POST', body: new FormData(form), headers: {'X-CSRFToken': csrf}, credentials: 'same-origin'})
       .then(function (r) { return r.json().then(function (j) { return {ok: r.ok, j: j}; }); })
       .then(function (res) {
-        if (!res.ok || !res.j.ok) {
-          painel.classList.add('lai-auto--fim');
-          el('lai-auto-titulo').textContent = 'Não foi possível iniciar';
-          el('lai-auto-etapa').textContent = res.j.erro || 'Tente de novo.';
-          el('lai-auto-fechar').hidden = false;
-          return;
-        }
-        timer = setInterval(consultar, 1200);
-        consultar();
+        if (!res.ok || !res.j.ok) return terminar(false, 'Não foi possível iniciar', res.j.erro || 'Tente de novo.');
+        recarregar = true;
+        if (!res.j.pendentes.length) return acompanhar();
+        return laiExt('pastas', {itens: res.j.pendentes, jaProntos: res.j.ja_prontos}, 6000).then(function (r) {
+          if (!r || !r.ok) return abortar('Não foi possível iniciar', (r && r.erro) || SEM_EXTENSAO);
+          acompanhar();
+        });
       })
-      .catch(function () {
-        painel.classList.add('lai-auto--fim');
-        el('lai-auto-titulo').textContent = 'Não foi possível iniciar';
-        el('lai-auto-etapa').textContent = 'O servidor não respondeu.';
-        el('lai-auto-fechar').hidden = false;
-      });
+      .catch(function () { terminar(false, 'Não foi possível iniciar', 'O servidor não respondeu.'); });
   });
-  el('lai-auto-fechar').addEventListener('click', function () { painel.hidden = true; });
   atualizar();
 })();
 </script>

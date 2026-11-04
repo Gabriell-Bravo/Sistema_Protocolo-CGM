@@ -1,0 +1,23 @@
+{% extends 'lai/base.html' %}{% block lai_content %}
+<div class="lai-heading"><div><div class="lai-kicker">Fala.BR</div><h1>Extensão do navegador</h1><p class="lai-muted">O sistema roda no servidor e não consegue entrar no gov.br. Quem entra é você, no seu navegador. A extensão lê o que o Fala.BR mostra e entrega ao sistema os NUPs, os PDFs e os anexos.</p></div></div>
+<section class="card"><div class="card__header"><h2 class="card__title">Instalar (uma vez por computador)</h2><span class="lai-muted">Versão {{ versao }}</span></div>
+<div class="card__body">
+<p><a class="btn btn--primary" href="{% url 'lai:extensao_baixar' %}">Baixar a extensão (.zip)</a></p>
+<ol class="lai-passos">
+<li>Extraia o arquivo numa pasta fixa, por exemplo <code>C:\LAI-extensao</code>. Não apague a pasta depois: o navegador usa os arquivos dela.</li>
+<li>No Edge abra <code>edge://extensions</code> (no Chrome, <code>chrome://extensions</code>) e ligue o <strong>Modo de desenvolvedor</strong>.</li>
+<li>Clique em <strong>Carregar sem pacote</strong> e escolha a pasta extraída.</li>
+<li>Volte para a aba LAI do sistema e recarregue a página. O cartão do Fala.BR passa a mostrar a extensão como instalada.</li>
+</ol>
+<p class="lai-muted">O arquivo traz o seu código de acesso ao sistema (endereço <code>{{ origem }}</code>). Não envie a outras pessoas. Se você trocar de senha ou acessar o sistema por outro endereço, baixe a extensão de novo e carregue-a outra vez.</p>
+</div></section>
+<section class="card"><div class="card__header"><h2 class="card__title">Como usar</h2></div>
+<div class="card__body"><ol class="lai-passos">
+<li>Abra o <a href="https://falabr.cgu.gov.br/" target="_blank" rel="noopener noreferrer">Fala.BR</a> numa aba comum e entre com o gov.br. Deixe a aba aberta.</li>
+<li>Na aba <strong>Acompanhamento do Fala.BR</strong> do sistema, a bolinha fica verde com o seu nome.</li>
+<li>Clique em <strong>Trazer NUPs</strong>, marque os pedidos e clique em <strong>Automatizar pastas</strong>.</li>
+<li>Quando terminar, as pastas ficam no servidor. Use <strong>Baixar pastas (.zip)</strong> para levá-las ao seu computador.</li>
+</ol>
+<p class="lai-muted">A extensão não vê nem guarda a sua senha ou o seu CPF. Ela só lê as telas do Fala.BR e baixa o PDF (sem os dados do manifestante) e os anexos. Nada é alterado no Fala.BR.</p>
+</div></section>
+{% endblock %}
