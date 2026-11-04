@@ -10,6 +10,7 @@ As palavras em **negrito** são os nomes dos botões e dos menus, do jeito que a
 | **Analista – Licitações e Contratos** | Analisa processos desse grupo | Fila de análise |
 | **Analista – Liquidações** | Analisa liquidações e controla os números de relatório | Fila de análise |
 | **Gestão** | Acompanha, prioriza e conclui diligências. Pode somar funções de Protocolo, Licitações e/ou Liquidações no menu **Funções** | Dashboard |
+| **LAI – Acesso à Informação** | Acompanha os pedidos da Lei de Acesso à Informação (Fala.BR). Só vê a aba **LAI** | LAI |
 
 Não tem conta, esqueceu a senha ou o menu não bate com o seu trabalho? Fale com quem passou o acesso.
 

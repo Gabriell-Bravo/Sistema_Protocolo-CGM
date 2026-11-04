@@ -30,6 +30,8 @@ PROTOCOLO = 'PROTOCOLO'
 ANALISTA_LICITACOES = 'ANALISTA_LICITACOES'
 ANALISTA_LIQUIDACOES = 'ANALISTA_LIQUIDACOES'
 GESTAO = 'GESTAO'
+# Conta dedicada ao módulo LAI (Lei de Acesso à Informação): só enxerga a aba LAI.
+LAI = 'LAI'
 
 # Valores gravados hoje em Processo.genero. Continuam sendo a chave de
 # grupo até a entrada de EspecieProcesso (Bloco C).
@@ -155,6 +157,11 @@ def is_analista(user):
 
 def is_gestao(user):
     return tem_funcao(user, GESTAO)
+
+
+def is_lai(user):
+    """Papel LAI (conta dedicada ao módulo). Não depende de função extra."""
+    return get_papel(user) == LAI
 
 
 def grupos_do_analista(user):
@@ -670,6 +677,7 @@ ROTA_INICIAL = {
     ANALISTA_LICITACOES: 'area_analista',
     ANALISTA_LIQUIDACOES: 'area_analista',
     GESTAO: 'gestao_dashboard',
+    LAI: 'lai:dashboard',
 }
 
 
@@ -716,6 +724,7 @@ def contexto_de_permissoes(user):
         'is_protocolo': is_protocolo(user),
         'is_analista': is_analista(user),
         'is_gestao': is_gestao(user),
+        'is_lai': is_lai(user),
         'grupo_analista': grupo_do_analista(user),
         'grupos_analista': grupos_do_analista(user),
         'pode_escolher_funcoes': pode_escolher_funcoes(user),
@@ -755,6 +764,7 @@ def contexto_processor(request):
             'is_protocolo': False,
             'is_analista': False,
             'is_gestao': False,
+            'is_lai': False,
             'grupo_analista': None,
             'grupos_analista': set(),
             'pode_escolher_funcoes': False,

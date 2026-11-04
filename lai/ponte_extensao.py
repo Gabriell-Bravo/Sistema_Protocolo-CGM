@@ -31,10 +31,10 @@ from .automacao_falabr import (PREFIXO_LINK, _destino_livre, _ja_tem_pdf, _marca
 
 log = logging.getLogger(__name__)
 
-VERSAO = '1.0.0'
+VERSAO = '1.0.1'
 _SAL = 'lai-extensao'
 VALIDADE_TOKEN = 365 * 24 * 3600
-SEM_SINAL = {'trazer': 75, 'pastas': 75}   # segundos sem notícia da extensão até dar a tarefa por parada (ela avisa a cada 10 s)
+SEM_SINAL = {'trazer': 150, 'pastas': 240}   # segundos sem notícia da extensão até dar a tarefa por parada (ela avisa a cada 10 s)
 LIMITE_PEDIDO = 400 * 1024 * 1024            # tamanho máximo de um pedido (PDF + anexos já descompactados)
 PASTA_EXTENSAO = Path(__file__).resolve().parent / 'extensao_navegador'
 ARQUIVOS_EXTENSAO = ('background.js', 'ponte.js', 'popup.html', 'popup.js')
@@ -79,7 +79,7 @@ def montar_pacote(origem, usuario):
         'name': 'LAI CGM - ponte com o Fala.BR',
         'version': VERSAO,
         'description': 'Lê o Fala.BR no seu navegador e entrega ao sistema da CGM os NUPs, PDFs e anexos.',
-        'permissions': ['tabs', 'scripting', 'downloads'],
+        'permissions': ['tabs', 'scripting', 'downloads', 'storage'],
         'host_permissions': ['https://falabr.cgu.gov.br/*', origem + '/*'],
         'background': {'service_worker': 'background.js'},
         'content_scripts': [{'matches': [origem + '/lai/*'], 'js': ['ponte.js'], 'run_at': 'document_idle'}],

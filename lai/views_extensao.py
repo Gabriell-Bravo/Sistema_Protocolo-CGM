@@ -14,7 +14,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from . import ponte_extensao
-from .permissions import exigir
+from .permissions import exigir, usuario_do_modulo
 
 
 def _recusa(mensagem, status):
@@ -31,8 +31,8 @@ def api(view):
         usuario = ponte_extensao.usuario_do_token(token)
         if usuario is None:
             return _recusa('Código da extensão inválido ou vencido. Baixe a extensão de novo na aba LAI.', 401)
-        if getattr(settings, 'LAI_SOMENTE_ADMIN', False) and not usuario.is_superuser:
-            return _recusa('A aba LAI é exclusiva do administrador.', 403)
+        if getattr(settings, 'LAI_SOMENTE_ADMIN', False) and not usuario_do_modulo(usuario):
+            return _recusa('A aba LAI é exclusiva do administrador e do perfil LAI.', 403)
         try:
             exigir(usuario, 'operar')
         except PermissionDenied as exc:

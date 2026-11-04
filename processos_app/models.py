@@ -3,7 +3,7 @@ from django.db import models
 from datetime import datetime, date, timedelta
 from django.contrib.auth.models import User
 from django.utils import timezone
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.contrib.auth.models import User
 
@@ -1169,6 +1169,7 @@ class Profile(models.Model):
         ('ANALISTA_LICITACOES', 'Analista – Licitações e Contratos'),
         ('ANALISTA_LIQUIDACOES', 'Analista – Liquidações'),
         ('GESTAO', 'Gestão'),
+        ('LAI', 'LAI – Acesso à Informação'),
     ]
 
     user = models.OneToOneField(User, on_delete=models.CASCADE)
@@ -1200,3 +1201,27 @@ def create_or_update_user_profile(sender, instance, created, **kwargs):
     """Garante Profile para todo User, inclusive os criados fora do fluxo
     normal (createsuperuser, shell, fixtures)."""
     Profile.objects.get_or_create(user=instance)
+
+
+@receiver(pre_save, sender=Profile)
+def guardar_papel_anterior(sender, instance, **kwargs):
+    """Lembra o papel gravado antes, para saber se a conta deixou de ser LAI."""
+    anterior = None
+    if instance.pk:
+        anterior = (Profile.objects.filter(pk=instance.pk)
+                    .values_list('papel', flat=True).first())
+    instance._papel_anterior = anterior
+
+
+@receiver(post_save, sender=Profile)
+def sincronizar_permissoes_lai(sender, instance, **kwargs):
+    """Conta com papel LAI recebe as permissões do módulo; ao sair do papel, perde."""
+    from django.apps import apps
+    if not apps.is_installed('lai'):
+        return
+    from lai.permissions import PAPEL_LAI, sincronizar_permissoes_do_papel
+    anterior = getattr(instance, '_papel_anterior', None)
+    if instance.papel == PAPEL_LAI:
+        sincronizar_permissoes_do_papel(instance.user, ativo=True)
+    elif anterior == PAPEL_LAI:
+        sincronizar_permissoes_do_papel(instance.user, ativo=False)

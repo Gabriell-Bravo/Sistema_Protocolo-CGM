@@ -10,6 +10,8 @@ não faz nada e valem somente as permissões `lai.*` e o cadastro de Operador.
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
 
+from .permissions import usuario_do_modulo
+
 
 class SomenteAdministrador:
     def __init__(self, get_response):
@@ -28,6 +30,6 @@ class SomenteAdministrador:
         if not usuario.is_authenticated:
             # Quem não entrou segue para a tela de login (decorator das views).
             return None
-        if not (usuario.is_active and usuario.is_superuser):
-            raise PermissionDenied('A aba LAI é exclusiva do administrador.')
+        if not usuario_do_modulo(usuario):
+            raise PermissionDenied('A aba LAI é exclusiva do administrador e do perfil LAI.')
         return None

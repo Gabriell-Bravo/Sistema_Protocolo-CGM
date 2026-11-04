@@ -507,9 +507,12 @@ chrome.downloads.onCreated.addListener(async (baixa) => {
 async function iniciarTarefa(tipo, dados) {
   if (job) return { ok: false, erro: 'A extensão já está executando uma tarefa. Aguarde o fim.' };
   job = { tipo, cancelar: false, esperaDownload: false, baixados: [], diag: [] };
+  try { await chrome.storage.session.set({ tarefaAtiva: tipo }); } catch (e) { /* sem storage */ }
   const batimento = setInterval(() => {
     chrome.runtime.getPlatformInfo(() => {}); // mantém o serviço da extensão acordado
-    progresso({}).catch(() => {});
+    progresso({}).catch((e) => {
+      if (job) job.diag.push('batimento falhou: ' + String((e && e.message) || e).slice(0, 80));
+    });
   }, 10000);
   (async () => {
     try {
@@ -520,10 +523,27 @@ async function iniciarTarefa(tipo, dados) {
     } finally {
       clearInterval(batimento);
       job = null;
+      try { await chrome.storage.session.remove('tarefaAtiva'); } catch (e) { /* sem storage */ }
     }
   })();
   return { ok: true };
 }
+
+// Se o navegador desligou o serviço da extensão no meio de uma tarefa, a tarefa se perdeu:
+// ao reiniciar, avisa o sistema com o motivo verdadeiro em vez de deixá-lo esperando.
+(async () => {
+  try {
+    const guardado = await chrome.storage.session.get('tarefaAtiva');
+    if (guardado && guardado.tarefaAtiva && !job) {
+      await chrome.storage.session.remove('tarefaAtiva');
+      await progresso({
+        erro: 'O navegador reiniciou o serviço da extensão no meio da tarefa. Tente de novo; se repetir, '
+          + 'deixe o navegador em primeiro plano e avise o suporte.',
+        fim: true,
+      });
+    }
+  } catch (e) { /* sem rede ou sem tarefa */ }
+})();
 
 chrome.runtime.onMessage.addListener((msg, remetente, responder) => {
   (async () => {
