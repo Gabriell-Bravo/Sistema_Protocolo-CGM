@@ -103,11 +103,9 @@ def pendentes(request):
     for r in rows:
         r['ultimo_memorando'] = ultimos.get(r['pk'])
         r['memo_obs'] = memorando_docx.observacao_padrao(r['prazo'], hoje, r['prorrogada']) if r['pk'] else 'nenhuma'
-    ultimo_numero = (MemorandoFalabr.objects.filter(ano=hoje.year).order_by('-numero')
-                     .values_list('numero', flat=True).first()) or 0
     secretarias_memo = list(Secretaria.objects.filter(ativa=True).values_list('nome', flat=True))
     return render(request, 'lai/pendentes.html', {
-        'memo_proximo': ultimo_numero + 1, 'memo_hoje': hoje, 'secretarias_memo': secretarias_memo,
+        'memo_proximo': NumeracaoMemorando.proximo_do_ano(hoje.year), 'memo_hoje': hoje, 'secretarias_memo': secretarias_memo,
         'rows': rows, 'cards': acompanhamento.resumo(todos), 'erro': erro,
         'versao_extensao': ponte_extensao.VERSAO, 'base_guardada': navegador_falabr._base_guardada(),
         'planilha_ativa': bool(getattr(settings, 'LAI_PLANILHA_ATIVA', False)),
@@ -182,7 +180,7 @@ def memorandos_gerar(request):
     pks = request.POST.getlist('pk')
     if not pks or len(pks) > 100:
         return JsonResponse({'ok': False, 'erro': 'Marque de 1 a 100 pedidos para gerar os memorandos.'}, status=400)
-    campos = {nome: request.POST.getlist(nome) for nome in ('numero', 'secretaria', 'tratamento', 'prazo', 'observacao')}
+    campos = {nome: request.POST.getlist(nome) for nome in ('secretaria', 'tratamento', 'prazo', 'observacao')}
     if any(len(v) != len(pks) for v in campos.values()):
         return JsonResponse({'ok': False, 'erro': 'Os dados dos memorandos vieram incompletos. Abra a janela de novo.'}, status=400)
     try:
@@ -190,30 +188,38 @@ def memorandos_gerar(request):
     except ValueError:
         return JsonResponse({'ok': False, 'erro': 'Informe a data do memorando.'}, status=400)
     registros = {str(r.pk): r for r in ManifestacaoFalabr.objects.filter(pk__in=[p for p in pks if p.isdigit()])}
-    arquivos, historico, numeros = [], [], set()
+    arquivos, historico, prazos = [], [], []
     for i, pk in enumerate(pks):
         registro = registros.get(pk)
         if registro is None:
             return JsonResponse({'ok': False, 'erro': 'Um dos pedidos marcados não existe mais. Atualize a lista.'}, status=400)
         try:
-            prazo = date.fromisoformat(campos['prazo'][i])
+            prazos.append(date.fromisoformat(campos['prazo'][i]))
         except ValueError:
             return JsonResponse({'ok': False, 'erro': f'NUP {registro.nup}: informe o prazo da resposta.'}, status=400)
-        try:
-            conteudo = memorando_docx.gerar(
-                numero=campos['numero'][i], data=data, nup=registro.nup, secretaria=campos['secretaria'][i],
-                prazo=prazo, tratamento=campos['tratamento'][i], observacao=campos['observacao'][i])
-        except memorando_docx.MemorandoError as exc:
-            return JsonResponse({'ok': False, 'erro': f'NUP {registro.nup}: {exc}'}, status=400)
-        numero = int(campos['numero'][i])
-        if numero in numeros:
-            return JsonResponse({'ok': False, 'erro': f'O número {numero} foi usado em mais de um memorando desta remessa.'}, status=400)
-        numeros.add(numero)
-        arquivos.append((memorando_docx.nome_do_arquivo(numero, data.year, registro.nup), conteudo))
-        historico.append(MemorandoFalabr(
-            manifestacao=registro, numero=numero, ano=data.year, data=data, prazo=prazo, usuario=request.user,
-            secretaria=' '.join(campos['secretaria'][i].split())))
-    MemorandoFalabr.objects.bulk_create(historico)
+    # Os números vêm da sequência da aba "Memorandos". Se algum memorando falhar, nada é consumido.
+    erro = None
+    with transaction.atomic():
+        numeros = NumeracaoMemorando.reservar(data.year, len(pks))
+        for i, pk in enumerate(pks):
+            registro = registros[pk]
+            try:
+                conteudo = memorando_docx.gerar(
+                    numero=numeros[i], data=data, nup=registro.nup, secretaria=campos['secretaria'][i],
+                    prazo=prazos[i], tratamento=campos['tratamento'][i], observacao=campos['observacao'][i])
+            except memorando_docx.MemorandoError as exc:
+                erro = f'NUP {registro.nup}: {exc}'
+                break
+            arquivos.append((memorando_docx.nome_do_arquivo(numeros[i], data.year, registro.nup), conteudo))
+            historico.append(MemorandoFalabr(
+                manifestacao=registro, numero=numeros[i], ano=data.year, data=data, prazo=prazos[i],
+                usuario=request.user, secretaria=' '.join(campos['secretaria'][i].split())))
+        if erro:
+            transaction.set_rollback(True)
+        else:
+            MemorandoFalabr.objects.bulk_create(historico)
+    if erro:
+        return JsonResponse({'ok': False, 'erro': erro}, status=400)
     if len(arquivos) == 1:
         nome, conteudo = arquivos[0]
         resposta = HttpResponse(conteudo, content_type=(
@@ -228,6 +234,38 @@ def memorandos_gerar(request):
         nome_zip = f'memorandos-lai-{data.isoformat()}.zip'
     resposta['Content-Disposition'] = "attachment; filename*=UTF-8''" + quote(nome_zip)
     return resposta
+
+@privado
+def memorandos(request):
+    """Aba "Memorandos": ponto de partida da numeração sequencial e histórico dos memorandos gerados."""
+    exigir(request.user, 'operar')
+    hoje = timezone.localdate()
+    if request.method == 'POST':
+        try:
+            ano = int(request.POST.get('ano') or '')
+            proximo = int(request.POST.get('proximo') or '')
+        except ValueError:
+            ano = proximo = 0
+        if not (2000 <= ano <= 2100) or not (1 <= proximo <= NumeracaoMemorando.LIMITE):
+            messages.error(request, f'Informe o ano e um número entre 1 e {NumeracaoMemorando.LIMITE}.')
+        else:
+            NumeracaoMemorando.definir(ano, proximo, request.user)
+            repetidos = MemorandoFalabr.objects.filter(ano=ano, numero__gte=proximo).count()
+            messages.success(request, f'Pronto: o próximo memorando de {ano} será o nº {proximo}.')
+            if repetidos:
+                messages.warning(request, f'Atenção: já existem {repetidos} memorando(s) gerados aqui em {ano} com número '
+                                          f'igual ou maior que {proximo}. Os números vão se repetir.')
+        return redirect('lai:memorandos')
+    try:
+        ano = int(request.GET.get('ano') or hoje.year)
+    except ValueError:
+        ano = hoje.year
+    historico = list(MemorandoFalabr.objects.filter(ano=ano).select_related('manifestacao', 'usuario')[:200])
+    return render(request, 'lai/memorandos.html', {
+        'ano': ano, 'proximo': NumeracaoMemorando.proximo_do_ano(ano), 'historico': historico,
+        'contador': NumeracaoMemorando.objects.filter(ano=ano).select_related('atualizado_por').first(),
+        'limite': NumeracaoMemorando.LIMITE,
+    })
 
 @privado
 def automacao_cancelar(request):

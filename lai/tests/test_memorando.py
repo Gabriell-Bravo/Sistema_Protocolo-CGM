@@ -7,9 +7,10 @@ from datetime import date
 
 from django.test import SimpleTestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from lai import memorando_docx
-from lai.models import MemorandoFalabr, ManifestacaoFalabr
+from lai.models import MemorandoFalabr, ManifestacaoFalabr, NumeracaoMemorando
 from lai.tests.test_extensao import NUP, _Base
 
 
@@ -33,8 +34,8 @@ class GerarDocxTest(SimpleTestCase):
         texto = _texto_do_docx(_gerar())
         self.assertNotIn('{{', texto)
         self.assertIn('Saquarema, 4 de novembro de 2026.', texto)
-        self.assertIn('MEMORANDO 311/2026/CGM', texto)
-        self.assertIn('RECEBIDOS AO MEMORANDO 311/2026/CGM', texto)
+        self.assertIn('MEMORANDO 311/2026/LAI/CGM', texto)
+        self.assertIn('RECEBIDOS AO MEMORANDO 311/2026/LAI/CGM', texto)
         self.assertIn('Para: Secretaria Municipal de Obras;', texto)
         self.assertIn('Assunto: Lei de Acesso à Informação – Protocolo nº 03996.2026.000970-12.', texto)
         self.assertIn('registrado sob o Protocolo nº 03996.2026.000970-12, em anexo', texto)
@@ -93,12 +94,13 @@ class GerarMemorandosViewTest(_Base):
     def _enviar(self, registros, **extra):
         dados = {'data': '2026-11-04', 'pk': [r.pk for r in registros]}
         n = len(registros)
-        dados.update({'numero': [str(311 + i) for i in range(n)], 'secretaria': ['Secretaria de Obras'] * n,
+        dados.update({'secretaria': ['Secretaria de Obras'] * n,
                       'tratamento': ['secretario'] * n, 'prazo': ['2026-11-12'] * n, 'observacao': ['nenhuma'] * n})
         dados.update(extra)
         return self.client.post(reverse('lai:memorandos_gerar'), dados)
 
     def test_um_pedido_baixa_o_docx_e_guarda_o_historico(self):
+        NumeracaoMemorando.definir(2026, 311)
         registro = self.registro()
         resp = self._enviar([registro])
         self.assertEqual(resp.status_code, 200)
@@ -110,6 +112,7 @@ class GerarMemorandosViewTest(_Base):
         self.assertEqual(memo.usuario, self.usuario)
 
     def test_varios_pedidos_vem_num_zip(self):
+        NumeracaoMemorando.definir(2026, 311)
         a = self.registro()
         b = self.registro(nup='03996.2026.000937-90', assunto='Outro')
         resp = self._enviar([a, b])
@@ -130,13 +133,6 @@ class GerarMemorandosViewTest(_Base):
         self.assertIn('03996.2026.000937-90', resp.json()['erro'])
         self.assertEqual(MemorandoFalabr.objects.count(), 0)
 
-    def test_numero_repetido_na_mesma_remessa_e_recusado(self):
-        a = self.registro()
-        b = self.registro(nup='03996.2026.000937-90', assunto='Outro')
-        resp = self._enviar([a, b], numero=['311', '311'])
-        self.assertEqual(resp.status_code, 400)
-        self.assertEqual(MemorandoFalabr.objects.count(), 0)
-
     def test_dados_incompletos_ou_pedido_inexistente(self):
         a = self.registro()
         self.assertEqual(self._enviar([a], secretaria=[]).status_code, 400)
@@ -147,11 +143,80 @@ class GerarMemorandosViewTest(_Base):
         self.assertEqual(self.client.get(reverse('lai:memorandos_gerar')).status_code, 405)
         self.assertEqual(MemorandoFalabr.objects.count(), 0)
 
-    def test_tela_sugere_o_proximo_numero_e_mostra_o_historico(self):
+    def test_numeros_sao_sequenciais_e_o_contador_avanca_sozinho(self):
+        a = self.registro()
+        b = self.registro(nup='03996.2026.000937-90', assunto='Outro')
+        self._enviar([a])
+        self.assertEqual(NumeracaoMemorando.proximo_do_ano(2026), 2)
+        resp = self._enviar([b])
+        self.assertIn('MEMO%202-2026-CGM', resp['Content-Disposition'])
+        self.assertEqual(list(MemorandoFalabr.objects.order_by('id').values_list('numero', flat=True)), [1, 2])
+        self.assertEqual(NumeracaoMemorando.proximo_do_ano(2026), 3)
+
+    def test_remessa_com_varios_usa_numeros_seguidos(self):
+        NumeracaoMemorando.definir(2026, 25)
+        a = self.registro()
+        b = self.registro(nup='03996.2026.000937-90', assunto='Outro')
+        self._enviar([a, b])
+        self.assertEqual(sorted(MemorandoFalabr.objects.values_list('numero', flat=True)), [25, 26])
+        self.assertEqual(NumeracaoMemorando.proximo_do_ano(2026), 27)
+
+    def test_numero_enviado_pela_tela_e_ignorado(self):
+        self._enviar([self.registro()], numero=['999'])
+        self.assertEqual(MemorandoFalabr.objects.get().numero, 1)
+
+    def test_erro_nao_consome_numero(self):
+        NumeracaoMemorando.definir(2026, 40)
+        resp = self._enviar([self.registro()], secretaria=[''])
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(NumeracaoMemorando.proximo_do_ano(2026), 40)
+        self.assertEqual(MemorandoFalabr.objects.count(), 0)
+
+    def test_cada_ano_tem_a_sua_sequencia(self):
+        NumeracaoMemorando.definir(2026, 300)
+        self._enviar([self.registro()], data='2027-01-05')
+        self.assertEqual(MemorandoFalabr.objects.get().numero, 1)
+        self.assertEqual(NumeracaoMemorando.proximo_do_ano(2026), 300)
+
+    def test_aba_memorandos_muda_o_ponto_de_partida(self):
+        resp = self.client.get(reverse('lai:memorandos'))
+        self.assertContains(resp, 'name="proximo"')
+        resp = self.client.post(reverse('lai:memorandos'), {'ano': '2026', 'proximo': '311'}, follow=True)
+        self.assertContains(resp, 'o próximo memorando de 2026 será o nº 311')
+        self.assertEqual(NumeracaoMemorando.proximo_do_ano(2026), 311)
+        self.assertEqual(NumeracaoMemorando.objects.get(ano=2026).atualizado_por, self.usuario)
+        self._enviar([self.registro()])
+        self.assertEqual(MemorandoFalabr.objects.get().numero, 311)
+        resp = self.client.get(reverse('lai:memorandos') + '?ano=2026')
+        self.assertContains(resp, '311/2026')
+        self.assertContains(resp, 'nº 312/2026/LAI/CGM')
+
+    def test_aba_memorandos_recusa_valores_invalidos_e_avisa_repeticao(self):
+        for ruim in ('', 'x', '0', '100000', '-3'):
+            with self.subTest(ruim=ruim):
+                self.client.post(reverse('lai:memorandos'), {'ano': '2026', 'proximo': ruim})
+                self.assertEqual(NumeracaoMemorando.proximo_do_ano(2026), 1)
+        self.client.post(reverse('lai:memorandos'), {'ano': '1', 'proximo': '5'})
+        self.assertFalse(NumeracaoMemorando.objects.exists())
+        self._enviar([self.registro()])  # usa o nº 1
+        resp = self.client.post(reverse('lai:memorandos'), {'ano': '2026', 'proximo': '1'}, follow=True)
+        self.assertContains(resp, 'vão se repetir')
+
+    def test_aba_memorandos_exige_permissao_de_operar(self):
+        from django.contrib.auth import get_user_model
+        sem = get_user_model().objects.create_user('curioso', password='teste-lai-123456')
+        self.client.force_login(sem)
+        resp = self.client.post(reverse('lai:memorandos'), {'ano': '2026', 'proximo': '500'})
+        self.assertEqual(resp.status_code, 403)
+        self.assertFalse(NumeracaoMemorando.objects.exists())
+
+    def test_tela_mostra_o_proximo_numero_somente_leitura_e_o_historico(self):
+        hoje = timezone.localdate()
+        NumeracaoMemorando.definir(hoje.year, 320)
         registro = self.registro()
-        self._enviar([registro], numero=['320'])
+        self._enviar([registro], data=hoje.isoformat())
         resp = self.client.get(reverse('lai:pendentes'))
-        self.assertContains(resp, 'id="lai-memo-inicio"')
-        self.assertContains(resp, 'value="321"')
-        self.assertContains(resp, 'Memorando 320/2026/CGM para Secretaria de Obras')
+        self.assertContains(resp, 'id="lai-memo-inicio" value="321" readonly')
+        self.assertContains(resp, f'Memorando 320/{hoje.year}/LAI/CGM para Secretaria de Obras')
         self.assertContains(resp, 'data-secretaria="Secretaria de Obras"')
+        self.assertContains(resp, reverse('lai:memorandos'))

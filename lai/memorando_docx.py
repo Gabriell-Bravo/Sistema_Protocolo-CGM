@@ -52,7 +52,7 @@ def observacao_padrao(prazo, hoje, prorrogada):
 
 
 def numero_formatado(numero, ano):
-    return f'{int(numero)}/{int(ano)}/CGM'
+    return f'{int(numero)}/{int(ano)}/LAI/CGM'
 
 
 def nome_do_arquivo(numero, ano, nup):

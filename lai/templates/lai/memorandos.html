@@ -1,0 +1,20 @@
+{% extends 'lai/base.html' %}{% block lai_content %}
+<div class="lai-heading"><div><div class="lai-kicker">Fala.BR</div><h1>Memorandos de reiteração</h1><p class="lai-muted">A numeração é sequencial: cada memorando gerado recebe o número seguinte e o contador avança sozinho. Aqui você define a partir de qual número a sequência continua.</p></div></div>
+<section class="card"><div class="card__header"><h2 class="card__title">Numeração de {{ ano }}</h2></div>
+<div class="card__body">
+<p>O próximo memorando será o <strong>nº {{ proximo }}/{{ ano }}/LAI/CGM</strong>.</p>
+<form method="post" class="lai-numeracao-form">{% csrf_token %}
+<input type="hidden" name="ano" value="{{ ano }}">
+<label>Começar a sequência no número
+<input type="number" name="proximo" min="1" max="{{ limite }}" step="1" value="{{ proximo }}" required></label>
+<button type="submit" class="btn btn--primary">Salvar</button>
+</form>
+<p class="lai-muted">Use quando a CGM já emitiu memorandos fora do sistema (por exemplo, para continuar do número da planilha). Os memorandos gerados depois seguem desse número em diante.{% if contador and contador.atualizado_por %} Última alteração manual: {{ contador.atualizado_em|date:'d/m/Y H:i' }} por {{ contador.atualizado_por.get_full_name|default:contador.atualizado_por.username }}.{% endif %}</p>
+<p class="lai-muted">Outro ano: <a href="?ano={{ ano|add:'-1' }}">{{ ano|add:'-1' }}</a> · <a href="?ano={{ ano|add:'1' }}">{{ ano|add:'1' }}</a></p>
+</div></section>
+<section class="card"><div class="card__header"><h2 class="card__title">Memorandos gerados em {{ ano }}</h2></div>
+<div class="lai-table-wrap"><table><thead><tr><th>Nº</th><th>NUP</th><th>Secretaria</th><th>Data</th><th>Prazo da resposta</th><th>Gerado por</th></tr></thead><tbody>
+{% for m in historico %}<tr><td>{{ m.numero }}/{{ m.ano }}</td><td>{{ m.manifestacao.nup }}</td><td>{{ m.secretaria }}</td><td>{{ m.data|date:'d/m/Y' }}</td><td>{{ m.prazo|date:'d/m/Y' }}</td><td>{{ m.usuario.get_full_name|default:m.usuario.username|default:'—' }}</td></tr>
+{% empty %}<tr><td colspan="6" class="lai-empty">Nenhum memorando gerado em {{ ano }}.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}

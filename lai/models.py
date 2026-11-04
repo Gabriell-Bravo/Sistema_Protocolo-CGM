@@ -304,8 +304,44 @@ class MemorandoFalabr(models.Model):
     criado_em = models.DateTimeField(auto_now_add=True)
     class Meta: ordering = ['-ano', '-numero', '-id']
     @property
-    def rotulo(self): return f'{self.numero}/{self.ano}/CGM'
+    def rotulo(self): return f'{self.numero}/{self.ano}/LAI/CGM'
     def __str__(self): return f'Memorando {self.rotulo}'
+
+class NumeracaoMemorando(models.Model):
+    """Contador sequencial dos memorandos de reiteração, um por ano.
+
+    `proximo` é o número que o PRÓXIMO memorando vai receber. Cada memorando gerado consome um número e o
+    contador avança sozinho; a aba "Memorandos" é o único lugar onde o usuário muda o ponto de partida.
+    Sem registro para o ano, a sequência começa em 1.
+    """
+    ano = models.PositiveIntegerField(unique=True)
+    proximo = models.PositiveIntegerField(default=1)
+    atualizado_em = models.DateTimeField(auto_now=True)
+    atualizado_por = models.ForeignKey(USER, null=True, blank=True, on_delete=models.SET_NULL)
+    LIMITE = 99999
+
+    @classmethod
+    def proximo_do_ano(cls, ano):
+        return cls.objects.filter(ano=ano).values_list('proximo', flat=True).first() or 1
+
+    @classmethod
+    def reservar(cls, ano, quantidade):
+        """Pega `quantidade` números seguidos e avança o contador. Chamar dentro de transaction.atomic()."""
+        contador, _ = cls.objects.select_for_update().get_or_create(ano=ano)
+        primeiro = contador.proximo
+        contador.proximo = primeiro + quantidade
+        contador.save(update_fields=['proximo', 'atualizado_em'])
+        return list(range(primeiro, primeiro + quantidade))
+
+    @classmethod
+    def definir(cls, ano, proximo, usuario=None):
+        contador, _ = cls.objects.get_or_create(ano=ano)
+        contador.proximo = proximo
+        contador.atualizado_por = usuario
+        contador.save()
+        return contador
+
+    def __str__(self): return f'Memorandos {self.ano}: próximo {self.proximo}'
 
 class ExecucaoMonitor(models.Model):
     inicio = models.DateTimeField(auto_now_add=True)

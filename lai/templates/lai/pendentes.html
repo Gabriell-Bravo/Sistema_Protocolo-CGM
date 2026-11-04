@@ -87,9 +87,9 @@
     <p class="lai-muted">Usa o modelo da Controladoria e troca só os dados de cada NUP. O prazo vem do Fala.BR; a secretaria de destino não vem no PDF exportado, então escolha ou digite.</p>
     <div class="lai-memo__topo">
       <label>Data do memorando<input type="date" id="lai-memo-data" value="{{ memo_hoje|date:'Y-m-d' }}" required></label>
-      <label>Primeiro número<input type="number" id="lai-memo-inicio" min="1" max="99999" step="1" value="{{ memo_proximo }}" required></label>
+      <label>Primeiro número<input type="number" id="lai-memo-inicio" value="{{ memo_proximo }}" readonly></label>
     </div>
-    <p class="lai-muted">Sugestão de número: o seguinte ao último gerado aqui neste ano. Se a numeração da CGM é compartilhada com outros memorandos, ajuste o primeiro número (cada linha também pode ser editada).</p>
+    <p class="lai-muted">Os números são sequenciais e o sistema avança sozinho a cada memorando gerado. Para mudar a partir de qual número a sequência segue, use a aba <a href="{% url 'lai:memorandos' %}">Memorandos</a>.</p>
     <div class="lai-table-wrap"><table class="lai-memo__tabela"><thead><tr><th>NUP</th><th>Nº</th><th>Secretaria de destino</th><th>Tratamento</th><th>Prazo da resposta</th><th>Observação do prazo</th></tr></thead><tbody id="lai-memo-linhas"></tbody></table></div>
     <datalist id="lai-memo-secretarias">{% for nome in secretarias_memo %}<option value="{{ nome }}">{% endfor %}</datalist>
     <p id="lai-memo-erro" class="lai-aviso" role="alert" hidden></p>
@@ -393,7 +393,7 @@
       var nup = criar('td', {'class': 'nup'}, c.getAttribute('data-nup'));
       nup.appendChild(criar('small', {}, c.getAttribute('data-assunto') || ''));
       tr.appendChild(nup);
-      tr.appendChild(celula(criar('input', {type: 'number', min: 1, max: 99999, step: 1, required: '', 'data-campo': 'numero', 'aria-label': 'Número do memorando'})));
+      tr.appendChild(celula(criar('input', {type: 'number', readonly: '', tabindex: -1, 'data-campo': 'numero', 'aria-label': 'Número do memorando (sequencial)'})));
       tr.appendChild(celula(criar('input', {type: 'text', list: 'lai-memo-secretarias', maxlength: 160, required: '',
         'data-campo': 'secretaria', 'aria-label': 'Secretaria de destino', placeholder: 'Secretaria Municipal de…',
         value: c.getAttribute('data-secretaria') || ''})));
@@ -409,7 +409,6 @@
     renumerar();
     memo.showModal();
   });
-  el('lai-memo-inicio').addEventListener('input', renumerar);
   el('lai-memo-cancelar').addEventListener('click', function () { memo.close(); });
   function nomeDoArquivo(resposta) {
     var cab = resposta.headers.get('Content-Disposition') || '', m = cab.match(/filename\*=UTF-8''([^;]+)/);
@@ -421,7 +420,7 @@
     corpo.append('data', el('lai-memo-data').value);
     Array.prototype.forEach.call(memoLinhas.querySelectorAll('tr'), function (tr) {
       corpo.append('pk', tr.getAttribute('data-pk'));
-      ['numero', 'secretaria', 'tratamento', 'prazo', 'observacao'].forEach(function (nome) {
+      ['secretaria', 'tratamento', 'prazo', 'observacao'].forEach(function (nome) {
         corpo.append(nome, tr.querySelector('[data-campo=' + nome + ']').value);
       });
     });
