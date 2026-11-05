@@ -31,7 +31,7 @@ from .automacao_falabr import (PREFIXO_LINK, _destino_livre, _ja_tem_pdf, _marca
 
 log = logging.getLogger(__name__)
 
-VERSAO = '1.0.1'
+VERSAO = '1.0.2'
 _SAL = 'lai-extensao'
 VALIDADE_TOKEN = 365 * 24 * 3600
 SEM_SINAL = {'trazer': 150, 'pastas': 240}   # segundos sem notícia da extensão até dar a tarefa por parada (ela avisa a cada 10 s)

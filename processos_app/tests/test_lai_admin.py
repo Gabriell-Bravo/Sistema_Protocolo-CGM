@@ -16,7 +16,7 @@ ROTAS_LAI = (
     'lai:cadastros', 'lai:exportar', 'lai:exportar_falabr', 'lai:extensao',
     'lai:automacao_estado',
 )
-LINK_DO_MENU = 'href="/lai/"'
+LINK_DO_MENU = 'href="/lai/falabr/pendentes/"'
 
 
 class AbaLaiSomenteAdministradorTest(TestCase):

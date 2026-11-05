@@ -37,10 +37,11 @@
 <label class="lai-marcar"><input type="checkbox" id="marcar-todos"> Marcar todos desta lista</label>
 <button class="btn btn--primary" id="btn-automacao" type="submit" disabled>Automatizar pastas</button>
 <button class="btn btn--ghost" id="btn-memorandos" type="button" disabled>Gerar memorandos</button>
+<button class="btn btn--ghost" id="btn-drive" type="button" disabled>Enviar ao Google Drive</button>
 <span class="lai-muted" id="contagem-marcados">Nenhum pedido marcado</span>
 {% if pode_abrir_pasta %}<button class="btn btn--ghost" id="abrir-pasta" type="button">Abrir pasta</button>{% endif %}
 </form>
-<p class="lai-muted">Marque os NUPs e clique em Automatizar pastas: o sistema baixa o PDF (sem os dados do manifestante) e os anexos de cada um e guarda tudo no servidor, em <code>{{ pasta_pedidos }}</code>, numa pasta por NUP. Ao terminar, baixe tudo num ZIP. Nada é alterado no Fala.BR.</p>
+<p id="lai-drive-status" class="lai-muted" role="status" hidden></p>
 </div>
 {% endif %}
 <div class="lai-table-wrap"><table><thead><tr>{% if perms.lai.operar %}<th><span class="lai-sr">Marcar</span></th>{% endif %}<th>NUP</th><th>Assunto</th><th>Cadastro</th><th>Prazo</th><th>Situação no Fala.BR</th><th>No módulo</th></tr></thead><tbody>
@@ -54,11 +55,12 @@
 <label>Tema (nome da pasta). Deixe vazio para usar o assunto.<input type="text" name="tema" value="{{ row.tema }}" maxlength="200" placeholder="{{ row.assunto }}"></label>
 <button class="btn btn--ghost" type="submit">Salvar tema</button></form></details>{% endif %}
 {% if row.baixado_em %}<small>Pasta: {{ row.pasta }} (baixada em {{ row.baixado_em|date:'d/m/Y H:i' }})</small>{% endif %}
+{% if row.drive_em %}<small>No Google Drive desde {{ row.drive_em|date:'d/m/Y H:i' }}{% if row.drive_link %} · <a href="{{ row.drive_link }}" target="_blank" rel="noopener noreferrer">abrir</a>{% endif %}</small>{% endif %}
 {% if row.ultimo_memorando %}<small>Memorando {{ row.ultimo_memorando.rotulo }} para {{ row.ultimo_memorando.secretaria }} (gerado em {{ row.ultimo_memorando.criado_em|date:'d/m/Y H:i' }})</small>{% endif %}</td>
 <td>{{ row.cadastro|date:'d/m/Y'|default:'—' }}</td>
 <td>{% if row.prazo %}{{ row.prazo|date:'d/m/Y' }}{% else %}—{% endif %}<small><span class="lai-badge {{ row.classe }}">{{ row.dias_texto }}</span></small></td>
 <td><span class="lai-badge">{{ row.situacao|default:'—' }}</span>{% if row.alteracao %}<small>{{ row.alteracao }}{% if row.alterado_em %} (em {{ row.alterado_em|date:'d/m/Y H:i' }}){% endif %}</small>{% endif %}</td>
-<td>{% if row.demanda %}<a href="{% url 'lai:detalhe' row.demanda.pk %}">Já cadastrada</a><small>{{ row.demanda.get_status_display }}</small>{% else %}Ainda não importada{% if row.pk and row.fila == 'ABERTA' and perms.lai.operar %}<small><a class="btn btn--ghost" href="{% url 'lai:nova' %}?falabr={{ row.pk }}">Cadastrar</a></small>{% endif %}{% endif %}{% for aviso in row.avisos %}<small class="lai-aviso">{{ aviso }}</small>{% endfor %}</td>
+<td>{% if row.demanda %}<a href="{% url 'lai:detalhe' row.demanda.pk %}">Já cadastrada</a><small>{{ row.demanda.get_status_display }}</small>{% else %}Ainda não importada{% endif %}{% for aviso in row.avisos %}<small class="lai-aviso">{{ aviso }}</small>{% endfor %}</td>
 </tr>
 {% empty %}<tr><td colspan="7" class="lai-empty">{% if total_lido %}Nenhuma manifestação nesta faixa{% if busca %} com essa busca{% endif %}.{% else %}Nenhum NUP trazido ainda. Entre no Fala.BR e clique em Trazer NUPs.{% endif %}</td></tr>
 {% endfor %}
@@ -124,7 +126,8 @@
   var URLS = {
     trazer: '{% url "lai:trazer_iniciar" %}', iniciar: '{% url "lai:automacao_iniciar" %}',
     estado: '{% url "lai:automacao_estado" %}', cancelar: '{% url "lai:automacao_cancelar" %}',
-    abrir: '{% url "lai:automacao_abrir_pasta" %}', memorandos: '{% url "lai:memorandos_gerar" %}'
+    abrir: '{% url "lai:automacao_abrir_pasta" %}', memorandos: '{% url "lai:memorandos_gerar" %}',
+    drive: '{% url "lai:drive_enviar" %}'
   };
   var versaoEsperada = caixa.dataset.versao;
   var atual = 'verificando';
@@ -314,6 +317,7 @@
     var n = caixas().filter(function (c) { return c.checked; }).length;
     botao.disabled = n === 0 || !window.laiOnline;
     el('btn-memorandos').disabled = n === 0;  /* não precisa do Fala.BR: usa só os dados já lidos */
+    el('btn-drive').disabled = n === 0;       /* também não: envia as pastas que já estão no servidor */
     contagem.textContent = !window.laiOnline ? 'Entre no Fala.BR (e deixe a extensão ligada) para automatizar'
       : (n === 0 ? 'Nenhum pedido marcado' : n + ' pedido(s) marcado(s)');
   }
@@ -443,6 +447,41 @@
       })
       .catch(function (erro) { memoErro.textContent = erro.message; memoErro.hidden = false; })
       .then(function () { gerar.disabled = false; });
+  });
+
+  /* ---- Enviar as pastas ao Google Drive (uma por vez, para acompanhar o andamento) ---- */
+  var btnDrive = el('btn-drive');
+  var driveStatus = el('lai-drive-status');
+  btnDrive.addEventListener('click', function () {
+    var marcados = caixas().filter(function (c) { return c.checked; });
+    if (!marcados.length) return;
+    var i = 0, enviados = 0, avisos = [];
+    btnDrive.disabled = true;
+    driveStatus.hidden = false;
+    function mostrar(texto) { driveStatus.textContent = texto; }
+    function fim() {
+      var texto = 'Google Drive: ' + enviados + ' de ' + marcados.length + ' pasta(s) enviada(s).';
+      if (avisos.length) texto += ' ' + avisos.join(' ');
+      mostrar(texto);
+      btnDrive.disabled = false;
+      if (enviados) setTimeout(function () { window.location.reload(); }, avisos.length ? 6000 : 1500);
+    }
+    function proximo() {
+      if (i >= marcados.length) return fim();
+      var c = marcados[i], nup = c.getAttribute('data-nup');
+      mostrar('Enviando ' + (i + 1) + ' de ' + marcados.length + ' (' + nup + ')…');
+      var corpo = new FormData();
+      corpo.append('pk', c.value);
+      fetch(URLS.drive, {method: 'POST', body: corpo, headers: {'X-CSRFToken': csrf}, credentials: 'same-origin'})
+        .then(function (r) { return r.json().then(function (j) { return {ok: r.ok && j.ok, j: j}; }); })
+        .then(function (res) {
+          if (res.ok) enviados += 1;
+          else avisos.push(nup + ': ' + (res.j.erro || 'não foi possível enviar.'));
+        })
+        .catch(function () { avisos.push(nup + ': o servidor não respondeu.'); })
+        .then(function () { i += 1; proximo(); });
+    }
+    proximo();
   });
 
   function iniciarPastas() {

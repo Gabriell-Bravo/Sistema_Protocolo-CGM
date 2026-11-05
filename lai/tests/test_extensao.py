@@ -103,6 +103,9 @@ class PacoteTest(_Base):
         config = pacote.read('config.js').decode()
         self.assertIn(self.token, config)
         self.assertIn('https://sistema.example', config)
+        # O login lembrado por alguns minutos evita desconectar ao abrir um NUP (tela sem o botão do usuário).
+        self.assertIn('ultimoUsuario', pacote.read('background.js').decode())
+        self.assertEqual(manifesto['version'], ponte_extensao.VERSAO)
 
     def test_baixar_pelo_sistema_usa_o_endereco_acessado(self):
         resp = self.client.get(reverse('lai:extensao_baixar'), HTTP_HOST='localhost')

@@ -296,6 +296,20 @@ async function esperarPor(abaId, func, args, limite) {
 
 // ------------------------------------------------------------ status
 
+// Algumas telas do Fala.BR (como o detalhe de um NUP) não mostram o botão com o nome do usuário, ou
+// o mostram só depois de carregar. Por isso o último usuário visto vale por alguns minutos enquanto
+// ainda houver uma aba do Fala.BR aberta; sem aba aberta, vale desconectado na hora.
+const VALIDADE_USUARIO = 5 * 60 * 1000;
+
+async function usuarioLembrado(abas) {
+  try {
+    if (!abas.length) { await chrome.storage.session.remove('ultimoUsuario'); return null; }
+    const { ultimoUsuario } = await chrome.storage.session.get('ultimoUsuario');
+    if (ultimoUsuario && ultimoUsuario.nome && Date.now() - ultimoUsuario.em < VALIDADE_USUARIO) return ultimoUsuario;
+  } catch (e) { /* sem storage: volta ao comportamento simples */ }
+  return null;
+}
+
 async function status() {
   const abas = await chrome.tabs.query({ url: FALABR + '/*' });
   let usuario = null;
@@ -304,6 +318,11 @@ async function status() {
       const usuarioDaAba = await executar(aba.id, paginaLerUsuario);
       if (usuarioDaAba && usuarioDaAba.nome) { usuario = usuarioDaAba; break; }
     } catch (e) { /* aba carregando ou sem acesso */ }
+  }
+  if (usuario) {
+    try { await chrome.storage.session.set({ ultimoUsuario: { nome: usuario.nome, perfil: usuario.perfil, em: Date.now() } }); } catch (e) { /* sem storage */ }
+  } else {
+    usuario = await usuarioLembrado(abas);
   }
   return {
     instalada: true, versao: CFG.versao, servidor: CFG.servidor,

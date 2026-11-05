@@ -678,7 +678,7 @@ ROTA_INICIAL = {
     ANALISTA_LICITACOES: 'area_analista',
     ANALISTA_LIQUIDACOES: 'area_analista',
     GESTAO: 'gestao_dashboard',
-    LAI: 'lai:dashboard',
+    LAI: 'lai:pendentes',
 }
 
 

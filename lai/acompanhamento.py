@@ -168,6 +168,7 @@ def montar_lista(registros, demandas, hoje=None):
                 cadastro=r.cadastro, prazo=r.prazo, responsavel=r.responsavel,
                 link=r.link, lida_em=r.ultima_leitura, fila=r.fila,
                 tema=r.tema, tema_efetivo=r.tema_efetivo, pasta=r.pasta, baixado_em=r.baixado_em,
+                drive_em=r.drive_em, drive_link=r.drive_link,
                 alteracao=_alteracao(r.prazo_anterior, r.prazo, r.situacao_anterior, r.situacao),
                 alterado_em=r.alterado_em)
         else:
@@ -177,7 +178,7 @@ def montar_lista(registros, demandas, hoje=None):
                 cadastro=data_do_texto(r.get('cadastro')), prazo=data_do_texto(r.get('prazo')),
                 responsavel=r.get('responsavel', ''), link=r.get('link', ''),
                 lida_em=None, fila=r.get('fila', 'ABERTA'), alteracao='', alterado_em=None,
-                tema='', tema_efetivo=r.get('assunto', ''), pasta='', baixado_em=None)
+                tema='', tema_efetivo=r.get('assunto', ''), pasta='', baixado_em=None, drive_em=None, drive_link='')
         aberta = base['fila'] == 'ABERTA'
         dias = (base['prazo'] - hoje).days if base['prazo'] else None
         base['dias'] = dias

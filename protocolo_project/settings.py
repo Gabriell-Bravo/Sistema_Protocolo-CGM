@@ -201,6 +201,9 @@ LAI_PRIVATE_ROOT = LAI_DATA_DIR / 'privado'
 LAI_MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 LAI_SCANNER = os.environ.get('LAI_SCANNER', '')
 LAI_PUBLIC_URL = os.environ.get('LAI_PUBLIC_URL', 'https://controladoria.saquarema.rj.gov.br/lai/')
+# Envio das pastas dos NUPs ao Google Drive (conta de serviço). O JSON fica no servidor, fora do repositório.
+LAI_DRIVE_CREDENCIAIS = os.environ.get('LAI_DRIVE_CREDENCIAIS', '')
+LAI_DRIVE_PASTA_ID = os.environ.get('LAI_DRIVE_PASTA_ID', '')
 
 # E-mail do módulo: SIMULADO até a TI homologar o SMTP (LAI_LIVE_EMAIL=1). O protocolo não envia e-mail.
 LAI_LIVE_EMAIL = _env_bool('LAI_LIVE_EMAIL', False)

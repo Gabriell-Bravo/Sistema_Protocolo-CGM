@@ -25,7 +25,7 @@ from .forms import *
 from .permissions import exigir, visiveis
 from .arquivos import guardar, validar
 from .extracao import extrair
-from . import acompanhamento, automacao_falabr, falabr, memorando_docx, navegador_falabr, ponte_extensao, services
+from . import acompanhamento, automacao_falabr, falabr, google_drive, memorando_docx, navegador_falabr, ponte_extensao, services
 from .prazos import somar, marco
 from .pdf import gerar_memorando
 
@@ -234,6 +234,34 @@ def memorandos_gerar(request):
         nome_zip = f'memorandos-lai-{data.isoformat()}.zip'
     resposta['Content-Disposition'] = "attachment; filename*=UTF-8''" + quote(nome_zip)
     return resposta
+
+@privado
+def drive_enviar(request):
+    """Envia ao Google Drive a pasta de UM pedido (a tela chama uma vez por NUP marcado)."""
+    exigir(request.user, 'operar')
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'erro': 'Use o botão da tela.'}, status=405)
+    pk = request.POST.get('pk', '')
+    registro = ManifestacaoFalabr.objects.filter(pk=pk).first() if pk.isdigit() else None
+    if registro is None:
+        return JsonResponse({'ok': False, 'erro': 'Pedido não encontrado. Atualize a lista.'}, status=404)
+    if not registro.pasta:
+        return JsonResponse({'ok': False, 'erro': 'Este pedido ainda não tem pasta. Use "Automatizar pastas" antes.'}, status=409)
+    base = automacao_falabr.pasta_base().resolve()
+    caminho = (base / registro.pasta).resolve()
+    if base not in caminho.parents or not caminho.is_dir():
+        return JsonResponse({'ok': False, 'erro': 'A pasta deste pedido não está mais no servidor.'}, status=404)
+    problema = google_drive.explicar_configuracao()
+    if problema:
+        return JsonResponse({'ok': False, 'erro': problema}, status=409)
+    try:
+        resumo = google_drive.enviar_pasta(caminho)
+    except google_drive.DriveError as exc:
+        return JsonResponse({'ok': False, 'erro': str(exc)}, status=502)
+    registro.drive_em = timezone.now()
+    registro.drive_link = resumo['link'][:300]
+    registro.save(update_fields=['drive_em', 'drive_link'])
+    return JsonResponse(dict(resumo, ok=True))
 
 @privado
 def memorandos(request):

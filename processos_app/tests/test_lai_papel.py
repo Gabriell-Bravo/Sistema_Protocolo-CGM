@@ -11,7 +11,7 @@ from processos_app.models import Profile
 from processos_app.services import permissions as perm
 from processos_app.tests.base import criar_usuario
 
-LINK_DO_MENU = 'href="/lai/"'
+LINK_DO_MENU = 'href="/lai/falabr/pendentes/"'
 
 
 class PapelLaiTest(TestCase):
@@ -27,7 +27,7 @@ class PapelLaiTest(TestCase):
         self.client.force_login(self.lai)
         resp = self.client.get('/')
         self.assertEqual(resp.status_code, 302)
-        self.assertEqual(resp['Location'], reverse('lai:dashboard'))
+        self.assertEqual(resp['Location'], reverse('lai:pendentes'))
 
     def test_conta_lai_abre_o_modulo_e_ve_o_item_no_menu(self):
         self.client.force_login(self.lai)

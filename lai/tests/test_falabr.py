@@ -216,7 +216,7 @@ class AcompanhamentoFalabrTest(TestCase):
         self.assertIn('03996.2026.000936-10', texto)
         self.assertIn('03/11/2026', texto)
         self.assertIn('Ainda não importada', texto)
-        self.assertIn('Cadastrar', texto)
+        self.assertNotIn('Cadastrar', texto)  # o cadastro manual saiu das abas do LAI
 
     def test_aviso_quando_lista_incompleta(self):
         lido = self._leitura(abertas=[self._linha()], completa=False)

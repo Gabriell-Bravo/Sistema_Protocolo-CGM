@@ -278,6 +278,9 @@ class ManifestacaoFalabr(models.Model):
     tema = models.CharField(max_length=200, blank=True)
     pasta = models.CharField(max_length=300, blank=True)
     baixado_em = models.DateTimeField(null=True, blank=True)
+    # Última vez que a pasta foi enviada ao Google Drive (e o link da pasta lá).
+    drive_em = models.DateTimeField(null=True, blank=True)
+    drive_link = models.URLField(max_length=300, blank=True)
     @property
     def tema_efetivo(self): return self.tema or self.assunto
     class Meta: ordering = ['prazo', 'nup']

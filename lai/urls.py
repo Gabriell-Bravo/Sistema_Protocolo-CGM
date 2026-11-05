@@ -4,6 +4,7 @@ app_name='lai'
 urlpatterns=[path('',views.dashboard,name='dashboard'),path('falabr/pendentes/',views.pendentes,name='pendentes'),path('falabr/exportar/',views.exportar_falabr,name='exportar_falabr'),
     path('falabr/extensao/',views.extensao,name='extensao'),path('falabr/extensao/baixar/',views.extensao_baixar,name='extensao_baixar'),
     path('memorandos/',views.memorandos,name='memorandos'),
+    path('falabr/drive/enviar/',views.drive_enviar,name='drive_enviar'),
     path('falabr/memorandos/gerar/',views.memorandos_gerar,name='memorandos_gerar'),
     path('falabr/trazer/iniciar/',views.trazer_iniciar,name='trazer_iniciar'),
     path('falabr/automacao/iniciar/',views.automacao_iniciar,name='automacao_iniciar'),path('falabr/automacao/estado/',views.automacao_estado,name='automacao_estado'),path('falabr/automacao/cancelar/',views.automacao_cancelar,name='automacao_cancelar'),path('falabr/automacao/zip/',views.automacao_zip,name='automacao_zip'),path('falabr/automacao/abrir-pasta/',views.automacao_abrir_pasta,name='automacao_abrir_pasta'),
