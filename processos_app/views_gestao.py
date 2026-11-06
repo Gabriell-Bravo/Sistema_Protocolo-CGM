@@ -341,10 +341,21 @@ def pessoas_desativar(request, registro_id):
 def dashboard(request):
     hoje = timezone.localdate()
     converter = gestao_pessoas.converter_data
-    inicio = converter(request.GET.get('inicio')) or hoje.replace(day=1)
-    fim = converter(request.GET.get('fim')) or hoje
+    unidade = request.GET.get('unidade')
+    if unidade not in dict(indicadores.UNIDADES_FLUXO):
+        unidade = 'dia'
+    padrao_inicio, padrao_fim = indicadores.janela_padrao(unidade, hoje)
+    inicio_informado = converter(request.GET.get('inicio'))
+    fim_informado = converter(request.GET.get('fim'))
+    if unidade == 'dia' and bool(inicio_informado) != bool(fim_informado):
+        # Em "Dia", informar só uma data significa olhar aquele dia.
+        inicio = fim = min(inicio_informado or fim_informado, hoje)
+    else:
+        inicio = inicio_informado or padrao_inicio
+        fim = fim_informado or padrao_fim
     if fim < inicio:
         inicio, fim = fim, inicio
+    periodo_personalizado = bool(inicio_informado or fim_informado)
 
     filtros = {
         'grupo': request.GET.get('grupo') or None,
@@ -356,8 +367,23 @@ def dashboard(request):
 
     periodo = indicadores.periodo(inicio, fim, **filtros)
     tempos = indicadores.tempos_medios(inicio, fim, **filtros)
+    fluxo = indicadores.fluxo(
+        inicio, fim, unidade, contexto_dias=indicadores.CONTEXTO_DIAS, **filtros)
+    cartoes = indicadores.cards(hoje)
+    valores = {cartao['rotulo']: cartao['valor'] for cartao in cartoes}
     return render(request, 'gestao/dashboard.html', {
-        'cards': indicadores.cards(hoje),
+        'destaque': {
+            'tramitacao': valores.get('Em tramitação', 0),
+            'vencidos': valores.get('Vencidos', 0),
+            'vencendo_hoje': valores.get('Vencendo hoje', 0),
+            'urgentes': valores.get('Urgentes', 0),
+        },
+        'fluxo': fluxo,
+        'unidades': indicadores.UNIDADES_FLUXO,
+        'unidade': fluxo['unidade'],
+        'periodo_personalizado': periodo_personalizado,
+        'filtros_ativos': sum(1 for valor in filtros.values() if valor),
+        'cards': cartoes,
         'panorama': indicadores.panorama(hoje),
         'equipe': indicadores.equipe(inicio, fim, hoje),
         'periodo': periodo,

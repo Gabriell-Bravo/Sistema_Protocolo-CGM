@@ -1,27 +1,240 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Dashboard{% endblock %}
 {% block page_title %}Dashboard da Gestão{% endblock %}
-{% block page_subtitle %}Situação atual do acervo e indicadores do período.{% endblock %}
+{% block page_subtitle %}Situação atual do acervo e fluxo de entradas e saídas.{% endblock %}
+
+{% block extra_css %}
+<script>
+    // Esconde os blocos só quando haverá animação (evita piscar). Sem Motion ou
+    // com "reduzir movimento" ligado, a página aparece direto.
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        document.documentElement.classList.add('dash-anim');
+    }
+</script>
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}?v=20261106h">
+{% endblock %}
 
 {% block content %}
-<div class="stack">
+<div class="stack dash" id="dash">
 
-    {# item 47: todos os cards são clicáveis #}
+    {# Faixa de abertura: o número que o chefe quer ver primeiro #}
+    <section class="dash-hero" data-anim>
+        <span class="dash-hero__blob dash-hero__blob--a" aria-hidden="true"></span>
+        <span class="dash-hero__blob dash-hero__blob--b" aria-hidden="true"></span>
+        <div class="dash-hero__texto">
+            <span class="dash-hero__selo"><span class="dash-hero__pulso"></span>Dados ao vivo · {{ hoje|date:"d/m/Y" }}</span>
+            <div class="dash-hero__numero">
+                <strong data-count="{{ destaque.tramitacao }}">{{ destaque.tramitacao }}</strong>
+                <span>processo{{ destaque.tramitacao|pluralize:"s" }} em tramitação na CGM</span>
+            </div>
+        </div>
+        <ul class="dash-hero__alertas">
+            <li class="dash-hero__alerta dash-hero__alerta--perigo">
+                <strong data-count="{{ destaque.vencidos }}">{{ destaque.vencidos }}</strong><span>vencidos</span>
+            </li>
+            <li class="dash-hero__alerta dash-hero__alerta--aviso">
+                <strong data-count="{{ destaque.vencendo_hoje }}">{{ destaque.vencendo_hoje }}</strong><span>vencem hoje</span>
+            </li>
+            <li class="dash-hero__alerta dash-hero__alerta--urgente">
+                <strong data-count="{{ destaque.urgentes }}">{{ destaque.urgentes }}</strong><span>urgentes</span>
+            </li>
+        </ul>
+    </section>
+
+    {# todos os cards são clicáveis #}
     <section class="stats stats--dashboard">
         {% for card in cards %}
-        <a class="stat stat--{{ card.cor }} stat--link" href="{{ card.url }}">
+        <a class="stat stat--{{ card.cor }} stat--link" href="{{ card.url }}" data-anim data-hover-lift>
             <span class="stat__icon"><span class="material-symbols-rounded">{{ card.icone }}</span></span>
             <div>
-                <div class="stat__value">{{ card.valor }}</div>
+                <div class="stat__value" data-count="{{ card.valor }}">{{ card.valor }}</div>
                 <div class="stat__label">{{ card.rotulo }}</div>
             </div>
         </a>
         {% endfor %}
     </section>
 
+    {# Controles do período: um seletor só, sem fileira de botões #}
+    <form method="get" class="dash-barra" id="dash-form" data-anim
+          data-modo-dia="{% if fluxo.modo_dia %}1{% endif %}"
+          data-dia="{{ inicio|date:'Y-m-d' }}" data-hoje="{{ hoje|date:'Y-m-d' }}">
+        <div class="dash-seg" role="radiogroup" aria-label="Agrupar por">
+            <span class="dash-seg__marca" aria-hidden="true"></span>
+            {% for codigo, rotulo in unidades %}
+            <label class="dash-seg__opcao">
+                <input type="radio" name="unidade" value="{{ codigo }}" {% if unidade == codigo %}checked{% endif %}>
+                <span>{{ rotulo }}</span>
+            </label>
+            {% endfor %}
+        </div>
+
+        <div class="dash-dia-nav">
+            <button type="button" class="dash-seta" data-dia-nav="-1" title="Dia anterior" aria-label="Dia anterior"
+                    {% if not fluxo.modo_dia %}hidden{% endif %}>
+                <span class="material-symbols-rounded">chevron_left</span>
+            </button>
+            <div class="dash-pop" data-pop>
+                <button type="button" class="dash-chip" data-pop-botao aria-expanded="false">
+                    <span class="material-symbols-rounded">calendar_month</span>
+                    <span class="dash-chip__texto" id="dash-periodo-texto">{% if fluxo.modo_dia %}{% if inicio == hoje %}Hoje · {% endif %}{{ inicio|date:"d/m/Y" }}{% else %}{{ inicio|date:"d/m/Y" }} – {{ fim|date:"d/m/Y" }}{% endif %}</span>
+                    <span class="material-symbols-rounded dash-chip__seta">expand_more</span>
+                </button>
+                <div class="dash-pop__painel" data-pop-painel hidden>
+                    <div class="dash-pop__titulo">Dia ou período específico</div>
+                    <div class="dash-pop__datas">
+                        <label class="field">
+                            <span class="field__label">De</span>
+                            <input type="date" name="inicio" class="input" value="{% if periodo_personalizado %}{{ inicio|date:'Y-m-d' }}{% endif %}">
+                        </label>
+                        <label class="field">
+                            <span class="field__label">Até</span>
+                            <input type="date" name="fim" class="input" value="{% if periodo_personalizado and not fluxo.modo_dia %}{{ fim|date:'Y-m-d' }}{% endif %}">
+                        </label>
+                    </div>
+                    <p class="dash-pop__dica">Em <strong>Dia</strong>, preencha só o <strong>De</strong> para ver um dia específico. Com os dois campos, vê vários dias.</p>
+                <div class="dash-pop__rapidos">
+                    <button type="button" data-rapido="mes">Este mês</button>
+                    <button type="button" data-rapido="mes-anterior">Mês anterior</button>
+                    <button type="button" data-rapido="ano">Este ano</button>
+                    <button type="button" data-rapido="ano-anterior">Ano passado</button>
+                </div>
+                <div class="dash-pop__rodape">
+                    <button type="button" class="btn btn--ghost btn--sm" data-limpar-periodo>Voltar ao padrão</button>
+                    <button type="submit" class="btn btn--primary btn--sm">Aplicar</button>
+                </div>
+            </div>
+            </div>
+            <button type="button" class="dash-seta" data-dia-nav="1" title="Próximo dia" aria-label="Próximo dia"
+                    {% if not fluxo.modo_dia %}hidden{% endif %}
+                    {% if inicio >= hoje %}disabled{% endif %}>
+                <span class="material-symbols-rounded">chevron_right</span>
+            </button>
+        </div>
+
+        <div class="dash-pop" data-pop>
+            <button type="button" class="dash-chip" data-pop-botao aria-expanded="false">
+                <span class="material-symbols-rounded">tune</span>
+                <span class="dash-chip__texto">Filtros</span>
+                {% if filtros_ativos %}<span class="dash-chip__conta">{{ filtros_ativos }}</span>{% endif %}
+            </button>
+            <div class="dash-pop__painel dash-pop__painel--filtros" data-pop-painel hidden>
+                <div class="dash-pop__titulo">Refinar os números</div>
+                <div class="dash-pop__grade">
+                    <label class="field">
+                        <span class="field__label">Grupo</span>
+                        <select name="grupo" class="select">
+                            <option value="">Todos</option>
+                            {% for valor, rotulo in grupos %}
+                            <option value="{{ valor }}" {% if filtros.grupo == valor %}selected{% endif %}>{{ rotulo }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span class="field__label">Analista</span>
+                        <select name="analista" class="select">
+                            <option value="">Todos</option>
+                            {% for a in analistas %}
+                            <option value="{{ a.id }}" {% if filtros.analista == a.id|stringformat:'s' %}selected{% endif %}>{{ a.get_full_name|default:a.username }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span class="field__label">Secretaria</span>
+                        <input type="text" name="secretaria" class="input" value="{{ filtros.secretaria|default:'' }}" placeholder="Parte do nome">
+                    </label>
+                    <label class="field">
+                        <span class="field__label">Espécie</span>
+                        <select name="especie" class="select">
+                            <option value="">Todas</option>
+                            {% for e in especies %}
+                            <option value="{{ e.id }}" {% if filtros.especie == e.id|stringformat:'s' %}selected{% endif %}>{{ e.nome }} ({{ e.get_grupo_display }}){% if not e.ativo %} — inativa{% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                </div>
+                <div class="dash-pop__rodape">
+                    <button type="button" class="btn btn--ghost btn--sm" data-limpar-filtros>Limpar filtros</button>
+                    <button type="submit" class="btn btn--primary btn--sm">Aplicar</button>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    {# ===== Entraram × saíram (troca sozinho ao mudar o período) ===== #}
+    <div id="dash-live-fluxo" data-dash-live>
+        <section class="card dash-fluxo" data-anim>
+            <div class="dash-fluxo__kpis">
+                <div class="dash-kpi dash-kpi--entrada">
+                    <span class="dash-kpi__rotulo"><i></i>Entraram</span>
+                    <strong class="dash-kpi__valor" data-count="{{ fluxo.totais.entradas }}">{{ fluxo.totais.entradas }}</strong>
+                    {% if fluxo.anterior.var_entradas is not None %}
+                    <span class="dash-kpi__var {% if fluxo.anterior.var_entradas >= 0 %}dash-kpi__var--sobe{% else %}dash-kpi__var--desce{% endif %}">
+                        {% if fluxo.anterior.var_entradas >= 0 %}▲{% else %}▼{% endif %} {{ fluxo.anterior.var_entradas }}% <em>vs {{ fluxo.rotulo_anterior }} ({{ fluxo.anterior.entradas }})</em>
+                    </span>
+                    {% else %}<span class="dash-kpi__var"><em>sem período anterior para comparar</em></span>{% endif %}
+                </div>
+                <div class="dash-kpi dash-kpi--saida">
+                    <span class="dash-kpi__rotulo"><i></i>Saíram</span>
+                    <strong class="dash-kpi__valor" data-count="{{ fluxo.totais.saidas }}">{{ fluxo.totais.saidas }}</strong>
+                    {% if fluxo.anterior.var_saidas is not None %}
+                    <span class="dash-kpi__var {% if fluxo.anterior.var_saidas >= 0 %}dash-kpi__var--sobe{% else %}dash-kpi__var--desce{% endif %}">
+                        {% if fluxo.anterior.var_saidas >= 0 %}▲{% else %}▼{% endif %} {{ fluxo.anterior.var_saidas }}% <em>vs {{ fluxo.rotulo_anterior }} ({{ fluxo.anterior.saidas }})</em>
+                    </span>
+                    {% else %}<span class="dash-kpi__var"><em>sem período anterior para comparar</em></span>{% endif %}
+                </div>
+                <div class="dash-kpi dash-kpi--saldo {% if fluxo.totais.saldo > 0 %}dash-kpi--cresce{% elif fluxo.totais.saldo < 0 %}dash-kpi--reduz{% endif %}">
+                    <span class="dash-kpi__rotulo"><i></i>Saldo</span>
+                    <strong class="dash-kpi__valor" data-count="{{ fluxo.totais.saldo }}" data-sinal="1">{% if fluxo.totais.saldo > 0 %}+{% endif %}{{ fluxo.totais.saldo }}</strong>
+                    <span class="dash-kpi__var"><em>{% if fluxo.totais.saldo > 0 %}o acervo cresceu{% elif fluxo.totais.saldo < 0 %}o acervo diminuiu{% else %}acervo estável{% endif %}</em></span>
+                </div>
+                <div class="dash-kpi dash-kpi--acervo">
+                    <span class="dash-kpi__rotulo"><i></i>Na CGM ao fim</span>
+                    <strong class="dash-kpi__valor" data-count="{{ fluxo.totais.estoque_final }}">{{ fluxo.totais.estoque_final }}</strong>
+                    <span class="dash-kpi__var"><em>eram {{ fluxo.totais.estoque_inicial }} no início</em></span>
+                </div>
+            </div>
+
+            <div class="dash-fluxo__cabeca">
+                <div>
+                    {% if fluxo.modo_dia %}
+                    <div class="dash-fluxo__titulo">Entraram × saíram em {{ inicio|date:"d/m/Y" }}</div>
+                    <div class="dash-fluxo__sub">O dia escolhido fica em destaque, com os 6 dias anteriores ao lado para comparar.</div>
+                    {% else %}
+                    <div class="dash-fluxo__titulo">Entraram × saíram por {{ fluxo.unidade_rotulo|lower }}</div>
+                    <div class="dash-fluxo__sub">{{ inicio|date:"d/m/Y" }} a {{ fim|date:"d/m/Y" }}</div>
+                    {% endif %}
+                </div>
+                <div class="dash-legenda" role="group" aria-label="Séries do gráfico">
+                    <button type="button" class="dash-legenda__item dash-legenda__item--entrada" data-serie="entradas" aria-pressed="true"><i></i>Entraram</button>
+                    <button type="button" class="dash-legenda__item dash-legenda__item--saida" data-serie="saidas" aria-pressed="true"><i></i>Saíram</button>
+                    <button type="button" class="dash-legenda__item dash-legenda__item--acervo" data-serie="acervo" aria-pressed="true"><i></i>Na CGM</button>
+                </div>
+            </div>
+
+            <div class="dash-grafico" id="dash-grafico" aria-label="Gráfico de processos que entraram e saíram"></div>
+            <p class="dash-insight" id="dash-insight"></p>
+
+            <details class="dash-tabela">
+                <summary>Ver os números em tabela</summary>
+                <div class="table-scroll table-scroll--compact">
+                    <table class="table">
+                        <thead><tr><th>{{ fluxo.unidade_rotulo }}</th><th>Entraram</th><th>Saíram</th><th>Saldo</th><th>Na CGM ao fim</th></tr></thead>
+                        <tbody>
+                            {% for b in fluxo.baldes %}
+                            <tr><td>{{ b.titulo }}</td><td>{{ b.entradas }}</td><td>{{ b.saidas }}</td><td>{{ b.saldo }}</td><td>{{ b.acervo }}</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+            {{ fluxo|json_script:"dash-fluxo-dados" }}
+        </section>
+    </div>
+
     <div class="dashboard-colunas">
-        <section class="card">
+        <section class="card" data-anim data-scroll-bars>
             <div class="card__header">
                 <span class="card__title">Onde estão os processos</span>
                 <span class="card__hint">Agora, ainda na CGM</span>
@@ -30,7 +243,7 @@
                 {% include "includes/grafico_barras.html" with itens=panorama.situacao %}
             </div>
         </section>
-        <section class="card">
+        <section class="card" data-anim data-scroll-bars>
             <div class="card__header">
                 <span class="card__title">Prioridade</span>
                 <span class="card__hint">Do que está na casa</span>
@@ -39,7 +252,7 @@
                 {% include "includes/grafico_barras.html" with itens=panorama.prioridade %}
             </div>
         </section>
-        <section class="card">
+        <section class="card" data-anim data-scroll-bars>
             <div class="card__header">
                 <span class="card__title">Prazo</span>
                 <span class="card__hint">Do que está na casa</span>
@@ -50,158 +263,111 @@
         </section>
     </div>
 
-    {# filtros do período (item 49) — aplicam-se ao quadro, aos indicadores e aos tempos #}
-    <section class="filters">
-        <form method="get" class="filters__grid">
-            <div class="field">
-                <label class="field__label" for="inicio">De</label>
-                <input type="date" id="inicio" name="inicio" class="input" value="{{ inicio|date:'Y-m-d' }}">
-            </div>
-            <div class="field">
-                <label class="field__label" for="fim">Até</label>
-                <input type="date" id="fim" name="fim" class="input" value="{{ fim|date:'Y-m-d' }}">
-            </div>
-            <div class="field">
-                <label class="field__label" for="grupo">Grupo</label>
-                <select id="grupo" name="grupo" class="select">
-                    <option value="">Todos</option>
-                    {% for valor, rotulo in grupos %}
-                        <option value="{{ valor }}" {% if filtros.grupo == valor %}selected{% endif %}>{{ rotulo }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="field">
-                <label class="field__label" for="analista">Analista</label>
-                <select id="analista" name="analista" class="select">
-                    <option value="">Todos</option>
-                    {% for a in analistas %}
-                        <option value="{{ a.id }}" {% if filtros.analista == a.id|stringformat:'s' %}selected{% endif %}>{{ a.get_full_name|default:a.username }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="field">
-                <label class="field__label" for="secretaria">Secretaria</label>
-                <input type="text" id="secretaria" name="secretaria" class="input" value="{{ filtros.secretaria|default:'' }}" placeholder="Parte do nome">
-            </div>
-            <div class="field">
-                <label class="field__label" for="especie">Espécie</label>
-                <select id="especie" name="especie" class="select">
-                    <option value="">Todas</option>
-                    {% for e in especies %}
-                        <option value="{{ e.id }}" {% if filtros.especie == e.id|stringformat:'s' %}selected{% endif %}>{{ e.nome }} ({{ e.get_grupo_display }}){% if not e.ativo %} — inativa{% endif %}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-actions">
-                <button type="submit" class="btn btn--primary">Aplicar</button>
-                <a href="{% url 'gestao_dashboard' %}" class="btn btn--ghost">Limpar</a>
-            </div>
-        </form>
-        <div class="filters__chips">
-            {% for rotulo, de, ate in atalhos %}
-                <a class="chip" href="?inicio={{ de|date:'Y-m-d' }}&fim={{ ate|date:'Y-m-d' }}">{{ rotulo }}</a>
-            {% endfor %}
-        </div>
-    </section>
-
-    {# item 48: quadro da equipe, alimentado pela Gestão de Pessoas CGM. Sem ranking. #}
-    <section class="table-card">
-        <div class="table-card__header">
-            <span class="table-card__title">Equipe de análise</span>
-            <a class="btn btn--sm btn--outline" href="{% url 'gestao_pessoas' %}">
-                <span class="material-symbols-rounded">group</span>
-                Gestão de Pessoas CGM
-            </a>
-        </div>
-        <div class="table-scroll table-scroll--compact">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Analista</th><th>Grupo</th><th>Disponibilidade hoje</th>
-                        <th>Em análise</th><th>Vencidos</th>
-                        <th>Concluídos no período</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for linha in equipe %}
-                    <tr>
-                        <td><strong>{{ linha.nome }}</strong></td>
-                        <td>{{ linha.grupo }}</td>
-                        <td>
-                            <span class="badge badge--dot {% if linha.disponivel %}badge--success{% else %}badge--warning{% endif %}">{{ linha.disponibilidade }}</span>
-                        </td>
-                        <td>{{ linha.em_analise }}</td>
-                        <td>{% if linha.vencidos %}<span class="badge badge--danger">{{ linha.vencidos }}</span>{% else %}0{% endif %}</td>
-                        <td>{{ linha.concluidos }}</td>
-                    </tr>
-                    {% empty %}
-                    <tr><td colspan="6"><div class="empty empty--compact">
-                        <div class="empty__title">Nenhum analista ativo cadastrado</div>
-                    </div></td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        <p class="cell-muted">Carga de trabalho em ordem alfabética. Não é ranking de servidores.</p>
-    </section>
-
-    {# item 49: indicadores do período #}
-    <section class="card">
-        <div class="card__header">
-            <span class="card__title">Indicadores de {{ inicio|date:"d/m/Y" }} a {{ fim|date:"d/m/Y" }}</span>
-        </div>
-        <div class="card__body">
-            <div class="stats">
-                <div class="stat"><div><div class="stat__value">{{ periodo.recebidos }}</div><div class="stat__label">Recebidos</div></div></div>
-                <div class="stat"><div><div class="stat__value">{{ periodo.liberados_assinatura }}</div><div class="stat__label">Liberados para assinatura</div></div></div>
-                <div class="stat"><div><div class="stat__value">{{ periodo.saidas_concluidas }}</div><div class="stat__label">Saídas concluídas</div></div></div>
-                <div class="stat"><div><div class="stat__value">{{ periodo.estoque_inicial }}</div><div class="stat__label">Estoque inicial</div></div></div>
-                <div class="stat"><div><div class="stat__value">{{ periodo.estoque_final }}</div><div class="stat__label">Estoque final</div></div></div>
-                <div class="stat"><div><div class="stat__value">{{ periodo.retornos }}</div><div class="stat__label">Retornos / reanálises</div></div></div>
-            </div>
-            {% include "includes/grafico_barras.html" with itens=periodo.movimento %}
-        </div>
-    </section>
-
-    {# item 50: tempos do fluxo #}
-    <section class="table-card">
-        <div class="table-card__header">
-            <span class="table-card__title">Tempo médio do fluxo (dias)</span>
-            <span class="table-card__count">{{ tempos.processos }} processo{{ tempos.processos|pluralize:"s" }} com saída no período</span>
-        </div>
-        <div class="card__body">
-            {% include "includes/grafico_barras.html" with itens=tempos_grafico %}
-        </div>
-        <p class="cell-muted">Calculado a partir dos registros de data e hora da tramitação — nada é digitado.</p>
-    </section>
-
-    <div class="dashboard-colunas">
-        <section class="table-card">
+    <div id="dash-live-detalhes" data-dash-live class="stack">
+        {# quadro da equipe, alimentado pela Gestão de Pessoas CGM. Sem ranking. #}
+        <section class="table-card" data-anim>
             <div class="table-card__header">
-                <span class="table-card__title">Volume por grupo</span>
+                <span class="table-card__title">Equipe de análise</span>
+                <a class="btn btn--sm btn--outline" href="{% url 'gestao_pessoas' %}">
+                    <span class="material-symbols-rounded">group</span>
+                    Gestão de Pessoas CGM
+                </a>
+            </div>
+            <div class="table-scroll table-scroll--compact">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Analista</th><th>Grupo</th><th>Disponibilidade hoje</th>
+                            <th>Em análise</th><th>Vencidos</th>
+                            <th>Concluídos no período</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for linha in equipe %}
+                        <tr>
+                            <td><strong>{{ linha.nome }}</strong></td>
+                            <td>{{ linha.grupo }}</td>
+                            <td>
+                                <span class="badge badge--dot {% if linha.disponivel %}badge--success{% else %}badge--warning{% endif %}">{{ linha.disponibilidade }}</span>
+                            </td>
+                            <td>{{ linha.em_analise }}</td>
+                            <td>{% if linha.vencidos %}<span class="badge badge--danger">{{ linha.vencidos }}</span>{% else %}0{% endif %}</td>
+                            <td>{{ linha.concluidos }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6"><div class="empty empty--compact">
+                            <div class="empty__title">Nenhum analista ativo cadastrado</div>
+                        </div></td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <p class="cell-muted">Carga de trabalho em ordem alfabética. Não é ranking de servidores.</p>
+        </section>
+
+        {# indicadores do período #}
+        <section class="card" data-anim data-scroll-bars>
+            <div class="card__header">
+                <span class="card__title">Indicadores {% if inicio == fim %}de {{ inicio|date:"d/m/Y" }}{% else %}de {{ inicio|date:"d/m/Y" }} a {{ fim|date:"d/m/Y" }}{% endif %}</span>
             </div>
             <div class="card__body">
-                {% include "includes/grafico_barras.html" with itens=periodo.por_grupo %}
+                <div class="stats">
+                    <div class="stat"><div><div class="stat__value" data-count="{{ periodo.recebidos }}">{{ periodo.recebidos }}</div><div class="stat__label">Recebidos</div></div></div>
+                    <div class="stat"><div><div class="stat__value" data-count="{{ periodo.liberados_assinatura }}">{{ periodo.liberados_assinatura }}</div><div class="stat__label">Liberados para assinatura</div></div></div>
+                    <div class="stat"><div><div class="stat__value" data-count="{{ periodo.saidas_concluidas }}">{{ periodo.saidas_concluidas }}</div><div class="stat__label">Saídas concluídas</div></div></div>
+                    <div class="stat"><div><div class="stat__value" data-count="{{ periodo.estoque_inicial }}">{{ periodo.estoque_inicial }}</div><div class="stat__label">Estoque inicial</div></div></div>
+                    <div class="stat"><div><div class="stat__value" data-count="{{ periodo.estoque_final }}">{{ periodo.estoque_final }}</div><div class="stat__label">Estoque final</div></div></div>
+                    <div class="stat"><div><div class="stat__value" data-count="{{ periodo.retornos }}">{{ periodo.retornos }}</div><div class="stat__label">Retornos / reanálises</div></div></div>
+                </div>
+                {% include "includes/grafico_barras.html" with itens=periodo.movimento %}
             </div>
         </section>
 
-        <section class="table-card">
+        {# tempos do fluxo #}
+        <section class="table-card" data-anim data-scroll-bars>
             <div class="table-card__header">
-                <span class="table-card__title">Volume por Secretaria</span>
+                <span class="table-card__title">Tempo médio do fluxo (dias)</span>
+                <span class="table-card__count">{{ tempos.processos }} processo{{ tempos.processos|pluralize:"s" }} com saída no período</span>
             </div>
             <div class="card__body">
-                {% include "includes/grafico_barras.html" with itens=periodo.por_secretaria %}
+                {% include "includes/grafico_barras.html" with itens=tempos_grafico %}
             </div>
+            <p class="cell-muted">Calculado a partir dos registros de data e hora da tramitação — nada é digitado.</p>
         </section>
 
-        <section class="table-card">
-            <div class="table-card__header">
-                <span class="table-card__title">Volume por espécie</span>
-            </div>
-            <div class="card__body">
-                {% include "includes/grafico_barras.html" with itens=periodo.por_especie %}
-            </div>
-        </section>
+        <div class="dashboard-colunas">
+            <section class="table-card" data-anim data-scroll-bars>
+                <div class="table-card__header">
+                    <span class="table-card__title">Volume por grupo</span>
+                </div>
+                <div class="card__body">
+                    {% include "includes/grafico_barras.html" with itens=periodo.por_grupo %}
+                </div>
+            </section>
+
+            <section class="table-card" data-anim data-scroll-bars>
+                <div class="table-card__header">
+                    <span class="table-card__title">Volume por Secretaria</span>
+                </div>
+                <div class="card__body">
+                    {% include "includes/grafico_barras.html" with itens=periodo.por_secretaria %}
+                </div>
+            </section>
+
+            <section class="table-card" data-anim data-scroll-bars>
+                <div class="table-card__header">
+                    <span class="table-card__title">Volume por espécie</span>
+                </div>
+                <div class="card__body">
+                    {% include "includes/grafico_barras.html" with itens=periodo.por_especie %}
+                </div>
+            </section>
+        </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'vendor/motion.js' %}"></script>
+<script src="{% static 'js/dashboard.js' %}?v=20261106f"></script>
 {% endblock %}

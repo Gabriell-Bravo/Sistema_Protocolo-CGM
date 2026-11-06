@@ -246,6 +246,199 @@ def periodo(inicio, fim, **filtros):
 
 
 # --------------------------------------------------------------------------
+# Fluxo: quantos entraram e quantos saíram (gráfico principal)
+# --------------------------------------------------------------------------
+
+UNIDADES_FLUXO = (
+    ('dia', 'Dia'), ('semana', 'Semana'), ('mes', 'Mês'), ('ano', 'Ano'),
+)
+_ORDEM_UNIDADES = [codigo for codigo, _ in UNIDADES_FLUXO]
+_MAX_BALDES = 62
+_MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun',
+                 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+
+
+def _meses_atras(data, meses):
+    total = data.year * 12 + (data.month - 1) - meses
+    return data.replace(year=total // 12, month=total % 12 + 1, day=1)
+
+
+def janela_padrao(unidade, hoje):
+    """Período mostrado quando o usuário só escolhe Dia/Semana/Mês/Ano."""
+    if unidade == 'semana':
+        segunda = hoje - timedelta(days=hoje.weekday())
+        return segunda - timedelta(weeks=11), hoje
+    if unidade == 'mes':
+        return _meses_atras(hoje.replace(day=1), 11), hoje
+    if unidade == 'ano':
+        return hoje.replace(year=hoje.year - 4, month=1, day=1), hoje
+    return hoje, hoje  # Dia = um dia só (hoje); o gráfico mostra os 7 dias até ele.
+
+
+CONTEXTO_DIAS = 6  # barras dos dias anteriores, para comparar com o dia escolhido
+
+
+def _inicio_balde(data, unidade):
+    if unidade == 'semana':
+        return data - timedelta(days=data.weekday())
+    if unidade == 'mes':
+        return data.replace(day=1)
+    if unidade == 'ano':
+        return data.replace(month=1, day=1)
+    return data
+
+
+def _proximo_balde(data, unidade):
+    if unidade == 'semana':
+        return data + timedelta(days=7)
+    if unidade == 'mes':
+        return _meses_atras(data, -1)
+    if unidade == 'ano':
+        return data.replace(year=data.year + 1)
+    return data + timedelta(days=1)
+
+
+def _inicios_dos_baldes(inicio, fim, unidade):
+    baldes = []
+    atual = _inicio_balde(inicio, unidade)
+    while atual <= fim:
+        baldes.append(atual)
+        atual = _proximo_balde(atual, unidade)
+    return baldes
+
+
+def unidade_adequada(inicio, fim, unidade):
+    """Sobe a unidade (dia → semana → mês → ano) se houver barras demais."""
+    if unidade not in _ORDEM_UNIDADES:
+        unidade = 'dia'
+    indice = _ORDEM_UNIDADES.index(unidade)
+    while (indice < len(_ORDEM_UNIDADES) - 1
+           and len(_inicios_dos_baldes(inicio, fim, _ORDEM_UNIDADES[indice])) > _MAX_BALDES):
+        indice += 1
+    return _ORDEM_UNIDADES[indice]
+
+
+def _rotulos_do_balde(inicio_balde, unidade, inicio, fim):
+    de = max(inicio_balde, inicio)
+    ate = min(_proximo_balde(inicio_balde, unidade) - timedelta(days=1), fim)
+    if unidade == 'dia':
+        return inicio_balde.strftime('%d/%m'), inicio_balde.strftime('%d/%m/%Y')
+    if unidade == 'mes':
+        return (f'{_MESES_CURTOS[inicio_balde.month - 1]}/{inicio_balde:%y}',
+                f'{_MESES_CURTOS[inicio_balde.month - 1]}/{inicio_balde.year}')
+    if unidade == 'ano':
+        return str(inicio_balde.year), str(inicio_balde.year)
+    return (de.strftime('%d/%m'),
+            f'Semana de {de:%d/%m} a {ate:%d/%m/%Y}')
+
+
+def _saida_em(registro):
+    concluida, legado = registro
+    if concluida is not None:
+        return timezone.localtime(concluida).date() if timezone.is_aware(concluida) else concluida.date()
+    return legado
+
+
+def _movimento_entre(base, de, ate):
+    """Datas de entrada e de saída (uma por processo) dentro de [de, ate]."""
+    entradas = list(base.filter(data_entrada__gte=de, data_entrada__lte=ate)
+                    .values_list('data_entrada', flat=True))
+    saidas = [
+        _saida_em(registro)
+        for registro in base.filter(
+            Q(saida_concluida_em__date__gte=de, saida_concluida_em__date__lte=ate)
+            | Q(saida_concluida_em__isnull=True, data_saida__gte=de, data_saida__lte=ate)
+        ).values_list('saida_concluida_em', 'data_saida')
+    ]
+    return entradas, [d for d in saidas if d is not None and de <= d <= ate]
+
+
+def _variacao(atual, anterior):
+    """Variação percentual em relação ao período anterior (None se não há base)."""
+    if not anterior:
+        return None
+    return round(100 * (atual - anterior) / anterior)
+
+
+def fluxo(inicio, fim, unidade='dia', contexto_dias=0, **filtros):
+    """Série de entradas × saídas por dia, semana, mês ou ano.
+
+    Entrada = data de entrada do processo. Saída = saída concluída (ou a data
+    de saída do fluxo antigo). A linha de acervo é o que continua na CGM ao
+    fim de cada intervalo, na mesma conta do estoque dos indicadores.
+
+    Com `unidade='dia'` e um único dia (inicio == fim), os totais são só
+    daquele dia; `contexto_dias` acrescenta barras dos dias anteriores para
+    comparar, e `destaque` aponta a barra do dia escolhido.
+    """
+    if fim < inicio:
+        inicio, fim = fim, inicio
+    unidade = unidade_adequada(inicio, fim, unidade)
+    modo_dia = unidade == 'dia' and inicio == fim
+    inicio_grafico = inicio - timedelta(days=contexto_dias) if modo_dia else inicio
+    base = aplicar_filtros(
+        Processo.objects.filter(cancelado_em__isnull=True), **filtros)
+
+    entradas_graf, saidas_graf = _movimento_entre(base, inicio_grafico, fim)
+    inicios = _inicios_dos_baldes(inicio_grafico, fim, unidade)
+    por_balde = {dia: [0, 0] for dia in inicios}
+    for dia in entradas_graf:
+        por_balde[_inicio_balde(dia, unidade)][0] += 1
+    for dia in saidas_graf:
+        por_balde[_inicio_balde(dia, unidade)][1] += 1
+    entradas = [d for d in entradas_graf if inicio <= d <= fim]
+    saidas = [d for d in saidas_graf if inicio <= d <= fim]
+
+    vespera = inicio_grafico - timedelta(days=1)
+    acervo = base.filter(data_entrada__lte=vespera).exclude(
+        _saiu_ate(vespera)).count()
+    estoque_inicial = acervo
+    baldes = []
+    for dia in inicios:
+        if modo_dia and dia == inicio:
+            estoque_inicial = acervo
+        entrou, saiu = por_balde[dia]
+        acervo += entrou - saiu
+        rotulo, titulo = _rotulos_do_balde(dia, unidade, inicio_grafico, fim)
+        baldes.append({
+            'chave': dia.isoformat(), 'rotulo': rotulo, 'titulo': titulo,
+            'entradas': entrou, 'saidas': saiu, 'saldo': entrou - saiu,
+            'acervo': acervo,
+        })
+
+    dias = (fim - inicio).days + 1
+    ant_fim = inicio - timedelta(days=1)
+    ant_entradas, ant_saidas = _movimento_entre(
+        base, ant_fim - timedelta(days=dias - 1), ant_fim)
+    total_entradas, total_saidas = len(entradas), len(saidas)
+    return {
+        'unidade': unidade,
+        'unidade_rotulo': dict(UNIDADES_FLUXO)[unidade],
+        'modo_dia': modo_dia,
+        'destaque': inicio.isoformat() if modo_dia else None,
+        'rotulo_anterior': 'dia anterior' if dias == 1 else 'período anterior',
+        'inicio': inicio.isoformat(),
+        'fim': fim.isoformat(),
+        'baldes': baldes,
+        'totais': {
+            'entradas': total_entradas,
+            'saidas': total_saidas,
+            'saldo': total_entradas - total_saidas,
+            'estoque_inicial': estoque_inicial,
+            'estoque_final': acervo,
+            'pico_entradas': max((b['entradas'] for b in baldes), default=0),
+            'pico_saidas': max((b['saidas'] for b in baldes), default=0),
+        },
+        'anterior': {
+            'entradas': len(ant_entradas),
+            'saidas': len(ant_saidas),
+            'var_entradas': _variacao(total_entradas, len(ant_entradas)),
+            'var_saidas': _variacao(total_saidas, len(ant_saidas)),
+        },
+    }
+
+
+# --------------------------------------------------------------------------
 # Tempos do fluxo (item 50)
 # --------------------------------------------------------------------------
 
