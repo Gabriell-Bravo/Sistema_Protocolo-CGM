@@ -402,8 +402,10 @@
                                     <label class="field__label" for="numero_relatorio">Número específico</label>
                                     <input type="text" id="numero_relatorio" name="numero_relatorio"
                                            {% if not pode_editar %}form="formNumeroRelatorio"{% endif %}
-                                           class="input" inputmode="numeric" value="{{ processo.numero_relatorio }}"
-                                           placeholder="Informe o número" disabled>
+                                           class="input" inputmode="text" autocomplete="off" maxlength="30"
+                                           value="{{ processo.numero_relatorio }}"
+                                           placeholder="Ex.: 1090 ou 1090.A" disabled>
+                                    <span class="field__hint">Pode ter letra ou símbolo: 1090, 1090.A, 1090.B.</span>
                                 </div>
                                 <div class="field">
                                     <label class="field__label" for="data_relatorio">{% if layout_planilha %}{{ layout_planilha.rotulos.data_relatorio }}{% else %}Data deste número{% endif %}</label>

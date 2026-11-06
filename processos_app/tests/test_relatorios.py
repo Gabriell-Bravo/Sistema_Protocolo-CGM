@@ -95,6 +95,76 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertEqual(pagina.status_code, 200)
         self.assertContains(pagina, '56 A')
 
+    def test_numero_especifico_com_letra_e_simbolo(self):
+        admin = criar_usuario('admin_num_sufixo', 'GESTAO', is_superuser=True)
+        normalizados = {
+            '1090': '1090', '01090': '1090', '1090.a': '1090.A',
+            ' 1090 . B ': '1090.B', '1090-A': '1090-A', '1090A': '1090A',
+        }
+        for bruto, esperado in normalizados.items():
+            self.assertEqual(
+                relatorios.interpretar_numero_relatorio(bruto)[0], esperado)
+        for invalido in ('', 'A1090', '0', '1090.', '1090..A', '10 90 x!'):
+            with self.assertRaises(relatorios.RelatorioInvalido):
+                relatorios.interpretar_numero_relatorio(invalido)
+
+        processos = {}
+        for numero, num_proc in (
+            ('1090', '901/2026'), ('1090.A', '902/2026'),
+            ('1090.B', '903/2026'),
+        ):
+            processo = self.novo_processo(
+                self.especie_liq, numero_processo=num_proc)
+            tramitacao.assumir(processo.id, self.analista_liq)
+            relatorios.alterar_numero(admin, processo.id, numero, '2026-03-15')
+            processo.refresh_from_db()
+            self.assertEqual(processo.numero_relatorio, numero)
+            processos[numero] = processo
+        # Os três coexistem, cada um com a própria linha ativa.
+        for numero, processo in processos.items():
+            linha = LinhaControleRelatorio.objects.get(
+                numero_relatorio=numero, situacao_linha='ATIVA')
+            self.assertEqual(linha.processo_id, processo.id)
+        # Os sufixos não mexem na sequência: o próximo continua 1091.
+        self.assertEqual(relatorios.estado_sequencia()['proximo'], 1091)
+
+        outro = LinhaControleRelatorio.objects.create(
+            processo=None, numero_relatorio='1091', numero_processo='z/2026',
+            data_relatorio=datetime.date(2026, 3, 16),
+            situacao_linha='HISTORICA', grupo='LIQUIDACOES',
+            sequencia='LIQUIDACOES')
+        anterior = LinhaControleRelatorio.objects.create(
+            processo=None, numero_relatorio='1089', numero_processo='w/2026',
+            data_relatorio=datetime.date(2026, 3, 14),
+            situacao_linha='HISTORICA', grupo='LIQUIDACOES',
+            sequencia='LIQUIDACOES')
+        numeros = [
+            linha.numero_relatorio
+            for linha in relatorios.listar(admin, 'LIQUIDACOES')
+            if linha.numero_relatorio in (
+                '1089', '1090', '1090.A', '1090.B', '1091')
+        ]
+        # Lista do mais novo para o mais antigo: 1090.B antes de 1090.A e 1090.
+        self.assertEqual(
+            numeros, ['1091', '1090.B', '1090.A', '1090', '1089'])
+        self.assertTrue(outro.pk and anterior.pk)
+
+    def test_numero_especifico_repetido_desvincula_o_outro_processo(self):
+        admin = criar_usuario('admin_num_rep', 'GESTAO', is_superuser=True)
+        p1 = self.novo_processo(self.especie_liq, numero_processo='911/2026')
+        p2 = self.novo_processo(self.especie_liq, numero_processo='912/2026')
+        for processo in (p1, p2):
+            tramitacao.assumir(processo.id, self.analista_liq)
+        relatorios.alterar_numero(admin, p1.id, '2500.A', '2026-03-15')
+        relatorios.alterar_numero(admin, p2.id, '2500.a', '2026-03-15')
+        p1.refresh_from_db()
+        p2.refresh_from_db()
+        self.assertEqual(p2.numero_relatorio, '2500.A')
+        self.assertFalse(p1.numero_relatorio)
+        self.assertEqual(
+            LinhaControleRelatorio.objects.filter(
+                numero_relatorio='2500.A', situacao_linha='ATIVA').count(), 1)
+
     def test_desvincular_processo_mantem_numero_na_planilha(self):
         admin = criar_usuario('admin_desvinc', 'GESTAO', is_superuser=True)
         relatorios.definir_ultimo_numero(admin, 7000)

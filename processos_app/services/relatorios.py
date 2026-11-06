@@ -14,8 +14,9 @@ from datetime import date, datetime
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Case, Count, F, IntegerField, Q, Value, When
-from django.db.models.functions import Cast
+from django.db.models import (
+    Case, CharField, Count, F, Func, IntegerField, Q, Value, When,
+)
 from django.utils import timezone
 
 from ..models import (
@@ -561,6 +562,53 @@ def _inteiro(bruto):
         return None
 
 
+class _BaseNumeroRelatorio(Func):
+    """Parte numérica no início do texto ("1090.A" → 1090).
+
+    Use só em linhas que já passaram pelo filtro regex de dígitos iniciais.
+    """
+
+    arity = 1
+    output_field = IntegerField()
+    template = 'CAST(%(expressions)s AS INTEGER)'
+
+    def as_postgresql(self, compiler, connection, **extra):
+        return self.as_sql(
+            compiler, connection,
+            template=(
+                "CAST(substring(%(expressions)s from '^[0-9]+') AS INTEGER)"
+            ),
+            **extra)
+
+
+# Número específico: dígitos + sufixo opcional, com letras e símbolos.
+# Ex.: 1090 · 1090.A · 1090.B · 1090-A · 1090/A · 1090A · 1090.A.1
+_PADRAO_NUMERO_ESPECIFICO = re.compile(
+    r'^(\d{1,9})((?:[.\-/_][A-Z0-9]{1,8}){1,3}|[A-Z][A-Z0-9]{0,7})?$')
+
+
+def interpretar_numero_relatorio(bruto):
+    """Valida um número específico e devolve (texto, base, sufixo).
+
+    O texto sai padronizado (maiúsculas, sem espaços, sem zeros à esquerda).
+    `sufixo` vazio significa número inteiro comum (entra na sequência).
+    """
+    texto = re.sub(r'\s+', '', str(bruto or '')).upper()
+    if not texto:
+        raise RelatorioInvalido('Informe o número do relatório.')
+    achou = _PADRAO_NUMERO_ESPECIFICO.match(texto)
+    if not achou:
+        raise RelatorioInvalido(
+            'Número de relatório inválido. Use dígitos e, se precisar, '
+            'letra ou símbolo depois (ex.: 1090, 1090.A, 1090.B).')
+    base = int(achou.group(1))
+    if base < 1:
+        raise RelatorioInvalido(
+            'O número do relatório deve ser maior que zero.')
+    sufixo = achou.group(2) or ''
+    return f'{base}{sufixo}', base, sufixo
+
+
 def filtro_sequencia(grupo):
     if grupo == GRUPO_PADRAO:
         return Q(sequencia=grupo) | Q(sequencia='', grupo=GRUPO_PADRAO)
@@ -616,6 +664,8 @@ def _liberar_reservas_do_processo(processo):
 
 def _consumir_reserva(processo, numero):
     _liberar_reservas_do_processo(processo)
+    if numero is None:
+        return
     sequencia = sequencia_do_processo(processo) or GRUPO_PADRAO
     reserva = reserva_do_numero(numero, sequencia)
     if reserva is None:
@@ -1148,18 +1198,14 @@ def alterar_numero(usuario, processo_id, novo, data=None):
     if limpar_sem_relatorio:
         processo.sem_relatorio = False
     sequencia = sequencia_do_processo(processo) or GRUPO_PADRAO
-    try:
-        novo = int(str(novo).strip())
-    except (TypeError, ValueError):
-        raise RelatorioInvalido('Informe um número inteiro para o relatório.')
-    if novo < 1:
-        raise RelatorioInvalido('O número do relatório deve ser maior que zero.')
+    numero_txt, base, sufixo = interpretar_numero_relatorio(novo)
+    inteiro_comum = not sufixo
     try:
         data_analise = converter_data(data)
     except ValidationError as exc:
         raise RelatorioInvalido('; '.join(exc.messages))
-    if data_analise is None:
-        reserva = reserva_do_numero(novo, sequencia)
+    if data_analise is None and inteiro_comum:
+        reserva = reserva_do_numero(base, sequencia)
         if reserva is not None:
             data_analise = reserva.data
     if data_analise is None:
@@ -1167,7 +1213,6 @@ def alterar_numero(usuario, processo_id, novo, data=None):
             'Informe a data deste número de relatório.')
 
     # Quem já usa este número (para avisar depois do desvínculo).
-    numero_txt = str(novo)
     donos_anteriores = list(
         LinhaControleRelatorio.objects
         .filter(filtro_sequencia(sequencia), numero_relatorio=numero_txt)
@@ -1177,22 +1222,25 @@ def alterar_numero(usuario, processo_id, novo, data=None):
         .values_list('numero_processo', flat=True)
     )
 
-    atual = _inteiro_atual(processo)
+    atual = str(processo.numero_relatorio or '').strip()
     campos = []
     if limpar_sem_relatorio:
         campos.append('sem_relatorio')
     anterior_numero = processo.numero_relatorio or ''
-    if atual != novo:
-        processo.numero_relatorio = str(novo)
+    if atual != numero_txt:
+        processo.numero_relatorio = numero_txt
         campos.append('numero_relatorio')
-        seq, _ = SequenciaRelatorio.objects.select_for_update().get_or_create(
-            grupo=sequencia,
-            defaults={'proximo_numero': novo + 1})
-        if int(seq.proximo_numero or 0) <= novo:
-            seq.proximo_numero = novo + 1
-            seq.save(update_fields=['proximo_numero'])
+        # Só o número inteiro comum avança a sequência; "1090.A" não.
+        if inteiro_comum:
+            seq, _ = (SequenciaRelatorio.objects.select_for_update()
+                      .get_or_create(
+                          grupo=sequencia,
+                          defaults={'proximo_numero': base + 1}))
+            if int(seq.proximo_numero or 0) <= base:
+                seq.proximo_numero = base + 1
+                seq.save(update_fields=['proximo_numero'])
         registrar_diff(
-            processo, 'numero_relatorio', anterior_numero, str(novo), usuario)
+            processo, 'numero_relatorio', anterior_numero, numero_txt, usuario)
 
     if processo.data_analise != data_analise:
         anterior_data = (
@@ -1208,7 +1256,7 @@ def alterar_numero(usuario, processo_id, novo, data=None):
         registrar(processo)
     else:
         registrar(processo)
-    _consumir_reserva(processo, novo)
+    _consumir_reserva(processo, base if inteiro_comum else None)
     processo._numeros_desvinculados = [
         n for n in donos_anteriores if n]
     return processo
@@ -1293,6 +1341,9 @@ def editar_linha(usuario, linha_id, dados):
 
     grupo = (linha.sequencia or '').strip() or GRUPO_PADRAO
     anterior_numero = (linha.numero_relatorio or '').strip()
+    if novo_numero != anterior_numero:
+        # Número novo segue o padrão (1090, 1090.A, 1090.B…).
+        novo_numero = interpretar_numero_relatorio(novo_numero)[0]
     if novo_numero != anterior_numero:
         if linha.situacao_linha == LinhaControleRelatorio.SITUACAO_CANCELADA:
             raise RelatorioInvalido(
@@ -1948,20 +1999,28 @@ def listar(usuario, sequencia=None):
         return consulta.none()
     if sequencia:
         consulta = consulta.filter(filtro_sequencia(sequencia))
-    # Só faz cast quando o nº é inteiro puro. No PostgreSQL,
-    # Cast("56 A") quebra a tela inteira (DataError).
+    # Ordem natural: parte numérica ("1090") e depois o sufixo (".A", ".B").
+    # Só extrai a parte numérica quando o texto começa com dígitos; um
+    # Cast direto de "56 A" quebraria a tela inteira no PostgreSQL.
     return consulta.annotate(
         numero_ordem=Case(
             When(numero_relatorio='', then=Value(None)),
             When(
-                numero_relatorio__regex=r'^[0-9]+$',
-                then=Cast('numero_relatorio', IntegerField()),
+                numero_relatorio__regex=r'^[0-9]{1,9}([^0-9]|$)',
+                then=_BaseNumeroRelatorio('numero_relatorio'),
             ),
             default=Value(None),
             output_field=IntegerField(null=True),
-        )
+        ),
+        sufixo_ordem=Func(
+            F('numero_relatorio'), Value('0123456789'),
+            function='LTRIM', output_field=CharField()),
     # Mais recentes primeiro: evita ir até a última página da planilha.
-    ).order_by(F('numero_ordem').desc(nulls_last=True), '-numero_relatorio', '-id')
+    # No mesmo número, o sufixo maior (1090.B) vem antes de 1090.A e do 1090.
+    ).order_by(
+        F('numero_ordem').desc(nulls_last=True),
+        F('sufixo_ordem').desc(),
+        '-numero_relatorio', '-id')
 
 
 def contagens_por_sequencia(usuario):

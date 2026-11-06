@@ -409,8 +409,9 @@ O número permanece na planilha; o processo deixa de ter esse relatório."
                             <div class="field">
                                 <label class="field__label" for="editar_numero">{{ layout_planilha.rotulos.numero_relatorio }}</label>
                                 <input type="text" id="editar_numero" name="numero_relatorio" class="input"
-                                       inputmode="numeric" autocomplete="off" required>
-                                <span class="field__hint">Pode trocar o número desta linha. Não use um nº já ocupado no mesmo grupo.</span>
+                                       inputmode="text" maxlength="30" autocomplete="off"
+                                       placeholder="Ex.: 1090 ou 1090.A" required>
+                                <span class="field__hint">Pode trocar o número desta linha (aceita letra e símbolo: 1090.A, 1090.B). Não use um nº já ocupado no mesmo grupo.</span>
                             </div>
                             <div class="field">
                                 <label class="field__label" for="editar_data">{{ layout_planilha.rotulos.data_relatorio }}</label>
