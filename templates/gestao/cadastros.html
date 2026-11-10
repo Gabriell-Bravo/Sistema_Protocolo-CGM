@@ -62,7 +62,15 @@
     <section class="table-card">
         <div class="table-card__header">
             <span class="table-card__title">{{ titulo }}</span>
-            <span class="table-card__count">{{ total }} registro{{ total|pluralize:"s" }}</span>
+            <div class="table-card__actions">
+                {% if slug == 'prioridades' and user.is_superuser %}
+                <a href="{% url 'gestao_prioridades_empresas_pdf' %}" class="btn btn--sm btn--outline">
+                    <span class="material-symbols-rounded">picture_as_pdf</span>
+                    PDF das empresas
+                </a>
+                {% endif %}
+                <span class="table-card__count">{{ total }} registro{{ total|pluralize:"s" }}</span>
+            </div>
         </div>
         <div class="table-scroll">
             <table class="table">

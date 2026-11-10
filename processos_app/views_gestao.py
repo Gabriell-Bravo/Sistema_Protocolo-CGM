@@ -15,13 +15,14 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import IntegrityError
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from .models import (EspecieProcesso, Prioridade, Profile,
                      TipoIndisponibilidade, UnidadeAdministrativa, Processo)
-from .services import gestao_pessoas, indicadores, prazos
+from .services import gestao_pessoas, indicadores, prazos, prioridade_auto
 from .services import permissions as perm
 from .services import relatorios as svc_relatorios
 
@@ -29,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 APENAS_GESTAO = 'Área exclusiva da Gestão.'
 APENAS_GESTAO_OU_ADMIN = 'Área exclusiva da Gestão e do administrador.'
+APENAS_ADMIN = 'Área exclusiva do administrador.'
 
 
 def _opcoes_sequencia_relatorio():
@@ -267,6 +269,20 @@ def cadastro_alternar(request, slug, registro_id):
     return redirect('gestao_cadastros', slug=slug)
 
 
+@login_required
+@require_GET
+@perm.exige(perm.eh_administrador, APENAS_ADMIN)
+def prioridades_empresas_pdf(request):
+    """PDF (só admin) das empresas automáticas com período da última análise."""
+    hoje = timezone.localdate()
+    pdf = prioridade_auto.gerar_pdf_empresas_automaticas(hoje)
+    resposta = HttpResponse(pdf, content_type='application/pdf')
+    resposta['Content-Disposition'] = (
+        f'attachment; filename="empresas-prioridade-automatica-{hoje:%Y-%m-%d}.pdf"'
+    )
+    return resposta
+
+
 # --------------------------------------------------------------------------
 # Gestão de Pessoas CGM (itens 23 e 24)
 # --------------------------------------------------------------------------
@@ -374,8 +390,6 @@ def dashboard(request):
     return render(request, 'gestao/dashboard.html', {
         'destaque': {
             'tramitacao': valores.get('Em tramitação', 0),
-            'vencidos': valores.get('Vencidos', 0),
-            'vencendo_hoje': valores.get('Vencendo hoje', 0),
             'urgentes': valores.get('Urgentes', 0),
         },
         'fluxo': fluxo,

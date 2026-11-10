@@ -13,7 +13,7 @@
         document.documentElement.classList.add('dash-anim');
     }
 </script>
-<link rel="stylesheet" href="{% static 'css/dashboard.css' %}?v=20261106h">
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}?v=20261106i">
 {% endblock %}
 
 {% block content %}
@@ -31,12 +31,6 @@
             </div>
         </div>
         <ul class="dash-hero__alertas">
-            <li class="dash-hero__alerta dash-hero__alerta--perigo">
-                <strong data-count="{{ destaque.vencidos }}">{{ destaque.vencidos }}</strong><span>vencidos</span>
-            </li>
-            <li class="dash-hero__alerta dash-hero__alerta--aviso">
-                <strong data-count="{{ destaque.vencendo_hoje }}">{{ destaque.vencendo_hoje }}</strong><span>vencem hoje</span>
-            </li>
             <li class="dash-hero__alerta dash-hero__alerta--urgente">
                 <strong data-count="{{ destaque.urgentes }}">{{ destaque.urgentes }}</strong><span>urgentes</span>
             </li>

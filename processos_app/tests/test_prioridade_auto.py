@@ -1,4 +1,6 @@
-from processos_app.models import Prioridade
+import datetime
+
+from processos_app.models import Prioridade, Processo
 from processos_app.services import prioridade_auto
 from processos_app.services import prazos
 
@@ -140,3 +142,82 @@ class PrioridadeAutoTest(BaseProcessoTestCase):
             numero_processo='prio-recusa/2026',
         )
         self.assertEqual(processo.prioridade, 'NORMAL')
+
+    def test_lista_empresas_automaticas_por_prioridade(self):
+        Prioridade.objects.filter(codigo='PRIORITARIO').update(
+            palavras_chave='HYDRA\nM. COSTA\nM COSTA\nMIDAS')
+        secoes = {
+            s['codigo']: s for s in prioridade_auto.listar_empresas_automaticas()
+        }
+        self.assertEqual(
+            [s['codigo'] for s in prioridade_auto.listar_empresas_automaticas()],
+            ['URGENTE', 'PRIORITARIO', 'RECORRENTE'],
+        )
+        self.assertEqual(secoes['URGENTE']['empresas'], ['AMX', 'ELITE', 'JP'])
+        # Variantes iguais (acento/espaço) viram uma só no PDF.
+        self.assertEqual(secoes['PRIORITARIO']['empresas'], ['HYDRA', 'M. COSTA', 'MIDAS'])
+        self.assertIn('HASHIMOTO', secoes['RECORRENTE']['empresas'])
+
+    def test_lista_puxa_periodo_da_ultima_analise_do_processo(self):
+        antigo = self.novo_processo(
+            contratada='CLARICIA FLORES Buffet',
+            numero_processo='100/2025',
+        )
+        Processo.objects.filter(id=antigo.id).update(
+            data_analise=datetime.date(2025, 3, 1),
+            periodo='jan/2025',
+        )
+        recente = self.novo_processo(
+            contratada='CLARICIA FLORES Ltda',
+            numero_processo='200/2026',
+        )
+        Processo.objects.filter(id=recente.id).update(
+            data_analise=datetime.date(2026, 8, 15),
+            periodo='jul a ago/2026',
+        )
+        por_empresa = {
+            linha['empresa']: linha
+            for secao in prioridade_auto.listar_empresas_com_ultima_analise()
+            for linha in secao['linhas']
+        }
+        linha = por_empresa['CLARICIA FLORES']
+        self.assertEqual(linha['numero_processo'], '200/2026')
+        self.assertEqual(linha['periodo'], 'jul a ago/2026')
+        self.assertEqual(
+            linha['rotulo'],
+            '200/2026 — CLARICIA FLORES Ltda — Prioridade recorrente — jul a ago/2026',
+        )
+
+    def test_pdf_empresas_automaticas_somente_administrador(self):
+        from django.urls import reverse
+
+        from .base import criar_usuario
+
+        pdf = prioridade_auto.gerar_pdf_empresas_automaticas()
+        self.assertTrue(pdf.startswith(b'%PDF'))
+        self.assertGreater(len(pdf), 800)
+
+        admin = criar_usuario('admin_prio', 'GESTAO', is_superuser=True)
+        self.client.force_login(admin)
+        resposta = self.client.get(reverse('gestao_prioridades_empresas_pdf'))
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta['Content-Type'], 'application/pdf')
+        self.assertTrue(resposta.content.startswith(b'%PDF'))
+        self.assertIn(
+            'empresas-prioridade-automatica-',
+            resposta['Content-Disposition'],
+        )
+        pagina = self.client.get(reverse('gestao_cadastros', kwargs={'slug': 'prioridades'}))
+        self.assertContains(pagina, 'PDF das empresas')
+        self.assertContains(pagina, reverse('gestao_prioridades_empresas_pdf'))
+
+        self.client.force_login(self.gestao)
+        negado_gestao = self.client.get(reverse('gestao_prioridades_empresas_pdf'))
+        self.assertEqual(negado_gestao.status_code, 403)
+        pagina_gestao = self.client.get(
+            reverse('gestao_cadastros', kwargs={'slug': 'prioridades'}))
+        self.assertNotContains(pagina_gestao, 'PDF das empresas')
+
+        self.client.force_login(self.protocolo)
+        negado = self.client.get(reverse('gestao_prioridades_empresas_pdf'))
+        self.assertEqual(negado.status_code, 403)

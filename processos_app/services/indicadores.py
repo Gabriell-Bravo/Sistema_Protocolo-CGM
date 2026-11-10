@@ -68,8 +68,10 @@ def panorama(referencia=None):
             {'rotulo': rotulos['DISPONIVEL'], 'valor': por_situacao.get('DISPONIVEL', 0), 'cor': 'ok'},
             {'rotulo': rotulos['EM_ANALISE'], 'valor': por_situacao.get('EM_ANALISE', 0), 'cor': 'info'},
             {'rotulo': rotulos['ASSINATURA_DIRECIONADA'], 'valor': por_situacao.get('ASSINATURA_DIRECIONADA', 0), 'cor': 'info'},
-            {'rotulo': rotulos['AGUARDANDO_ASSINATURA'], 'valor': por_situacao.get('AGUARDANDO_ASSINATURA', 0), 'cor': 'alerta'},
-            {'rotulo': rotulos['DISPONIVEL_RETIRADA'], 'valor': por_situacao.get('DISPONIVEL_RETIRADA', 0), 'cor': 'ok'},
+            # Disponível para retirada já passou pelo Controlador: conta junto.
+            {'rotulo': rotulos['AGUARDANDO_ASSINATURA'],
+             'valor': por_situacao.get('AGUARDANDO_ASSINATURA', 0) + por_situacao.get('DISPONIVEL_RETIRADA', 0),
+             'cor': 'alerta'},
         ]),
         'prioridade': _com_percentual([
             {'rotulo': 'Normal', 'valor': por_prioridade['NORMAL'], 'cor': 'ok'},
@@ -85,21 +87,15 @@ def panorama(referencia=None):
 
 
 def cards(referencia=None):
-    hoje = referencia or timezone.localdate()
     ativos = tramitacao.ativos()
 
     por_situacao = dict(ativos.values_list('situacao_tramite')
                         .annotate(total=Count('id')).values_list('situacao_tramite', 'total'))
-
-    vencidos = vencendo_hoje = 0
-    for processo in ativos.only('id', 'data_entrada', 'prioridade'):
-        dias = prazos.dias_restantes(processo, hoje)
-        if dias is None:
-            continue
-        if dias < 0:
-            vencidos += 1
-        elif dias == 0:
-            vencendo_hoje += 1
+    # "Disponível para retirada" não tem card próprio: o processo já foi
+    # analisado e assinado, então conta em "Com o Controlador". Assim os
+    # cards sempre somam o total em tramitação.
+    com_controlador = (por_situacao.get('AGUARDANDO_ASSINATURA', 0)
+                       + por_situacao.get('DISPONIVEL_RETIRADA', 0))
 
     return [
         {'rotulo': 'Em tramitação', 'valor': sum(por_situacao.values()),
@@ -109,24 +105,14 @@ def cards(referencia=None):
         {'rotulo': 'Em análise', 'valor': por_situacao.get('EM_ANALISE', 0)
                                           + por_situacao.get('ASSINATURA_DIRECIONADA', 0),
          'icone': 'manage_accounts', 'cor': 'violet', 'url': _url('gestao_processos', 'filtro=em_analise')},
-        {'rotulo': 'Com o Controlador', 'valor': por_situacao.get('AGUARDANDO_ASSINATURA', 0),
+        {'rotulo': 'Com o Controlador', 'valor': com_controlador,
          'icone': 'draw', 'cor': 'primary',
          'url': _url('gestao_processos', 'filtro=liberados')},
-        {'rotulo': 'Disponíveis para retirada', 'valor': por_situacao.get('DISPONIVEL_RETIRADA', 0),
-         'icone': 'assignment_return', 'cor': 'success',
-         'url': _url('listar_processos', 'situacao=DISPONIVEL_RETIRADA')},
-        {'rotulo': 'Vencidos', 'valor': vencidos, 'icone': 'running_with_errors',
-         'cor': 'danger', 'url': _url('gestao_processos', 'filtro=vencidos')},
-        {'rotulo': 'Vencendo hoje', 'valor': vencendo_hoje, 'icone': 'event_busy',
-         'cor': 'warning', 'url': _url('gestao_processos', 'filtro=vence_hoje')},
         {'rotulo': 'Urgentes', 'valor': ativos.filter(prioridade='URGENTE').count(),
          'icone': 'priority_high', 'cor': 'danger', 'url': _url('gestao_processos', 'filtro=urgentes')},
         {'rotulo': 'Diligências', 'icone': 'campaign', 'cor': 'warning',
          'valor': Pendencia.objects.filter(status='AGUARDANDO_ATENDIMENTO').count(),
          'url': _url('gestao_diligencias')},
-        {'rotulo': 'Atendimentos indicados', 'icone': 'assignment_turned_in', 'cor': 'violet',
-         'valor': Pendencia.objects.filter(status='ATENDIMENTO_INDICADO').count(),
-         'url': _url('gestao_diligencias', 'status=ATENDIMENTO_INDICADO')},
     ]
 
 

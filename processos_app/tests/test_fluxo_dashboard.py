@@ -188,3 +188,33 @@ class FluxoEntradasSaidasTest(BaseProcessoTestCase):
             url + '?unidade=dia&inicio=2026-03-08&fim=2026-03-10')
         self.assertFalse(varios.context['fluxo']['modo_dia'])
         self.assertEqual(len(varios.context['fluxo']['baldes']), 3)
+
+
+class CardsDoDashboardTest(BaseProcessoTestCase):
+    """Cards do topo: só os que importam, somando sempre o total em tramitação."""
+
+    def test_cards_enxutos_e_retirada_conta_com_o_controlador(self):
+        situacoes = ['DISPONIVEL', 'DISPONIVEL', 'EM_ANALISE', 'ASSINATURA_DIRECIONADA',
+                     'AGUARDANDO_ASSINATURA', 'DISPONIVEL_RETIRADA', 'DISPONIVEL_RETIRADA']
+        for indice, situacao in enumerate(situacoes, start=1):
+            processo = self.novo_processo(numero_processo=f'{indice}/2026')
+            Processo.objects.filter(id=processo.id).update(situacao_tramite=situacao)
+
+        cartoes = {c['rotulo']: c['valor'] for c in indicadores.cards()}
+
+        self.assertEqual(
+            list(cartoes),
+            ['Em tramitação', 'Disponíveis para análise', 'Em análise',
+             'Com o Controlador', 'Urgentes', 'Diligências'])
+        self.assertEqual(cartoes['Em tramitação'], 7)
+        self.assertEqual(cartoes['Disponíveis para análise'], 2)
+        self.assertEqual(cartoes['Em análise'], 2)
+        self.assertEqual(cartoes['Com o Controlador'], 3)
+        self.assertEqual(
+            cartoes['Disponíveis para análise'] + cartoes['Em análise']
+            + cartoes['Com o Controlador'],
+            cartoes['Em tramitação'])
+
+        situacao = {i['rotulo']: i['valor'] for i in indicadores.panorama()['situacao']}
+        self.assertEqual(situacao['Com o Controlador'], 3)
+        self.assertNotIn('Disponível para retirada', situacao)

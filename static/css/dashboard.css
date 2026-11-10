@@ -165,6 +165,16 @@ html:not([data-theme="dark"]) .dash {
 .dash-hero__alerta--aviso strong { color: #fde68a; }
 .dash-hero__alerta--urgente strong { color: #fdba74; }
 
+/* São 6 cards: cabem numa linha só em telas largas, ou em 3 + 3 nas menores
+   (nunca um card sozinho na segunda linha). */
+.dash .stats--dashboard { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (min-width: 1280px) {
+    .dash .stats--dashboard { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) {
+    .dash .stats--dashboard { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 /* ---------- Barra do período ---------- */
 .dash-barra {
     position: sticky;

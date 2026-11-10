@@ -1416,6 +1416,14 @@ button.encaminhamento__opcao:disabled {
     flex-wrap: wrap;
 }
 
+.table-card__actions {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
 .table-card__title {
     font-size: 14px;
     font-weight: 650;
@@ -3739,6 +3747,18 @@ tr.is-inativo td {
 [data-theme="dark"] .table tbody tr.tr-prio-prioritario > td .cell-muted,
 [data-theme="dark"] .table tbody tr.tr-prio-urgente > td .cell-muted {
     color: #475569;
+}
+
+/* Histórico da diligência: nas linhas coloridas do modo escuro o fundo é claro,
+   então o cartão e o texto precisam seguir o mesmo esquema (senão fica escuro sobre escuro). */
+[data-theme="dark"] .table tbody tr[class*="tr-prio-"] > td .dil-historico > summary {
+    color: #334155;
+}
+
+[data-theme="dark"] .table tbody tr[class*="tr-prio-"] > td .dil-historico__lista li {
+    background: rgba(255, 255, 255, .78);
+    color: #0f172a;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .12);
 }
 
 .balao {

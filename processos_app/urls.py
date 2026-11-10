@@ -141,6 +141,8 @@ urlpatterns = [
     # Bloco C — cadastros parametrizáveis e Gestão de Pessoas CGM
     # ------------------------------------------------------------------
     path('gestao/cadastros/', gest.cadastros, name='gestao_cadastros_inicio'),
+    path('gestao/cadastros/prioridades/empresas.pdf',
+         gest.prioridades_empresas_pdf, name='gestao_prioridades_empresas_pdf'),
     path('gestao/cadastros/<slug:slug>/', gest.cadastros, name='gestao_cadastros'),
     path('gestao/cadastros/<slug:slug>/salvar/', gest.cadastro_salvar,
          name='gestao_cadastro_salvar'),
