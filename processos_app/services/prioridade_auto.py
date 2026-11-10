@@ -8,7 +8,7 @@ from django.db import DatabaseError
 
 from .prazos import SO_DESTA_ENTRADA
 
-# Ordem de precedência: urgente > obras > recorrente > normal.
+# Ordem de precedência: urgente > alta > recorrente > normal.
 PRECEDENCIA = ('URGENTE', 'PRIORITARIO', 'RECORRENTE', 'NORMAL')
 
 
@@ -107,10 +107,10 @@ def sugerir(dados):
     return None
 
 
-# Ordem do PDF: urgente, obras e recorrentes (as que entram automático).
+# Ordem do PDF: urgente, alta e recorrentes (as que entram automático).
 SECOES_EMPRESAS = (
     ('URGENTE', 'Urgente'),
-    ('PRIORITARIO', 'Prioridade de obras'),
+    ('PRIORITARIO', 'Prioridade Alta'),
     ('RECORRENTE', 'Prioridade recorrente'),
 )
 
@@ -262,7 +262,7 @@ def listar_empresas_com_ultima_analise():
 
 
 def gerar_pdf_empresas_automaticas(referencia=None):
-    """PDF com empresas de Urgente, Obras e Recorrentes + período da última análise."""
+    """PDF com empresas de Urgente, Alta e Recorrentes + período da última análise."""
     from io import BytesIO
     from xml.sax.saxutils import escape
 

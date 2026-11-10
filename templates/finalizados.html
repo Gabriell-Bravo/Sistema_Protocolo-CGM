@@ -115,7 +115,7 @@
                     <select id="filtroPrioridade" class="select">
                         <option value="todas" {% if prioridade_filtro == 'todas' %}selected{% endif %}>Todas</option>
                         <option value="NORMAL" {% if prioridade_filtro == 'NORMAL' %}selected{% endif %}>Normal</option>
-                        <option value="PRIORITARIO" {% if prioridade_filtro == 'PRIORITARIO' %}selected{% endif %}>Prioritário</option>
+                        <option value="PRIORITARIO" {% if prioridade_filtro == 'PRIORITARIO' %}selected{% endif %}>Prioridade Alta</option>
                         <option value="URGENTE" {% if prioridade_filtro == 'URGENTE' %}selected{% endif %}>Urgente</option>
                     </select>
                 </div>
@@ -522,7 +522,7 @@
                 inputElement.className = 'edit-field';
                 const prioridadeOptions = [
                     { value: 'NORMAL', text: 'Normal' },
-                    { value: 'PRIORITARIO', text: 'Prioritário' },
+                    { value: 'PRIORITARIO', text: 'Prioridade Alta' },
                     { value: 'URGENTE', text: 'Urgente' }
                 ];
                 prioridadeOptions.forEach(optionData => {

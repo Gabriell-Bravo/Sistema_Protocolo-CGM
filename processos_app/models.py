@@ -11,7 +11,7 @@ from django.contrib.auth.models import User
 class Processo(models.Model):
     PRIORIDADE_CHOICES = [
         ('NORMAL', 'Normal'),
-        ('PRIORITARIO', 'Prioridade de obras'),
+        ('PRIORITARIO', 'Prioridade Alta'),
         ('RECORRENTE', 'Prioridade recorrente'),
         ('N_RECORRENTE', 'Prioridade N/Recorrente'),
         ('URGENTE', 'Urgente'),
@@ -302,11 +302,11 @@ class Processo(models.Model):
     def prioridade_display(self):
         labels = {
             'NORMAL': 'Normal',
-            'PRIORITARIO': 'Prioridade de obras',
+            'PRIORITARIO': 'Prioridade Alta',
             'RECORRENTE': 'Prioridade recorrente',
             'N_RECORRENTE': 'Prioridade N/Recorrente',
             'URGENTE': 'Urgente',
-            'SIM': 'Prioridade de obras',
+            'SIM': 'Prioridade Alta',
             'NAO': 'Normal',
         }
         if self.prioridade in labels:

@@ -25,7 +25,7 @@ class PrioridadeAutoTest(BaseProcessoTestCase):
         Prioridade.objects.update_or_create(
             codigo='PRIORITARIO',
             defaults={
-                'nome': 'Prioridade de obras',
+                'nome': 'Prioridade Alta',
                 'prazo_dias': 2,
                 'ordem': 20,
                 'ativo': True,

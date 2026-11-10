@@ -75,7 +75,7 @@ def panorama(referencia=None):
         ]),
         'prioridade': _com_percentual([
             {'rotulo': 'Normal', 'valor': por_prioridade['NORMAL'], 'cor': 'ok'},
-            {'rotulo': 'Prioritário', 'valor': por_prioridade['PRIORITARIO'], 'cor': 'alerta'},
+            {'rotulo': 'Prioridade Alta', 'valor': por_prioridade['PRIORITARIO'], 'cor': 'alerta'},
             {'rotulo': 'Urgente', 'valor': por_prioridade['URGENTE'], 'cor': 'perigo'},
         ]),
         'prazo': _com_percentual([
