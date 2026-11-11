@@ -158,35 +158,60 @@ class PrioridadeAutoTest(BaseProcessoTestCase):
         self.assertEqual(secoes['PRIORITARIO']['empresas'], ['HYDRA', 'M. COSTA', 'MIDAS'])
         self.assertIn('HASHIMOTO', secoes['RECORRENTE']['empresas'])
 
-    def test_lista_puxa_periodo_da_ultima_analise_do_processo(self):
-        antigo = self.novo_processo(
+    def test_lista_todos_os_processos_so_ultima_analise_de_cada_numero(self):
+        saude = self.novo_processo(
             contratada='CLARICIA FLORES Buffet',
-            numero_processo='100/2025',
+            numero_processo='22899/2022',
+            secretaria='Saúde',
         )
-        Processo.objects.filter(id=antigo.id).update(
-            data_analise=datetime.date(2025, 3, 1),
-            periodo='jan/2025',
+        Processo.objects.filter(id=saude.id).update(
+            data_analise=datetime.date(2026, 3, 13),
+            periodo='mar/2026',
         )
-        recente = self.novo_processo(
+        passagem_antiga = self.novo_processo(
+            contratada='CLARICIA FLORES Buffet',
+            numero_processo='22899/2022',
+            secretaria='Saúde',
+        )
+        Processo.objects.filter(id=passagem_antiga.id).update(
+            data_analise=datetime.date(2024, 1, 10),
+            periodo='jan/2024',
+        )
+        educacao = self.novo_processo(
             contratada='CLARICIA FLORES Ltda',
-            numero_processo='200/2026',
+            numero_processo='20523/2023',
+            secretaria='Educação',
         )
-        Processo.objects.filter(id=recente.id).update(
-            data_analise=datetime.date(2026, 8, 15),
-            periodo='jul a ago/2026',
+        Processo.objects.filter(id=educacao.id).update(
+            data_analise=datetime.date(2025, 11, 28),
+            periodo='nov/2025',
         )
-        por_empresa = {
-            linha['empresa']: linha
+        linhas = [
+            linha
             for secao in prioridade_auto.listar_empresas_com_ultima_analise()
             for linha in secao['linhas']
-        }
-        linha = por_empresa['CLARICIA FLORES']
-        self.assertEqual(linha['numero_processo'], '200/2026')
-        self.assertEqual(linha['periodo'], 'jul a ago/2026')
+            if linha['empresa'] == 'CLARICIA FLORES'
+        ]
         self.assertEqual(
-            linha['rotulo'],
-            '200/2026 — CLARICIA FLORES Ltda — Prioridade recorrente — jul a ago/2026',
+            [
+                (linha['numero_processo'], linha['secretaria'], linha['periodo'])
+                for linha in linhas
+            ],
+            [
+                ('22899/2022', 'Saúde', 'mar/2026'),
+                ('20523/2023', 'Educação', 'nov/2025'),
+            ],
         )
+        self.assertEqual(linhas[0]['prioridade'], 'Prioridade recorrente')
+        self.assertEqual(linhas[0]['contratada'], 'CLARICIA FLORES Buffet')
+        sem_processo = [
+            linha
+            for secao in prioridade_auto.listar_empresas_com_ultima_analise()
+            for linha in secao['linhas']
+            if linha['empresa'] == 'HASHIMOTO'
+        ]
+        self.assertEqual(len(sem_processo), 1)
+        self.assertEqual(sem_processo[0]['numero_processo'], '')
 
     def test_pdf_empresas_automaticas_somente_administrador(self):
         from django.urls import reverse

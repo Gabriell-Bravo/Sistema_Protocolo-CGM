@@ -273,7 +273,7 @@ def cadastro_alternar(request, slug, registro_id):
 @require_GET
 @perm.exige(perm.eh_administrador, APENAS_ADMIN)
 def prioridades_empresas_pdf(request):
-    """PDF (só admin) das empresas automáticas com período da última análise."""
+    """PDF (só admin): contratada, prioridade e última análise de cada processo."""
     hoje = timezone.localdate()
     pdf = prioridade_auto.gerar_pdf_empresas_automaticas(hoje)
     resposta = HttpResponse(pdf, content_type='application/pdf')

@@ -177,7 +177,7 @@ def _periodo_do_processo(processo):
 
 
 def _score_ultima_analise(processo):
-    """Ordena pelo processo com análise mais recente daquela empresa."""
+    """Ordena pela análise mais recente daquele número de processo."""
     from datetime import date
     tem_periodo = 1 if _periodo_do_processo(processo) else 0
     return (
@@ -186,6 +186,11 @@ def _score_ultima_analise(processo):
         processo.data_entrada or date.min,
         processo.id or 0,
     )
+
+
+def _chave_numero(processo):
+    numero = (processo.numero_processo or '').strip().casefold()
+    return numero or f'id:{processo.id}'
 
 
 def _candidatos_empresas():
@@ -197,8 +202,8 @@ def _candidatos_empresas():
             .exclude(contratada='')
             .select_related('linha_relatorio')
             .only(
-                'id', 'numero_processo', 'contratada', 'prioridade', 'periodo',
-                'data_analise', 'data_entrada',
+                'id', 'numero_processo', 'contratada', 'secretaria',
+                'prioridade', 'periodo', 'data_analise', 'data_entrada',
                 'linha_relatorio__periodo',
             )
         )
@@ -206,54 +211,60 @@ def _candidatos_empresas():
         return []
 
 
-def _processo_da_empresa(empresa, candidatos):
+def _processos_da_empresa(empresa, candidatos):
+    """Todos os processos da contratada, só a última análise de cada número."""
     termo = _normalizar(empresa)
     if not termo:
-        return None
-    matches = [
-        processo for processo in candidatos
-        if _contem(_normalizar(processo.contratada), termo)
-    ]
-    if not matches:
-        return None
-    return max(matches, key=_score_ultima_analise)
+        return []
+    por_numero = {}
+    for processo in candidatos:
+        if not _contem(_normalizar(processo.contratada), termo):
+            continue
+        chave = _chave_numero(processo)
+        atual = por_numero.get(chave)
+        if atual is None or _score_ultima_analise(processo) > _score_ultima_analise(atual):
+            por_numero[chave] = processo
+    return sorted(por_numero.values(), key=_score_ultima_analise, reverse=True)
+
+
+def _linha_sem_processo(empresa, secao):
+    return {
+        'empresa': empresa,
+        'numero_processo': '',
+        'contratada': empresa,
+        'secretaria': '',
+        'prioridade': secao['nome'],
+        'periodo': '',
+    }
+
+
+def _linha_processo(empresa, secao, processo):
+    contratada = (processo.contratada or empresa).strip() or empresa
+    return {
+        'empresa': empresa,
+        'numero_processo': processo.numero_processo,
+        'contratada': contratada,
+        'secretaria': (processo.secretaria or '').strip(),
+        'prioridade': secao['nome'],
+        'periodo': _periodo_do_processo(processo),
+    }
 
 
 def listar_empresas_com_ultima_analise():
-    """Por empresa automática: último processo encontrado e o período da análise."""
+    """Por contratada automática: cada processo, só com a última análise e o período."""
     candidatos = _candidatos_empresas()
     secoes = []
     for secao in listar_empresas_automaticas():
         linhas = []
         for empresa in secao['empresas']:
-            processo = _processo_da_empresa(empresa, candidatos)
-            if processo is None:
-                linhas.append({
-                    'empresa': empresa,
-                    'numero_processo': '',
-                    'contratada': empresa,
-                    'prioridade': secao['nome'],
-                    'periodo': '',
-                    'rotulo': (
-                        f'{empresa} — {secao["nome"]} — '
-                        'sem processo encontrado'
-                    ),
-                })
+            processos = _processos_da_empresa(empresa, candidatos)
+            if not processos:
+                linhas.append(_linha_sem_processo(empresa, secao))
                 continue
-            periodo = _periodo_do_processo(processo)
-            contratada = (processo.contratada or empresa).strip() or empresa
-            periodo_txt = periodo or 'sem período na última análise'
-            linhas.append({
-                'empresa': empresa,
-                'numero_processo': processo.numero_processo,
-                'contratada': contratada,
-                'prioridade': secao['nome'],
-                'periodo': periodo,
-                'rotulo': (
-                    f'{processo.numero_processo} — {contratada} — '
-                    f'{secao["nome"]} — {periodo_txt}'
-                ),
-            })
+            linhas.extend(
+                _linha_processo(empresa, secao, processo)
+                for processo in processos
+            )
         secoes.append({
             **secao,
             'linhas': linhas,
@@ -262,18 +273,20 @@ def listar_empresas_com_ultima_analise():
 
 
 def gerar_pdf_empresas_automaticas(referencia=None):
-    """PDF com empresas de Urgente, Alta e Recorrentes + período da última análise."""
+    """PDF em tabela: cada contratada, a prioridade e a última análise de cada processo."""
     from io import BytesIO
     from xml.sax.saxutils import escape
 
     from django.utils import timezone
     from reportlab.lib import colors
-    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
-    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
+    from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.platypus import (
         Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
     )
+
+    pagina = landscape(A4)
 
     hoje = referencia or timezone.localdate()
     secoes = listar_empresas_com_ultima_analise()
@@ -300,13 +313,33 @@ def gerar_pdf_empresas_automaticas(referencia=None):
         spaceAfter=6, leading=14,
     ))
     styles.add(ParagraphStyle(
-        name='ItemPrio', fontName='Helvetica', fontSize=9,
-        textColor=colors.HexColor('#0f172a'), leading=12,
+        name='CelulaPrio', fontName='Helvetica', fontSize=8,
+        alignment=TA_LEFT, textColor=colors.HexColor('#0f172a'), leading=10,
+    ))
+    styles.add(ParagraphStyle(
+        name='CabTabelaPrio', fontName='Helvetica-Bold', fontSize=8,
+        alignment=TA_LEFT, textColor=colors.white, leading=10,
     ))
     styles.add(ParagraphStyle(
         name='VazioPrio', fontName='Helvetica-Oblique', fontSize=9,
         textColor=colors.HexColor('#64748b'), spaceAfter=6, leading=12,
     ))
+
+    def celula(texto, estilo):
+        return Paragraph(escape(str(texto or '—')), estilo)
+
+    def periodo_da_linha(linha):
+        if linha['periodo']:
+            return linha['periodo']
+        if not linha['numero_processo']:
+            return 'sem processo encontrado'
+        return 'sem período na última análise'
+
+    colunas = (
+        'Contratada', 'Prioridade', 'Nº do processo',
+        'Secretaria', 'Período da última análise',
+    )
+    larguras = (200, 100, 90, 190, 188)
 
     story = [
         Paragraph(
@@ -320,22 +353,23 @@ def gerar_pdf_empresas_automaticas(referencia=None):
         ),
         Paragraph(
             f'Emitido em {hoje:%d/%m/%Y}. Documento restrito ao administrador. '
-            'Para cada empresa cadastrada em Prioridades aparece o processo '
-            'mais recente encontrado e o <b>período da última análise</b> '
-            '(nº do processo — contratada — prioridade — período).',
+            'Para cada contratada cadastrada em Prioridades aparecem '
+            '<b>todos os processos</b> encontrados. De cada número, só a '
+            '<b>última análise</b> e o período dela.',
             styles['IntroPrio'],
         ),
     ]
 
-    total = 0
+    total_empresas = 0
     com_processo = 0
     for secao in secoes:
         prazo = secao['prazo_dias']
         prazo_txt = f' — prazo de {prazo} dia{"s" if prazo != 1 else ""}'
+        qtd_empresas = len(secao['empresas'])
         story.append(Paragraph(
             f'{escape(secao["nome"])}{prazo_txt} '
-            f'({len(secao["linhas"])} empresa'
-            f'{"s" if len(secao["linhas"]) != 1 else ""})',
+            f'({qtd_empresas} empresa'
+            f'{"s" if qtd_empresas != 1 else ""})',
             styles['SecaoPrio'],
         ))
         if not secao['linhas']:
@@ -344,28 +378,40 @@ def gerar_pdf_empresas_automaticas(referencia=None):
                 styles['VazioPrio'],
             ))
             continue
-        total += len(secao['linhas'])
+        total_empresas += qtd_empresas
         com_processo += sum(1 for linha in secao['linhas'] if linha['numero_processo'])
-        linhas = [[
-            Paragraph(f'{indice}.', styles['ItemPrio']),
-            Paragraph(escape(linha['rotulo']), styles['ItemPrio']),
-        ] for indice, linha in enumerate(secao['linhas'], start=1)]
-        tabela = Table(linhas, colWidths=[28, 460])
+        dados = [[celula(coluna, styles['CabTabelaPrio']) for coluna in colunas]]
+        for linha in secao['linhas']:
+            dados.append([
+                celula(linha['contratada'], styles['CelulaPrio']),
+                celula(linha['prioridade'], styles['CelulaPrio']),
+                celula(linha['numero_processo'], styles['CelulaPrio']),
+                celula(linha['secretaria'], styles['CelulaPrio']),
+                celula(periodo_da_linha(linha), styles['CelulaPrio']),
+            ])
+        tabela = Table(dados, colWidths=larguras, repeatRows=1)
         tabela.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0f2a5c')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
             ('RIGHTPADDING', (0, 0), (-1, -1), 4),
-            ('TOPPADDING', (0, 0), (-1, -1), 2),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-            ('LINEBELOW', (0, 0), (-1, -2), 0.25, colors.HexColor('#e2e8f0')),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('GRID', (0, 0), (-1, -1), 0.3, colors.HexColor('#cbd5e1')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [
+                colors.white, colors.HexColor('#f1f5f9'),
+            ]),
         ]))
         story.append(tabela)
 
     story.append(Spacer(1, 16))
     story.append(Paragraph(
-        f'Total: {total} empresa{"s" if total != 1 else ""} '
-        f'({com_processo} com processo localizado). '
-        'A lista de empresas segue o cadastro em Cadastros → Prioridades.',
+        f'Total: {total_empresas} empresa{"s" if total_empresas != 1 else ""} '
+        f'({com_processo} processo{"s" if com_processo != 1 else ""} localizado'
+        f'{"s" if com_processo != 1 else ""}). '
+        'A lista de empresas segue o cadastro em Cadastros → Prioridades. '
+        'Quando o mesmo número tem mais de uma análise, entra só a última.',
         styles['IntroPrio'],
     ))
 
@@ -373,12 +419,12 @@ def gerar_pdf_empresas_automaticas(referencia=None):
         canvas.setFont('Helvetica', 8)
         canvas.setFillColor(colors.HexColor('#64748b'))
         canvas.drawString(
-            42, 26,
+            32, 22,
             'CGM Saquarema · Prioridades automáticas · uso do administrador')
-        canvas.drawRightString(A4[0] - 42, 26, f'Página {doc.page}')
+        canvas.drawRightString(pagina[0] - 32, 22, f'Página {doc.page}')
 
     SimpleDocTemplate(
-        stream, pagesize=A4,
-        rightMargin=42, leftMargin=42, topMargin=40, bottomMargin=48,
+        stream, pagesize=pagina,
+        rightMargin=32, leftMargin=32, topMargin=36, bottomMargin=42,
     ).build(story, onFirstPage=rodape, onLaterPages=rodape)
     return stream.getvalue()
