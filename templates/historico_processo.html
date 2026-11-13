@@ -258,8 +258,8 @@
                     <div class="tl__corpo">
                         <div class="tl__quando">{{ evento.criado_em_formatted }}</div>
                         <div class="tl__titulo">{{ evento.get_tipo_display }}</div>
-                        {% if evento.descricao %}
-                        <p class="tl__texto">{{ evento.descricao }}</p>
+                        {% if evento|descricao_evento %}
+                        <p class="tl__texto">{{ evento|descricao_evento }}</p>
                         {% endif %}
                         {% if evento.dados.autorizado_por %}
                         <div class="cell-muted">Autorizado por: {{ evento.dados.autorizado_por }}</div>
@@ -292,7 +292,7 @@
                             <td>{{ evento.criado_em_formatted }}</td>
                             <td><span class="badge badge--primary">{{ evento.get_tipo_display }}</span></td>
                             <td class="cell-wrap">
-                                {{ evento.descricao }}
+                                {{ evento|descricao_evento }}
                                 {% if evento.dados.autorizado_por %}<div class="cell-muted">Autorizado por: {{ evento.dados.autorizado_por }}</div>{% endif %}
                                 {% if evento.dados.observacao %}<div class="cell-muted">Observação: {{ evento.dados.observacao }}</div>{% endif %}
                             </td>

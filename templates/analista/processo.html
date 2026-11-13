@@ -807,6 +807,15 @@
                     {% endif %}
 
                     {% if pode_declinar %}
+                    {% if pode_editar %}
+                    <button type="button" class="encaminhamento__opcao" id="btnPerguntarDevolver">
+                        <span class="material-symbols-rounded">undo</span>
+                        <div class="encaminhamento__texto">
+                            <div class="encaminhamento__titulo">Devolver à fila</div>
+                            <div class="encaminhamento__hint">Pergunta se o preenchimento deve ser salvo. Não gera número de relatório.</div>
+                        </div>
+                    </button>
+                    {% else %}
                     <button type="submit" form="formFilaSemAnalise" class="encaminhamento__opcao"
                             data-confirm="Devolver este processo à fila?
 
@@ -820,6 +829,7 @@ A análise em andamento será limpa (incluindo número de relatório, se houver)
                             <div class="encaminhamento__hint">Limpa a análise em andamento e deixa o processo disponível de novo.</div>
                         </div>
                     </button>
+                    {% endif %}
                     {% endif %}
                 </div>
 
@@ -846,6 +856,49 @@ A análise em andamento será limpa (incluindo número de relatório, se houver)
             </div>
         </div>
     </div>
+    {% endif %}
+
+    {% if pode_declinar and pode_editar %}
+    <div class="modal" id="modalSalvarAoDevolver" role="dialog" aria-labelledby="tituloSalvarAoDevolver">
+        <div class="modal__dialog modal__dialog--sm">
+            <div class="modal__header">
+                <span class="modal__title" id="tituloSalvarAoDevolver">Devolver à fila</span>
+                <button type="button" class="icon-btn" data-modal-close="modalSalvarAoDevolver" aria-label="Fechar">
+                    <span class="material-symbols-rounded">close</span>
+                </button>
+            </div>
+            <div class="modal__body">
+                <p style="margin:0 0 14px; line-height:1.45;">
+                    Salvar o preenchimento antes de devolver o processo à fila?
+                    Isso <strong>não gera número de relatório</strong>.
+                </p>
+                <div class="form-actions" style="margin:0; display:flex; flex-direction:column; gap:10px;">
+                    <button type="submit" form="formAnalise" name="acao" value="devolver_salvando" class="btn btn--primary">
+                        <span class="material-symbols-rounded">save</span>
+                        Salvar preenchimento
+                    </button>
+                    <button type="submit" form="formFilaSemAnalise" class="btn btn--outline">
+                        Não salvar
+                    </button>
+                    <button type="button" class="btn btn--outline" data-modal-close="modalSalvarAoDevolver">
+                        Voltar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+    (function () {
+        var botao = document.getElementById('btnPerguntarDevolver');
+        var pergunta = document.getElementById('modalSalvarAoDevolver');
+        var encaminhar = document.getElementById('modalEncaminhar');
+        if (!botao || !pergunta) return;
+        botao.addEventListener('click', function () {
+            if (encaminhar) encaminhar.classList.remove('is-open');
+            pergunta.classList.add('is-open');
+        });
+    })();
+    </script>
     {% endif %}
 
     <section class="card" id="blocoPendencias">

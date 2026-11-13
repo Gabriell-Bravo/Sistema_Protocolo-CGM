@@ -200,11 +200,13 @@ CAMPOS_ANALISE_AO_DECLINAR = [
 
 
 @transaction.atomic
-def declinar_analise(processo_id, usuario, motivo):
+def declinar_analise(processo_id, usuario, motivo, *, preservar_preenchimento=False):
     """EM_ANALISE -> DISPONIVEL.
 
     O analista responsável desiste, ou a Gestão destranca o processo.
-    A tentativa de análise é limpa; o histórico do ato permanece.
+    Sem preservar, a tentativa de análise é limpa. Com preservar, o que
+    foi preenchido permanece e nenhum número de relatório é gerado.
+    O histórico do ato permanece.
     """
     processo = _travar(processo_id)
 
@@ -238,21 +240,27 @@ def declinar_analise(processo_id, usuario, motivo):
     processo.analista_responsavel = None
     processo.data_hora_assumido = None
     processo.tecnico = None
-    processo.data_analise = None
-    processo.numero_despacho = None
-    processo.numero_relatorio = None
-    processo.sem_relatorio = False
-    processo.observacao = None
-    processo.valor = None
-    processo.periodo = None
-    processo.destino = None
-    processo.destino_fk = None
-    processo.status_analise = 'NAO_APLICAVEL'
     processo.situacao_tramite = 'DISPONIVEL'
-    processo.save(update_fields=CAMPOS_ANALISE_AO_DECLINAR)
+    campos = [
+        'analista_responsavel', 'data_hora_assumido', 'tecnico', 'situacao_tramite',
+    ]
+    if not preservar_preenchimento:
+        processo.data_analise = None
+        processo.numero_despacho = None
+        processo.numero_relatorio = None
+        processo.sem_relatorio = False
+        processo.observacao = None
+        processo.valor = None
+        processo.periodo = None
+        processo.destino = None
+        processo.destino_fk = None
+        processo.status_analise = 'NAO_APLICAVEL'
+        campos = list(CAMPOS_ANALISE_AO_DECLINAR)
+    processo.save(update_fields=campos)
 
-    from .relatorios import remover_do_processo
-    remover_do_processo(processo)
+    if not preservar_preenchimento:
+        from .relatorios import remover_do_processo
+        remover_do_processo(processo)
 
     motivo_pendencia = f'Análise declinada: {motivo}'
     abertas = list(processo.pendencias.select_for_update().filter(
@@ -271,7 +279,11 @@ def declinar_analise(processo_id, usuario, motivo):
         processo, 'ANALISE_DECLINADA', usuario,
         descricao=(
             f'Análise declinada por {perm.nome_usuario(usuario)}. '
-            f'Antes: {analista_anterior or "—"}. Motivo: {motivo}'),
+            f'Antes: {analista_anterior or "—"}. Motivo: {motivo}'
+            + (
+                ' Preenchimento mantido, sem número de relatório novo.'
+                if preservar_preenchimento else ''
+            )),
         analista_anterior=analista_anterior,
         motivo=motivo,
         numero_relatorio_anterior=numero_relatorio_anterior,
@@ -1132,26 +1144,20 @@ def registrar_saida_direta(processo_id, usuario):
         raise TransicaoInvalida(
             'Este processo já saiu ou não está mais na CGM.')
 
-    situacao_anterior = processo.get_situacao_tramite_display()
     codigo_anterior = processo.situacao_tramite
     legado = eh_legado(processo)
     if legado:
         descricao = ('Saída registrada pelo Protocolo (processo anterior à '
                      'nova tramitação).')
         dados = {'legado': True, 'destino': processo.destino}
-    elif codigo_anterior == 'DISPONIVEL_RETIRADA':
+    else:
         descricao = f'Saída registrada por {perm.nome_usuario(usuario)}.'
         dados = {'destino': processo.destino}
-    else:
-        descricao = (
-            f'Saída registrada pelo Protocolo, sem passar pelas etapas de '
-            f'análise. Situação anterior: {situacao_anterior}.'
-        )
-        dados = {
-            'saida_direta': True,
-            'situacao_anterior': codigo_anterior,
-            'destino': processo.destino,
-        }
+        if codigo_anterior != 'DISPONIVEL_RETIRADA':
+            dados.update({
+                'saida_direta': True,
+                'situacao_anterior': codigo_anterior,
+            })
     return _gravar_saida(processo, usuario, descricao, dados)
 
 

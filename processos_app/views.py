@@ -1842,6 +1842,10 @@ def analista_processo(request, process_id):
             'gerar_numero': pode_editar,
             'concluir': pode_liberar,
             'direcionar': pode_direcionar,
+            'devolver_salvando': (
+                pode_editar
+                and perm.pode_declinar_analise(request.user, processo)
+            ),
         }.get(acao, False)
         if not permitido:
             messages.error(
@@ -1858,6 +1862,25 @@ def analista_processo(request, process_id):
                     f"{reverse('analista_processo', args=[processo.id])}"
                     f"?next={next_controle}")
             return redirect('analista_processo', process_id=processo.id)
+
+        if acao == 'devolver_salvando':
+            try:
+                tramitacao.declinar_analise(
+                    processo.id, request.user,
+                    (request.POST.get('motivo') or '').strip() or 'Devolvido à fila',
+                    preservar_preenchimento=True)
+            except (PermissionDenied, ValidationError) as exc:
+                messages.error(
+                    request, '; '.join(getattr(exc, 'messages', [str(exc)])))
+                return redirect('analista_processo', process_id=processo.id)
+            messages.success(
+                request,
+                'Processo devolvido à fila. O preenchimento foi salvo, '
+                'sem número de relatório.')
+            destino = request.POST.get('next') or ''
+            if not destino.startswith('/') or destino.startswith('//'):
+                destino = reverse('area_analista')
+            return redirect(destino)
 
         if acao == 'concluir':
             # Liberação passa pelo service: em Licitações exige anexo;

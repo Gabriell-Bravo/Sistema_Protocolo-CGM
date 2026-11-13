@@ -52,3 +52,23 @@ def icone_evento(tipo):
 @register.filter
 def dica_evento(tipo):
     return _EVENTOS.get(tipo, ('', 'Ato registrado na tramitação.'))[1]
+
+
+# Frase antiga da saída direta. O histórico mostra só quem registrou a saída.
+_SAIDA_DIRETA_ANTIGA = (
+    'Saída registrada pelo Protocolo, sem passar pelas etapas'
+)
+
+
+@register.filter
+def descricao_evento(evento):
+    texto = (getattr(evento, 'descricao', None) or '').strip()
+    if texto.startswith(_SAIDA_DIRETA_ANTIGA):
+        usuario = getattr(evento, 'usuario', None)
+        nome = ''
+        if usuario is not None:
+            nome = (usuario.get_full_name() or usuario.username or '').strip()
+        if nome:
+            return f'Saída registrada por {nome}.'
+        return 'Saída registrada.'
+    return texto

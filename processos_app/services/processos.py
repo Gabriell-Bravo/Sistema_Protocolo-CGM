@@ -395,6 +395,18 @@ def aplicar_analise(processo, dados, usuario):
     (ou nº específico) para a análise entrar na planilha. Dados de
     cadastro (espécie, volume, objeto…) passam por aplicar_edicao.
     """
+    acao_inicial = str((dados or {}).get('acao') or '').strip().lower()
+    if acao_inicial == 'devolver_salvando':
+        # Devolver à fila pode gravar o que foi digitado, sem emitir relatório.
+        if hasattr(dados, 'getlist'):
+            dados = {chave: dados.get(chave) for chave in dados}
+        else:
+            dados = dict(dados or {})
+        for chave in (
+            'numero_relatorio', 'data_relatorio', 'gerar_numero', 'sem_relatorio',
+        ):
+            dados.pop(chave, None)
+
     dados_cadastro = {
         k: dados.get(k) for k in CAMPOS_CADASTRO if k in (dados or {})
     }

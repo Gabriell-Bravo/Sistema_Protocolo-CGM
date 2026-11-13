@@ -1,7 +1,7 @@
 from django.core.exceptions import PermissionDenied
 from django.urls import reverse
 
-from processos_app.models import EventoProcesso, Prioridade, Processo
+from processos_app.models import EventoProcesso, LinhaControleRelatorio, Prioridade, Processo
 from processos_app.services import processos as svc_processos
 from processos_app.services import tramitacao
 from processos_app.services.tramitacao import TransicaoInvalida
@@ -241,6 +241,50 @@ class DeclinarAnaliseTest(BaseProcessoTestCase):
             processo.id, self.analista_liq, 'Corrigir no mesmo dia')
         processo.refresh_from_db()
         self.assertEqual(processo.situacao_tramite, 'DISPONIVEL')
+
+    def test_devolver_perguntando_salva_sem_gerar_numero(self):
+        processo = self.novo_processo(
+            self.especie_liq, numero_processo='devolver-salva/2026')
+        tramitacao.assumir(processo.id, self.analista_liq)
+        self.client.force_login(self.analista_liq)
+        pagina = self.client.get(reverse('analista_processo', args=[processo.id]))
+        self.assertContains(pagina, 'Salvar o preenchimento antes de devolver')
+        self.assertContains(pagina, 'não gera número de relatório')
+        self.assertContains(pagina, 'Não salvar')
+
+        resposta = self.client.post(reverse('analista_processo', args=[processo.id]), {
+            'acao': 'devolver_salvando',
+            'objeto': 'Objeto preenchido na fila',
+            'contratada': 'Empresa da fila',
+            'volume': processo.volume,
+            'secretaria': processo.secretaria,
+            'especie': processo.especie,
+            'genero': processo.genero,
+            'prioridade': 'NORMAL',
+            'data_entrada': processo.data_entrada.isoformat(),
+            'hora_entrada': processo.hora_entrada.strftime('%H:%M'),
+            'destino': 'Unidade de Teste',
+            'valor': '1500',
+            'periodo': 'Nov/2026',
+            'observacao': 'Anotação antes de devolver',
+            'status_analise': 'PROSSEGUIMENTO_COM_RESSALVA',
+            'numero_relatorio': '9999',
+            'gerar_numero': '1',
+        })
+        self.assertEqual(resposta.status_code, 302)
+        processo.refresh_from_db()
+        self.assertEqual(processo.situacao_tramite, 'DISPONIVEL')
+        self.assertIsNone(processo.analista_responsavel)
+        self.assertFalse((processo.numero_relatorio or '').strip())
+        self.assertFalse(processo.sem_relatorio)
+        self.assertEqual(processo.objeto, 'Objeto preenchido na fila')
+        self.assertEqual(processo.valor, 'R$ 1.500,00')
+        self.assertEqual(processo.periodo, 'Nov/2026')
+        self.assertEqual(processo.observacao, 'Anotação antes de devolver')
+        self.assertEqual(processo.destino, 'Unidade de Teste')
+        self.assertEqual(processo.status_analise, 'PROSSEGUIMENTO_COM_RESSALVA')
+        self.assertFalse(
+            LinhaControleRelatorio.objects.filter(processo=processo).exists())
 
 
 class DesfazerTramiteAdminTest(BaseProcessoTestCase):
@@ -495,6 +539,8 @@ class LegadoTest(BaseProcessoTestCase):
         self.assertEqual(processo.situacao_tramite, 'SAIDA_CONCLUIDA')
         evento = EventoProcesso.objects.get(processo=processo, tipo='SAIDA_CONCLUIDA')
         self.assertTrue(evento.dados.get('saida_direta'))
+        self.assertNotIn('sem passar pelas etapas', evento.descricao)
+        self.assertIn('Saída registrada por', evento.descricao)
 
     def test_gestao_nao_da_saida_direta(self):
         processo = self.novo_processo()
