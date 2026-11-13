@@ -516,14 +516,15 @@ def sequencia_ativa(codigo):
 def sequencia_do_processo(processo):
     """Código da sequência de numeração conforme a espécie do processo.
 
-    Ordem: ajuste manual no processo → sequência cadastrada na espécie →
+    Ordem: ajuste manual no processo (vale também na reserva, mesmo se a
+    espécie não gera relatório) → sequência cadastrada na espécie →
     mapa legado pelo nome → Liquidação (demais Liquidações).
     """
-    if not especie_gera_relatorio(processo):
-        return None
     ajuste = (getattr(processo, 'sequencia_relatorio', None) or '').strip()
     if ajuste and sequencia_ativa(ajuste):
         return ajuste
+    if not especie_gera_relatorio(processo):
+        return None
     especie = processo.especie_fk if getattr(processo, 'especie_fk_id', None) else None
     if especie is not None:
         cadastrada = (especie.sequencia_numeracao or '').strip()
@@ -2081,6 +2082,10 @@ def destinar_numeros(usuario, inicio=None, fim=None, data=None, grupo=GRUPO_PADR
                      numeros_processo=None, quantidade_auto=None, pares=None):
     """Reserva um número por processo e vincula (linha amarela no Controle).
 
+    O grupo escolhido na tela é a sequência do número. O processo pode ser
+    de qualquer grupo (licitação, contrato, contabilidade ou liquidação),
+    mesmo sem processo de pagamento.
+
     Preferencial: `pares` = [(nº processo, nº relatório), ...].
     Legado: faixa inicio/fim ou quantidade_auto + lista de processos.
     """
@@ -2165,13 +2170,15 @@ def destinar_numeros(usuario, inicio=None, fim=None, data=None, grupo=GRUPO_PADR
         ReservaNumeroRelatorio.objects.create(
             grupo=grupo, numero=numero, data=data_reserva,
             criado_por=usuario, processo=processo, usado_em=agora)
+        processo.sequencia_relatorio = grupo
         processo.numero_relatorio = str(numero)
         processo.data_analise = data_reserva
         processo.sem_relatorio = True
         if not (processo.observacao or '').strip():
             processo.observacao = 'Sem relatório — número reservado e vinculado.'
         processo.save(update_fields=[
-            'numero_relatorio', 'data_analise', 'sem_relatorio', 'observacao'])
+            'sequencia_relatorio', 'numero_relatorio', 'data_analise',
+            'sem_relatorio', 'observacao'])
         registrar(processo)
     return {'quantidade': quantidade, 'numeros': numeros}
 
@@ -2271,6 +2278,15 @@ def _parse_numeros_processo(bruto):
 
 
 def _buscar_processo_para_destino(numero_processo, grupo):
+    """Localiza o processo a receber o número.
+
+    Não exige espécie que gera relatório nem o mesmo grupo da sequência
+    escolhida: licitação e contrato também podem reservar número.
+    `grupo` é a sequência informada na reserva; o vínculo grava isso
+    no processo depois.
+    """
+    if not sequencia_valida(grupo):
+        raise RelatorioInvalido('Sequência de relatório inválida.')
     numero = (numero_processo or '').strip()
     processo = (Processo.objects
                 .filter(numero_processo__iexact=numero)
@@ -2280,15 +2296,6 @@ def _buscar_processo_para_destino(numero_processo, grupo):
         raise RelatorioInvalido(
             f'Processo {numero} não encontrado. Cadastre a entrada no '
             f'Protocolo antes de vincular o número.')
-    if not especie_gera_relatorio(processo):
-        raise RelatorioInvalido(
-            f'A espécie de {numero} não gera número de relatório.')
-    sequencia = sequencia_do_processo(processo) or GRUPO_PADRAO
-    if sequencia != grupo:
-        nome = info_sequencia(sequencia)['nome']
-        raise RelatorioInvalido(
-            f'O processo {numero} pertence à sequência {nome}, '
-            f'não a {info_sequencia(grupo)["nome"]}.')
     return processo
 
 

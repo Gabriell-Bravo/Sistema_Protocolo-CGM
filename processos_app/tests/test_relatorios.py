@@ -1147,6 +1147,48 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertContains(aba_bolsa, '11')
         self.assertContains(aba_bolsa, 'bolsa-vinculo/2026')
 
+    def test_destinar_aceita_processo_de_licitacao_em_qualquer_grupo(self):
+        """Licitação ainda sem pagamento pode reservar número no grupo escolhido."""
+        licitacao = self.novo_processo(
+            self.especie_lic, numero_processo='14873/2026')
+        self.assertFalse(relatorios.especie_gera_relatorio(licitacao))
+
+        relatorios.destinar_numeros(
+            self.analista_liq, inicio=9101, fim=9101, data='2026-11-13',
+            grupo='LIQUIDACOES', numeros_processo='14873/2026')
+        licitacao.refresh_from_db()
+        self.assertEqual(licitacao.numero_relatorio, '9101')
+        self.assertTrue(licitacao.sem_relatorio)
+        self.assertEqual(licitacao.sequencia_relatorio, 'LIQUIDACOES')
+        linha = LinhaControleRelatorio.objects.get(processo=licitacao)
+        self.assertEqual(linha.numero_relatorio, '9101')
+        self.assertEqual(linha.sequencia, 'LIQUIDACOES')
+        self.assertEqual(linha.numero_processo, '14873/2026')
+        self.assertTrue(linha.sem_relatorio)
+
+        from processos_app.models import EspecieProcesso
+        especie_bolsa, _ = EspecieProcesso.objects.get_or_create(
+            nome='Concessão Aux. Bolsa Atleta', grupo='LIQUIDACOES',
+            defaults={'ativo': True, 'gera_relatorio': True,
+                      'sequencia_numeracao': 'BOLSA_ATLETA'})
+        especie_bolsa.gera_relatorio = True
+        especie_bolsa.sequencia_numeracao = 'BOLSA_ATLETA'
+        especie_bolsa.save(update_fields=['gera_relatorio', 'sequencia_numeracao'])
+        bolsa = self.novo_processo(
+            especie_bolsa, numero_processo='bolsa-outro-grupo/2026')
+        self.assertEqual(
+            relatorios.sequencia_do_processo(bolsa), 'BOLSA_ATLETA')
+
+        relatorios.destinar_numeros(
+            self.analista_liq, inicio=12, fim=12, data='2026-11-13',
+            grupo='LIQUIDACOES', numeros_processo='bolsa-outro-grupo/2026')
+        bolsa.refresh_from_db()
+        self.assertEqual(bolsa.numero_relatorio, '12')
+        self.assertEqual(bolsa.sequencia_relatorio, 'LIQUIDACOES')
+        self.assertEqual(
+            LinhaControleRelatorio.objects.get(processo=bolsa).sequencia,
+            'LIQUIDACOES')
+
     def test_destinar_automatico_usa_cancelados_e_sequencia(self):
         admin = criar_usuario('admin_auto_dest', 'GESTAO', is_superuser=True)
         relatorios.definir_ultimo_numero(admin, 8000)
