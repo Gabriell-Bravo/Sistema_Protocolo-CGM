@@ -104,17 +104,34 @@
     position: sticky;
     left: 0;
     z-index: 4;
-    min-width: 36px;
-    width: 36px;
+    min-width: 58px;
+    width: 58px;
     background: #f1f5f9;
     box-shadow: 2px 0 0 #cbd5e1;
     text-align: center;
+  }
+  .sheet-row-tools {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+  }
+  .sheet-check {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    cursor: pointer;
+    accent-color: #2563eb;
+    flex: 0 0 auto;
+  }
+  .sheet tr.is-marcada td.sheet-cell--row {
+    box-shadow: inset 3px 0 0 #2563eb, 2px 0 0 #cbd5e1;
   }
   .sheet th.sheet-col--row { z-index: 6; background: #e2e8f0; }
   .sheet td.sheet-cell--sticky,
   .sheet th.sheet-col--sticky {
     position: sticky;
-    left: 36px;
+    left: 58px;
     z-index: 3;
     box-shadow: 2px 0 0 #cbd5e1;
   }
@@ -137,7 +154,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 100%;
+    width: 22px;
     height: 32px;
     border: 0;
     background: transparent;
@@ -276,7 +293,8 @@
      data-url-desvincular="{% url 'controle_relatorio_desvincular_linha' 0 %}"
      data-url-vincular="{% url 'controle_relatorio_vincular_linha' 0 %}"
      data-pode-editar="{% if pode_cancelar_linha_relatorio %}1{% else %}0{% endif %}"
-     data-pode-apagar="{% if pode_apagar_linha_relatorio %}1{% else %}0{% endif %}">
+     data-pode-apagar="{% if pode_apagar_linha_relatorio %}1{% else %}0{% endif %}"
+     data-titulo="{{ info_aba.nome }}">
 
   {% if pode_destinar_numeros or pode_definir_ultimo %}
   <section class="filters">
@@ -320,6 +338,10 @@
       <span class="sheet-hint">próximo nº {{ sequencia.proximo }} · {{ total }} linha{{ total|pluralize:"s" }}</span>
     </div>
     <div class="sheet-bar__right">
+      <button type="button" class="btn btn--outline" id="btnImprimirLinhas" disabled>
+        <span class="material-symbols-rounded">print</span>
+        <span data-rotulo>Imprimir</span>
+      </button>
       {% if pode_nova_analise %}
       <button type="button" class="btn btn--primary" data-modal-open="modalAssumir">
         <span class="material-symbols-rounded">handshake</span>
@@ -345,8 +367,10 @@
       <thead>
         <tr>
           <th class="sheet-col--row" data-campo="__row" draggable="false">
-            <div class="sheet-th" style="cursor:default; justify-content:center; padding:8px 0;">
-              <span class="material-symbols-rounded sheet-th__grip" style="margin:0;">drag_indicator</span>
+            <div class="sheet-row-tools" style="height:36px;">
+              <input type="checkbox" class="sheet-check" id="sheetMarcarTodas"
+                     title="Marcar todas as linhas desta página"
+                     aria-label="Marcar todas as linhas desta página">
             </div>
           </th>
           {% for col in layout_planilha.colunas %}
@@ -375,11 +399,16 @@
             data-numero="{{ linha.numero_relatorio|default:'' }}"
             data-processo="{{ linha.numero_processo|default:'' }}">
           <td class="sheet-cell--row" data-campo="__row">
-            <button type="button" class="sheet-row-grip" draggable="true"
-                    title="Arrastar linha" aria-label="Arrastar linha"
-                    data-row-drag>
-              <span class="material-symbols-rounded">drag_indicator</span>
-            </button>
+            <div class="sheet-row-tools">
+              <input type="checkbox" class="sheet-check" data-imprimir
+                     aria-label="Marcar linha para impressão"
+                     title="Marcar para imprimir">
+              <button type="button" class="sheet-row-grip" draggable="true"
+                      title="Arrastar linha" aria-label="Arrastar linha"
+                      data-row-drag>
+                <span class="material-symbols-rounded">drag_indicator</span>
+              </button>
+            </div>
           </td>
           {% for col in layout_planilha.colunas %}
           <td class="{% if col.campo == 'numero_processo' %}sheet-cell--sticky{% endif %}"
@@ -1039,6 +1068,148 @@
     toast('Ordem das linhas atualizada neste navegador.', true);
     dragLinhaId = null;
   });
+
+  /* ---- marcar linhas e imprimir ---- */
+  var marcarTodas = document.getElementById('sheetMarcarTodas');
+  var btnImprimir = document.getElementById('btnImprimirLinhas');
+
+  function linhasDaFolha() {
+    return Array.prototype.filter.call(tbody.rows, function (tr) {
+      return !!tr.dataset.linhaId;
+    });
+  }
+
+  function linhasMarcadas() {
+    return linhasDaFolha().filter(function (tr) {
+      var caixa = tr.querySelector('[data-imprimir]');
+      return caixa && caixa.checked;
+    });
+  }
+
+  function atualizarMarcacao() {
+    var linhas = linhasDaFolha();
+    var marcadas = linhasMarcadas();
+    linhas.forEach(function (tr) {
+      var caixa = tr.querySelector('[data-imprimir]');
+      tr.classList.toggle('is-marcada', !!(caixa && caixa.checked));
+    });
+    if (btnImprimir) {
+      var rotulo = btnImprimir.querySelector('[data-rotulo]');
+      btnImprimir.disabled = marcadas.length === 0;
+      if (rotulo) {
+        rotulo.textContent = marcadas.length
+          ? ('Imprimir (' + marcadas.length + ')')
+          : 'Imprimir';
+      }
+    }
+    if (marcarTodas) {
+      marcarTodas.checked = linhas.length > 0 && marcadas.length === linhas.length;
+      marcarTodas.indeterminate = marcadas.length > 0 && marcadas.length < linhas.length;
+    }
+  }
+
+  function valorCelula(td) {
+    var campo = td.querySelector('input, select, textarea');
+    if (!campo) return (td.innerText || '').replace(/\s+/g, ' ').trim();
+    if (campo.tagName === 'SELECT') {
+      var opcao = campo.options[campo.selectedIndex];
+      return opcao ? (opcao.text || '').trim() : '';
+    }
+    if (campo.type === 'date' && campo.value) {
+      var partes = campo.value.split('-');
+      if (partes.length === 3) return partes[2] + '/' + partes[1] + '/' + partes[0];
+    }
+    return (campo.value || '').trim();
+  }
+
+  function escaparHtml(texto) {
+    return String(texto == null ? '' : texto)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function imprimirMarcadas() {
+    var marcadas = linhasMarcadas();
+    if (!marcadas.length) {
+      toast('Marque ao menos uma linha para imprimir.', false);
+      return;
+    }
+    var colunas = [];
+    Array.prototype.forEach.call(table.tHead.rows[0].cells, function (th) {
+      var campo = th.dataset.campo;
+      if (!campo || campo === '__row' || campo === '__menu') return;
+      colunas.push({
+        campo: campo,
+        label: th.dataset.label || (th.innerText || '').trim()
+      });
+    });
+    var corpo = marcadas.map(function (tr) {
+      var celulas = colunas.map(function (col) {
+        var td = tr.querySelector('td[data-campo="' + col.campo + '"]');
+        return '<td>' + escaparHtml(td ? valorCelula(td) : '') + '</td>';
+      }).join('');
+      return '<tr>' + celulas + '</tr>';
+    }).join('');
+    var cabecalho = colunas.map(function (col) {
+      return '<th>' + escaparHtml(col.label) + '</th>';
+    }).join('');
+    var titulo = app.dataset.titulo || 'Controle de relatório';
+    var agora = new Date();
+    var quando = agora.toLocaleString('pt-BR');
+    var html = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">'
+      + '<title>Impressão — ' + escaparHtml(titulo) + '</title>'
+      + '<style>'
+      + '@page{size:A4 landscape;margin:10mm;}'
+      + 'body{margin:0;color:#0d0d0d;font-family:Calibri,"Segoe UI",sans-serif;}'
+      + 'h1{font-size:16px;margin:0 0 4px;}'
+      + '.meta{font-size:12px;margin:0 0 12px;color:#334155;}'
+      + 'table{width:100%;border-collapse:collapse;font-size:11px;}'
+      + 'th,td{border:1px solid #94a3b8;padding:4px 6px;vertical-align:top;text-align:left;}'
+      + 'th{background:#e2e8f0;}'
+      + '.barra{display:flex;justify-content:flex-end;gap:8px;margin:0 0 12px;}'
+      + '.barra button{font:inherit;font-weight:650;border-radius:8px;padding:8px 14px;cursor:pointer;}'
+      + '.primario{background:#30839A;color:#fff;border:0;}'
+      + '@media print{.barra{display:none;}}'
+      + '</style></head><body>'
+      + '<div class="barra"><button class="primario" onclick="window.print()">Imprimir</button>'
+      + '<button onclick="window.close()">Fechar</button></div>'
+      + '<h1>Controle de relatório — ' + escaparHtml(titulo) + '</h1>'
+      + '<p class="meta">' + marcadas.length + ' linha'
+      + (marcadas.length === 1 ? '' : 's') + ' · ' + escaparHtml(quando) + '</p>'
+      + '<table><thead><tr>' + cabecalho + '</tr></thead><tbody>'
+      + corpo + '</tbody></table></body></html>';
+    var janela = window.open('', '_blank');
+    if (!janela) {
+      toast('O navegador bloqueou a janela de impressão.', false);
+      return;
+    }
+    janela.document.open();
+    janela.document.write(html);
+    janela.document.close();
+    janela.focus();
+  }
+
+  if (marcarTodas) {
+    marcarTodas.addEventListener('change', function () {
+      var marcado = marcarTodas.checked;
+      linhasDaFolha().forEach(function (tr) {
+        var caixa = tr.querySelector('[data-imprimir]');
+        if (caixa) caixa.checked = marcado;
+      });
+      atualizarMarcacao();
+    });
+  }
+
+  tbody.addEventListener('change', function (ev) {
+    if (!ev.target.closest('[data-imprimir]')) return;
+    atualizarMarcacao();
+  });
+
+  if (btnImprimir) {
+    btnImprimir.addEventListener('click', imprimirMarcadas);
+  }
 })();
 </script>
 {% include "analista/_modal_assumir.html" %}

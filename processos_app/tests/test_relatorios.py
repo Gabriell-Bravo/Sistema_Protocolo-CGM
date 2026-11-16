@@ -2405,6 +2405,20 @@ class ControleRelatorioTest(BaseProcessoTestCase):
         self.assertIn(disponivel.id, ids)
         self.assertNotContains(pagina, 'Abrir para encaminhar')
 
+    def test_planilha_marca_linhas_para_imprimir(self):
+        processo = self.novo_processo(
+            self.especie_liq, numero_processo='imp-linha/2026')
+        self._salvar_liquidacao(processo)
+        self.client.force_login(self.analista_liq)
+        pagina = self.client.get(
+            reverse('controle_relatorio') + '?aba=LIQUIDACOES&secao=analises')
+        self.assertEqual(pagina.status_code, 200)
+        self.assertContains(pagina, 'id="btnImprimirLinhas"')
+        self.assertContains(pagina, 'id="sheetMarcarTodas"')
+        self.assertContains(pagina, 'data-imprimir')
+        self.assertContains(pagina, 'Marcar linha para impressão')
+        self.assertContains(pagina, 'imp-linha/2026')
+
     def test_nova_analise_busca_formata_valor(self):
         processo = self.novo_processo(
             self.especie_liq, numero_processo='fmt-valor/2026')
