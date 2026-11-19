@@ -639,7 +639,7 @@ O número permanece na planilha; o processo deixa de ter esse relatório."
         <section class="card">
             <div class="card__header">
                 <span class="card__title">Reservar e vincular números</span>
-                <span class="card__hint">Qualquer grupo do processo — licitação, contrato ou liquidação. A linha amarela entra no grupo de numeração escolhido.</span>
+                <span class="card__hint">Qualquer processo, mesmo que nunca tenha passado pelo Protocolo. A linha amarela entra no grupo de numeração escolhido.</span>
             </div>
             <form method="post" action="{% url 'controle_relatorio_destinar' %}" class="card__body" id="formDestinarNumeros"
                   data-sugerir-url="{% url 'controle_relatorio_sugerir_numeros' %}">
@@ -665,7 +665,7 @@ O número permanece na planilha; o processo deixa de ter esse relatório."
                 <div style="margin-top:18px;">
                     <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:8px; flex-wrap:wrap;">
                         <label class="field__label" style="margin:0;">Processos</label>
-                        <span class="field__hint" style="margin:0;">Preencha o nº do relatório ou use o preenchimento automático</span>
+                        <span class="field__hint" style="margin:0;">O processo não precisa estar cadastrado. Preencha o nº do relatório ou use o preenchimento automático</span>
                     </div>
                     <div id="listaParesDestino" style="display:flex; flex-direction:column; gap:8px;"></div>
                     <div class="form-actions" style="margin-top:12px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">

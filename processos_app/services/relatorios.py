@@ -690,6 +690,10 @@ def numeros_usados(grupo, ignorar=None):
                         LinhaControleRelatorio.SITUACAO_HISTORICA,
                     ])
                     | Q(processo__isnull=False)
+                    | Q(
+                        situacao_linha=LinhaControleRelatorio.SITUACAO_ATIVA,
+                        sem_relatorio=True,
+                    )
                 ))
     for bruto in consulta.values_list('numero_relatorio', flat=True):
         numero = _inteiro(bruto)
@@ -749,10 +753,15 @@ def definir_ultimo_numero(usuario, ultimo, grupo=GRUPO_PADRAO):
         grupo=grupo, defaults={'proximo_numero': ultimo + 1})
     seq.proximo_numero = ultimo + 1
     seq.save(update_fields=['proximo_numero'])
-    LinhaControleRelatorio.objects.filter(
-        processo__isnull=True,
-        situacao_linha=LinhaControleRelatorio.SITUACAO_ATIVA,
-    ).filter(filtro_sequencia(grupo)).delete()
+    # Sobras ativas sem dono. Reserva amarela de processo fora do Protocolo fica.
+    (LinhaControleRelatorio.objects
+     .filter(
+         processo__isnull=True,
+         situacao_linha=LinhaControleRelatorio.SITUACAO_ATIVA,
+         sem_relatorio=False,
+     )
+     .filter(filtro_sequencia(grupo))
+     .delete())
     return estado_sequencia(grupo)
 
 
@@ -777,11 +786,17 @@ def proximo_numero(grupo):
     numero = int(seq.proximo_numero or 1)
     if numero < 1:
         numero = 1
-    # Limpa sobras ativas órfãs abaixo do contador; preserva guardadas/canceladas.
-    LinhaControleRelatorio.objects.filter(
-        processo__isnull=True,
-        situacao_linha=LinhaControleRelatorio.SITUACAO_ATIVA,
-    ).filter(filtro_sequencia(grupo)).exclude(numero_relatorio='').delete()
+    # Limpa sobras ativas órfãs; preserva guardadas, canceladas e a reserva
+    # amarela de processo que ainda não entrou no Protocolo.
+    (LinhaControleRelatorio.objects
+     .filter(
+         processo__isnull=True,
+         situacao_linha=LinhaControleRelatorio.SITUACAO_ATIVA,
+         sem_relatorio=False,
+     )
+     .filter(filtro_sequencia(grupo))
+     .exclude(numero_relatorio='')
+     .delete())
 
     while numero in usados:
         numero += 1
@@ -1978,6 +1993,10 @@ def listar(usuario, sequencia=None):
                         LinhaControleRelatorio.SITUACAO_CANCELADA,
                         LinhaControleRelatorio.SITUACAO_HISTORICA,
                     ])
+                    | Q(
+                        situacao_linha=LinhaControleRelatorio.SITUACAO_ATIVA,
+                        sem_relatorio=True,
+                    )
                 )
                 .select_related('processo'))
     if perm.eh_administrador(usuario) or perm.is_gestao(usuario):
@@ -2084,7 +2103,9 @@ def destinar_numeros(usuario, inicio=None, fim=None, data=None, grupo=GRUPO_PADR
 
     O grupo escolhido na tela é a sequência do número. O processo pode ser
     de qualquer grupo (licitação, contrato, contabilidade ou liquidação),
-    mesmo sem processo de pagamento.
+    mesmo sem processo de pagamento, e mesmo que nunca tenha entrado no
+    Protocolo: nesse caso a linha amarela fica só na planilha, com o nº
+    informado, até o processo aparecer no sistema.
 
     Preferencial: `pares` = [(nº processo, nº relatório), ...].
     Legado: faixa inicio/fim ou quantidade_auto + lista de processos.
@@ -2151,22 +2172,36 @@ def destinar_numeros(usuario, inicio=None, fim=None, data=None, grupo=GRUPO_PADR
     if len(set(numeros)) != len(numeros):
         raise RelatorioInvalido('Há número de relatório repetido na lista.')
 
-    processos = []
+    vistos = set()
+    pares_resolvidos = []
     for numero, num_proc in zip(numeros, processos_txt):
-        processo = _buscar_processo_para_destino(num_proc, grupo)
-        if processo.numero_relatorio and not processo.sem_relatorio:
-            raise RelatorioInvalido(
-                f'O processo {num_proc} já tem relatório '
-                f'{processo.numero_relatorio}.')
-        if any(p.id == processo.id for p in processos):
+        chave = num_proc.casefold()
+        if chave in vistos:
             raise RelatorioInvalido(
                 f'O processo {num_proc} foi informado mais de uma vez.')
-        processos.append(processo)
+        vistos.add(chave)
+        processo = _buscar_processo_para_destino(num_proc, grupo)
+        if processo is not None:
+            if processo.numero_relatorio and not processo.sem_relatorio:
+                raise RelatorioInvalido(
+                    f'O processo {num_proc} já tem relatório '
+                    f'{processo.numero_relatorio}.')
+        else:
+            ocupada = _linha_ocupada_do_processo(grupo, num_proc)
+            if ocupada is not None:
+                raise RelatorioInvalido(
+                    f'O processo {num_proc} já tem o relatório '
+                    f'{ocupada.numero_relatorio} na planilha.')
+        pares_resolvidos.append((numero, num_proc, processo))
 
     agora = timezone.now()
     quantidade = len(numeros)
-    for numero, processo in zip(numeros, processos):
+    for numero, num_proc, processo in pares_resolvidos:
         _remover_linha_cancelada_do_numero(grupo, numero)
+        if processo is None:
+            _criar_linha_reserva_sem_cadastro(
+                grupo, numero, num_proc, data_reserva, usuario)
+            continue
         ReservaNumeroRelatorio.objects.create(
             grupo=grupo, numero=numero, data=data_reserva,
             criado_por=usuario, processo=processo, usado_em=agora)
@@ -2278,25 +2313,66 @@ def _parse_numeros_processo(bruto):
 
 
 def _buscar_processo_para_destino(numero_processo, grupo):
-    """Localiza o processo a receber o número.
+    """Localiza o processo a receber o número, se ele já existir.
 
     Não exige espécie que gera relatório nem o mesmo grupo da sequência
     escolhida: licitação e contrato também podem reservar número.
     `grupo` é a sequência informada na reserva; o vínculo grava isso
-    no processo depois.
+    no processo depois. Se o nº nunca passou pelo Protocolo, devolve
+    None e a reserva fica só na planilha.
     """
     if not sequencia_valida(grupo):
         raise RelatorioInvalido('Sequência de relatório inválida.')
     numero = (numero_processo or '').strip()
-    processo = (Processo.objects
-                .filter(numero_processo__iexact=numero)
-                .order_by('-id')
-                .first())
-    if processo is None:
-        raise RelatorioInvalido(
-            f'Processo {numero} não encontrado. Cadastre a entrada no '
-            f'Protocolo antes de vincular o número.')
-    return processo
+    return (Processo.objects
+            .filter(numero_processo__iexact=numero)
+            .order_by('-id')
+            .first())
+
+
+def _linha_ocupada_do_processo(grupo, numero_processo):
+    """Linha da planilha que já guarda este nº de processo nesta sequência."""
+    numero = (numero_processo or '').strip()
+    if not numero:
+        return None
+    return (
+        LinhaControleRelatorio.objects
+        .filter(filtro_sequencia(grupo))
+        .exclude(situacao_linha=LinhaControleRelatorio.SITUACAO_CANCELADA)
+        .exclude(numero_relatorio='')
+        .filter(
+            Q(numero_processo__iexact=numero)
+            | Q(volume__iexact=numero)
+        )
+        .order_by('-id')
+        .first()
+    )
+
+
+def _criar_linha_reserva_sem_cadastro(grupo, numero, numero_processo, data, usuario):
+    """Linha amarela para processo que ainda não existe no Protocolo."""
+    nome = ''
+    if usuario is not None:
+        nome = (usuario.get_full_name() or usuario.username or '').strip()
+    volume = ''
+    if grupo in ('BOLSA_ATLETA', 'AUXILIO_COMPETICAO'):
+        volume = numero_processo
+    LinhaControleRelatorio.objects.create(
+        processo=None,
+        numero_processo=numero_processo[:255],
+        volume=volume[:255],
+        numero_relatorio=str(numero),
+        sem_relatorio=True,
+        situacao_linha=LinhaControleRelatorio.SITUACAO_ATIVA,
+        data_relatorio=data,
+        grupo=GRUPO_PADRAO,
+        sequencia=grupo,
+        analista=nome[:255],
+        observacao=(
+            'Sem relatório — número reservado para processo '
+            'que ainda não entrou no Protocolo.'
+        ),
+    )
 
 
 @transaction.atomic

@@ -1189,6 +1189,59 @@ class ControleRelatorioTest(BaseProcessoTestCase):
             LinhaControleRelatorio.objects.get(processo=bolsa).sequencia,
             'LIQUIDACOES')
 
+    def test_destinar_processo_que_nunca_entrou_no_protocolo(self):
+        """Reserva o número mesmo sem cadastro do processo no sistema."""
+        from processos_app.models import Processo
+
+        self.assertFalse(
+            Processo.objects.filter(numero_processo='fora/2026').exists())
+        resultado = relatorios.destinar_numeros(
+            self.analista_liq, data='2026-11-13', grupo='LIQUIDACOES',
+            pares=[('fora/2026', '9102')])
+        self.assertEqual(resultado['numeros'], [9102])
+        self.assertFalse(
+            Processo.objects.filter(numero_processo='fora/2026').exists())
+        linha = LinhaControleRelatorio.objects.get(numero_relatorio='9102')
+        self.assertIsNone(linha.processo_id)
+        self.assertEqual(linha.numero_processo, 'fora/2026')
+        self.assertTrue(linha.sem_relatorio)
+        self.assertEqual(linha.situacao_linha, 'ATIVA')
+        self.assertEqual(linha.linha_css_class, 'tr-sem-relatorio')
+        self.assertIn(9102, relatorios.numeros_usados('LIQUIDACOES'))
+
+        with self.assertRaises(relatorios.RelatorioInvalido) as repetido:
+            relatorios.destinar_numeros(
+                self.analista_liq, data='2026-11-14', grupo='LIQUIDACOES',
+                pares=[('fora/2026', '9103')])
+        self.assertIn('já tem o relatório', str(repetido.exception))
+
+        # Gerar número de outro processo não apaga nem reutiliza o reservado.
+        outro = self.novo_processo(
+            self.especie_liq, numero_processo='vizinho-fora/2026')
+        self._salvar_liquidacao(outro)
+        self.assertNotEqual(outro.numero_relatorio, '9102')
+        linha.refresh_from_db()
+        self.assertIsNone(linha.processo_id)
+        self.assertEqual(linha.numero_processo, 'fora/2026')
+
+        self.client.force_login(self.analista_liq)
+        pagina = self.client.get(reverse('controle_relatorio'))
+        self.assertContains(pagina, 'fora/2026')
+        self.assertContains(pagina, '9102')
+        self.assertContains(pagina, 'tr-sem-relatorio')
+        dest = self.client.get(
+            reverse('controle_relatorio') + '?secao=destinados')
+        self.assertContains(dest, 'nunca tenha passado pelo Protocolo')
+        self.assertContains(dest, 'não precisa estar cadastrado')
+
+        # Quando o processo entra, Gerar reaproveita o número reservado.
+        entrou = self.novo_processo(
+            self.especie_liq, numero_processo='fora/2026')
+        self._salvar_liquidacao(entrou)
+        self.assertEqual(entrou.numero_relatorio, '9102')
+        linha.refresh_from_db()
+        self.assertEqual(linha.processo_id, entrou.id)
+
     def test_destinar_automatico_usa_cancelados_e_sequencia(self):
         admin = criar_usuario('admin_auto_dest', 'GESTAO', is_superuser=True)
         relatorios.definir_ultimo_numero(admin, 8000)
